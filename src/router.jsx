@@ -1,3 +1,4 @@
+import ProtectedRoute from "./components/ProtectedRoute";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Páginas
