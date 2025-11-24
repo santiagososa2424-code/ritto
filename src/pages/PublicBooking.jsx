@@ -34,7 +34,7 @@ export default function PublicBooking() {
 
     setBusiness(biz);
 
-    // cargar servicios del negocio
+    // cargar servicios
     const { data: servs } = await supabase
       .from("services")
       .select("*")
@@ -42,7 +42,7 @@ export default function PublicBooking() {
 
     setServices(servs || []);
 
-    // cargar horarios del negocio
+    // cargar horarios
     const { data: sched } = await supabase
       .from("schedules")
       .select("*")
@@ -62,7 +62,6 @@ export default function PublicBooking() {
       weekday: "long",
     });
 
-    // horarios del día elegido
     const todaysSchedules = schedules.filter(
       (s) => s.day_of_week.toLowerCase() === capitalize(dayOfWeek)
     );
@@ -119,9 +118,11 @@ export default function PublicBooking() {
       return;
     }
 
+    // INSERT ACTUALIZADO (este es el que pediste)
     const { error: insertError } = await supabase.from("bookings").insert({
       business_id: business.id,
       service_id: selectedService.id,
+      service_name: selectedService.name,
       date: selectedDate,
       hour: selectedHour + ":00",
       customer_name: name,
@@ -170,4 +171,48 @@ export default function PublicBooking() {
         onChange={(e) => setSelectedDate(e.target.value)}
       />
 
-      <h2 className="text-xl font-semibold m
+      <h2 className="text-xl font-semibold mb-2">Horarios disponibles</h2>
+      {availableHours.length === 0 && <p>No hay horarios para este día.</p>}
+      <select
+        className="border p-2 rounded mb-4 w-full"
+        onChange={(e) => setSelectedHour(e.target.value)}
+      >
+        <option value="">Seleccionar</option>
+        {availableHours.map((h) => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </select>
+
+      <h2 className="text-xl font-semibold mb-2">Tus datos</h2>
+      <form onSubmit={handleBooking} className="flex flex-col gap-3">
+        <input
+          type="text"
+          placeholder="Nombre"
+          className="border p-2 rounded"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+
+        <input
+          type="text"
+          placeholder="Teléfono"
+          className="border p-2 rounded"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+
+        {error && <p className="text-red-600">{error}</p>}
+        {success && <p className="text-green-600">{success}</p>}
+
+        <button
+          type="submit"
+          className="bg-black text-white p-2 rounded font-semibold"
+        >
+          Reservar
+        </button>
+      </form>
+    </div>
+  );
+}
