@@ -1,12 +1,34 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useEffect, useState } from "react";
+import { supabase } from "../supabaseClient";
 
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
+  const [allowed, setAllowed] = useState(null);
 
-  if (loading) return <p>Loading...</p>;
+  useEffect(() => {
+    const checkSubscription = async () => {
+      if (!user) {
+        setAllowed(false);
+        return;
+      }
 
-  if (!user) return <Navigate to="/" />;
+      // Buscar suscripción del usuario
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
 
-  return children;
-}
+      if (!sub) {
+        // No tiene suscripción creada → recién registrado → permitir por ahora
+        setAllowed(true);
+        return;
+      }
+
+      const now = new Date();
+      const expires = new Date(sub.expires_at);
+
+      if (expires > now || sub.active === true) {
+        // Trial todavía vigente o suscripción acti
