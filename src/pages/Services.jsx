@@ -1,123 +1,220 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom";
 
 export default function Services() {
+  const [loading, setLoading] = useState(true);
+  const [business, setBusiness] = useState(null);
   const [services, setServices] = useState([]);
-  const [businessId, setBusinessId] = useState(null);
+
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [duration, setDuration] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [description, setDescription] = useState("");
+
   const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const loadBusinessAndServices = async () => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+    try {
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
 
-      // Obtener negocio del usuario
-      const { data: business } = await supabase
+      if (userError || !user) {
+        setError("No se pudo obtener el usuario.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("*")
         .eq("owner_id", user.id)
         .single();
 
-      if (!business) {
-        navigate("/setup");
+      if (bizError || !biz) {
+        setError("Configurá primero tu negocio.");
+        setLoading(false);
         return;
       }
 
-      setBusinessId(business.id);
+      setBusiness(biz);
 
-      // Cargar servicios
-      const { data: servicesData } = await supabase
+      const { data: servs, error: servError } = await supabase
         .from("services")
         .select("*")
-        .eq("business_id", business.id);
+        .eq("business_id", biz.id)
+        .order("created_at", { ascending: true });
 
-      setServices(servicesData || []);
-    };
+      if (servError) {
+        setError(servError.message);
+        setLoading(false);
+        return;
+      }
 
-    loadBusinessAndServices();
-  }, []);
+      setServices(servs || []);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setError("Error cargando servicios.");
+      setLoading(false);
+    }
+  };
 
-  const handleAddService = async (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
-    const { error: insertError } = await supabase.from("services").insert({
-      business_id: businessId,
+    if (!business) {
+      setError("No se encontró el negocio.");
+      return;
+    }
+
+    if (!name || !price || !duration) {
+      setError("Completá nombre, precio y duración.");
+      return;
+    }
+
+    const payload = {
+      business_id: business.id,
       name,
-      price,
-      duration,
-    });
+      price: Number(price),
+      duration: Number(duration),
+      description,
+      is_active: true,
+    };
+
+    const { data, error: insertError } = await supabase
+      .from("services")
+      .insert(payload)
+      .select()
+      .single();
 
     if (insertError) {
       setError(insertError.message);
       return;
     }
 
-    // Recargar servicios
-    const { data: servicesData } = await supabase
-      .from("services")
-      .select("*")
-      .eq("business_id", businessId);
-
-    setServices(servicesData || []);
+    setServices((prev) => [...prev, data]);
     setName("");
     setPrice("");
-    setDuration("");
+    setDuration(30);
+    setDescription("");
+    setSuccess("Servicio creado correctamente.");
   };
 
+  const toggleActive = async (service) => {
+    const { error: updateError } = await supabase
+      .from("services")
+      .update({ is_active: !service.is_active })
+      .eq("id", service.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === service.id ? { ...s, is_active: !s.is_active } : s
+      )
+    );
+  };
+
+  if (loading) {
+    return <div className="p-6">Cargando servicios...</div>;
+  }
+
   return (
-    <div className="p-6 max-w-lg mx-auto">
+    <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Servicios</h1>
 
-      {error && <p className="text-red-500 mb-2">{error}</p>}
+      {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+      {success && <p className="mb-3 text-green-600 text-sm">{success}</p>}
 
-      <form onSubmit={handleAddService} className="flex flex-col gap-3 mb-6">
+      <form onSubmit={handleCreate} className="mb-6 grid gap-3 md:grid-cols-4">
         <input
           type="text"
-          placeholder="Nombre del servicio"
-          className="border p-2 rounded"
+          className="border rounded p-2 md:col-span-1"
+          placeholder="Nombre"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <input
           type="number"
+          className="border rounded p-2 md:col-span-1"
           placeholder="Precio"
-          className="border p-2 rounded"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
         />
 
         <input
           type="number"
-          placeholder="Duración en minutos"
-          className="border p-2 rounded"
+          className="border rounded p-2 md:col-span-1"
+          placeholder="Duración (min)"
           value={duration}
           onChange={(e) => setDuration(e.target.value)}
         />
 
-        <button className="bg-black text-white p-2 rounded font-semibold">
+        <button
+          type="submit"
+          className="bg-black text-white rounded p-2 font-semibold md:col-span-1"
+        >
           Agregar servicio
         </button>
+
+        <textarea
+          className="border rounded p-2 md:col-span-4"
+          placeholder="Descripción (opcional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </form>
 
-      <h2 className="text-xl font-semibold mb-2">Servicios creados</h2>
+      <div className="space-y-2">
+        {services.length === 0 && (
+          <p className="text-sm text-gray-600">
+            No tenés servicios cargados todavía.
+          </p>
+        )}
 
-      {services.length === 0 && <p>Aún no agregaste servicios.</p>}
-
-      <ul className="divide-y">
         {services.map((s) => (
-          <li key={s.id} className="py-3">
-            <b>{s.name}</b> — ${s.price} — {s.duration} min
-          </li>
+          <div
+            key={s.id}
+            className="border rounded p-3 flex items-center justify-between"
+          >
+            <div>
+              <p className="font-semibold">
+                {s.name} — ${s.price} ({s.duration} min)
+              </p>
+              {s.description && (
+                <p className="text-xs text-gray-600 mt-1">{s.description}</p>
+              )}
+              <p className="text-xs mt-1">
+                Estado:{" "}
+                <span className={s.is_active ? "text-green-600" : "text-gray-500"}>
+                  {s.is_active ? "Activo" : "Inactivo"}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => toggleActive(s)}
+              className="text-sm px-3 py-1 border rounded"
+            >
+              {s.is_active ? "Desactivar" : "Activar"}
+            </button>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
