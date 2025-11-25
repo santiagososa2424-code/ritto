@@ -93,7 +93,7 @@ export default function PublicBooking() {
 
     const takenHours = bookings?.map((b) => b.hour) || [];
 
-    const hours: string[] = [];
+    const hours = []; // ← FIX: antes tenía tipos de TypeScript
 
     todays.forEach((slot) => {
       let current = slot.start_time.slice(0, 5);
@@ -135,7 +135,7 @@ export default function PublicBooking() {
       return Math.round((price * value) / 100);
     }
 
-    return value; // fixed
+    return value;
   };
 
   const handleSubmit = async (e) => {
@@ -163,7 +163,6 @@ export default function PublicBooking() {
 
     try {
       if (!usesDeposit) {
-        // 🔹 Sin seña → reserva directa
         const { error: insertError } = await supabase.from("bookings").insert({
           business_id: business.id,
           service_id: selectedService.id,
@@ -187,7 +186,6 @@ export default function PublicBooking() {
         return;
       }
 
-      // 🔹 Con seña → ir a Mercado Pago
       const depositAmount = calculateDepositAmount();
 
       if (!depositAmount || depositAmount <= 0) {
