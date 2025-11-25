@@ -14,7 +14,7 @@ export default function PublicBooking() {
   const [selectedHour, setSelectedHour] = useState("");
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -34,7 +34,6 @@ export default function PublicBooking() {
 
     setBusiness(biz);
 
-    // cargar servicios
     const { data: servs } = await supabase
       .from("services")
       .select("*")
@@ -42,7 +41,6 @@ export default function PublicBooking() {
 
     setServices(servs || []);
 
-    // cargar horarios
     const { data: sched } = await supabase
       .from("schedules")
       .select("*")
@@ -113,30 +111,74 @@ export default function PublicBooking() {
     setError("");
     setSuccess("");
 
-    if (!selectedService || !selectedDate || !selectedHour) {
+    if (!selectedService || !selectedDate || !selectedHour || !name || !email) {
       setError("Completa todos los campos.");
       return;
     }
 
-    // INSERT ACTUALIZADO (este es el que pediste)
-    const { error: insertError } = await supabase.from("bookings").insert({
-      business_id: business.id,
-      service_id: selectedService.id,
-      service_name: selectedService.name,
-      date: selectedDate,
-      hour: selectedHour + ":00",
-      customer_name: name,
-      customer_phone: phone,
-    });
+    // Crear la reserva
+    const { data: bookingData, error: insertError } = await supabase
+      .from("bookings")
+      .insert({
+        business_id: business.id,
+        service_id: selectedService.id,
+        service_name: selectedService.name,
+        date: selectedDate,
+        hour: selectedHour + ":00",
+        customer_name: name,
+        customer_email: email,
+        status: "confirmed",
+      })
+      .select()
+      .single();
 
     if (insertError) {
       setError(insertError.message);
       return;
     }
 
+    // EMAIL INMEDIATO
+    await supabase.from("email_queue").insert({
+      to_email: email,
+      subject: `Tu reserva en ${business.name} está confirmada`,
+      body: `
+Hola ${name},
+
+Tu turno quedó confirmado:
+
+📅 Fecha: ${selectedDate}
+⏰ Hora: ${selectedHour}
+💈 Servicio: ${selectedService.name}
+
+¡Gracias por reservar con ${business.name}!
+      `,
+      send_at: new Date().toISOString(),
+    });
+
+    // EMAIL RECORDATORIO 24H ANTES
+    const reminderDate = new Date(selectedDate + "T" + selectedHour + ":00");
+    reminderDate.setHours(reminderDate.getHours() - 24);
+
+    await supabase.from("email_queue").insert({
+      to_email: email,
+      subject: `Recordatorio de tu turno — ${business.name}`,
+      body: `
+Hola ${name},
+
+Te recordamos que mañana tenés tu turno:
+
+💈 ${selectedService.name}
+📅 Día: ${selectedDate}
+⏰ Hora: ${selectedHour}
+
+¡Te esperamos!
+      `,
+      send_at: reminderDate.toISOString(),
+    });
+
     setSuccess("Reserva creada con éxito.");
     setName("");
-    setPhone("");
+    setEmail("");
     setSelectedHour("");
   };
 
@@ -151,9 +193,7 @@ export default function PublicBooking() {
       <select
         className="border p-2 rounded mb-4 w-full"
         onChange={(e) =>
-          setSelectedService(
-            services.find((s) => s.id === e.target.value)
-          )
+          setSelectedService(services.find((s) => s.id === e.target.value))
         }
       >
         <option value="">Seleccionar</option>
@@ -196,11 +236,11 @@ export default function PublicBooking() {
         />
 
         <input
-          type="text"
-          placeholder="Teléfono"
+          type="email"
+          placeholder="Email"
           className="border p-2 rounded"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
 
         {error && <p className="text-red-600">{error}</p>}
