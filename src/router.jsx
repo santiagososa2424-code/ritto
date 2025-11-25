@@ -1,16 +1,16 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import BusinessSetup from "./pages/BusinessSetup";
-import Schedule from "./pages/Schedule";
-import Services from "./pages/Services";
-import PublicBooking from "./pages/PublicBooking";
-import ForgotPassword from "./pages/ForgotPassword"; 
-import UpdatePassword from "./pages/UpdatePassword"; 
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import BusinessSetup from "./pages/BusinessSetup.jsx";
+import Schedule from "./pages/Schedule.jsx";
+import Services from "./pages/Services.jsx";
+import PublicBooking from "./pages/PublicBooking.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import UpdatePassword from "./pages/UpdatePassword.jsx";  // 👈 IMPORT CON EXTENSIÓN
 
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute from "./components/ProtectedRoute.jsx"; // asegúrate de tener .jsx también
 
 export default function AppRouter() {
   return (
