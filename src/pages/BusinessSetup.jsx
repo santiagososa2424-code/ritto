@@ -52,7 +52,6 @@ export default function BusinessSetup() {
         .single();
 
       if (bizError && bizError.code !== "PGRST116") {
-        // PGRST116 = no rows
         setError(bizError.message);
         setLoading(false);
         return;
@@ -116,13 +115,13 @@ export default function BusinessSetup() {
         deposit_enabled: depositEnabled,
         deposit_type: depositEnabled ? depositType : null,
         deposit_value: depositEnabled ? Number(depositValue) : 0,
-        // por si existe esta columna en tu schema
+        // por si existe en tu schema
         requires_deposit: depositEnabled,
       };
 
       let query = supabase.from("businesses");
-
       let result;
+
       if (business?.id) {
         result = await query.update(payload).eq("id", business.id).select().single();
       } else {
@@ -141,7 +140,7 @@ export default function BusinessSetup() {
       setSuccess("Datos del negocio guardados correctamente.");
       setLoading(false);
 
-      // Opcional: mandar al dashboard
+      // Si querés mandarlo al dashboard:
       // navigate("/dashboard");
     } catch (err) {
       console.error(err);
