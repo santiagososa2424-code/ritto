@@ -20,7 +20,7 @@ export default function Dashboard() {
         .single();
 
       if (!data) {
-        navigate("/setup");
+        navigate("/setup"); // si no tiene negocio → lo manda a crearlo
         return;
       }
 
@@ -31,23 +31,127 @@ export default function Dashboard() {
     fetchBusiness();
   }, []);
 
-  if (loading) return <p>Cargando...</p>;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600 text-lg">Cargando...</p>
+      </div>
+    );
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Dashboard de {business.name}</h1>
+    <div className="min-h-screen flex bg-gray-50">
+      {/* SIDEBAR */}
+      <aside className="w-64 bg-blue-700 text-white flex flex-col p-6">
+        <div className="mb-10 flex items-center gap-2">
+          <img src="/ritto-logo.svg" className="h-10" />
+        </div>
 
-      <p className="mt-2">Slug público: <b>{business.slug}</b></p>
+        <nav className="flex flex-col gap-4 text-blue-100">
+          <button
+            className="text-left hover:text-white"
+            onClick={() => navigate("/dashboard")}
+          >
+            Inicio
+          </button>
 
-      <p className="mt-4 text-blue-600 cursor-pointer"
-         onClick={() => navigate("/services")}>
-        Configurar servicios →
-      </p>
+          <button
+            className="text-left hover:text-white"
+            onClick={() => navigate("/services")}
+          >
+            Servicios
+          </button>
 
-      <p className="mt-2 text-blue-600 cursor-pointer"
-         onClick={() => navigate("/schedule")}>
-        Configurar horarios →
-      </p>
+          <button
+            className="text-left hover:text-white"
+            onClick={() => navigate("/schedule")}
+          >
+            Horarios
+          </button>
+
+          <button
+            className="text-left hover:text-white"
+            onClick={() => navigate("/setup")}
+          >
+            Configuración del negocio
+          </button>
+
+          <button
+            className="text-left hover:text-white"
+            onClick={handleLogout}
+          >
+            Cerrar sesión
+          </button>
+        </nav>
+
+        <div className="mt-auto text-xs text-blue-200 pt-6">
+          <p>Soporte: 093 403 706</p>
+          <p>Hecho en Uruguay 🇺🇾</p>
+        </div>
+      </aside>
+
+      {/* CONTENIDO */}
+      <main className="flex-1 p-10">
+        <h1 className="text-3xl font-bold text-blue-800 mb-3">
+          Dashboard de {business.name}
+        </h1>
+
+        <p className="text-gray-600 mb-6">
+          Link público:{" "}
+          <span className="font-semibold text-blue-700">{business.slug}</span>
+        </p>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="bg-white border rounded-xl p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-blue-700 mb-2">
+              Servicios
+            </h2>
+            <p className="text-gray-600 text-sm mb-4">
+              Añadí o editá los servicios que ofrecés.
+            </p>
+            <button
+              className="text-blue-600 font-semibold hover:underline"
+              onClick={() => navigate("/services")}
+            >
+              Ir a Servicios →
+            </button>
+          </div>
+
+          <div className="bg-white border rounded-xl p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-blue-700 mb-2">
+              Horarios
+            </h2>
+            <p className="text-gray-600 text-sm mb-4">
+              Configurá tus horarios disponibles.
+            </p>
+            <button
+              className="text-blue-600 font-semibold hover:underline"
+              onClick={() => navigate("/schedule")}
+            >
+              Ir a Horarios →
+            </button>
+          </div>
+
+          <div className="bg-white border rounded-xl p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-blue-700 mb-2">
+              Configuración
+            </h2>
+            <p className="text-gray-600 text-sm mb-4">
+              Cambiá el nombre del negocio, ubicación y políticas.
+            </p>
+            <button
+              className="text-blue-600 font-semibold hover:underline"
+              onClick={() => navigate("/setup")}
+            >
+              Ir a Configuración →
+            </button>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
