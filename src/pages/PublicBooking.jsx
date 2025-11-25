@@ -27,6 +27,7 @@ export default function PublicBooking() {
 
   const loadData = async () => {
     setError("");
+
     try {
       const { data: biz, error: bizError } = await supabase
         .from("businesses")
@@ -72,12 +73,12 @@ export default function PublicBooking() {
   const calculateAvailableHours = async () => {
     if (!business || !selectedService || !selectedDate) return;
 
-    const dayOfWeek = new Date(selectedDate).toLocaleDateString("es-UY", {
-      weekday: "long",
-    });
+    const dayOfWeekName = new Date(selectedDate)
+      .toLocaleDateString("es-UY", { weekday: "long" })
+      .toLowerCase();
 
     const todays = schedules.filter(
-      (s) => s.day_of_week.toLowerCase() === capitalize(dayOfWeek)
+      (s) => String(s.day_of_week || "").toLowerCase() === dayOfWeekName
     );
 
     if (todays.length === 0) {
@@ -93,16 +94,21 @@ export default function PublicBooking() {
 
     const takenHours = bookings?.map((b) => b.hour) || [];
 
-    const hours = []; // ← FIX: antes tenía tipos de TypeScript
+    const hours = [];
 
     todays.forEach((slot) => {
       let current = slot.start_time.slice(0, 5);
+      const end = slot.end_time.slice(0, 5);
 
-      while (current < slot.end_time.slice(0, 5)) {
-        if (!takenHours.includes(current + ":00")) {
+      while (current < end) {
+        const normalized = current.endsWith(":00") ? current : `${current}:00`;
+
+        if (!takenHours.includes(normalized)) {
           hours.push(current);
         }
-        current = addMinutes(current, selectedService.duration);
+
+        const step = Number(selectedService.duration || 0);
+        current = addMinutes(current, step);
       }
     });
 
@@ -114,22 +120,19 @@ export default function PublicBooking() {
     const d = new Date();
     d.setHours(h);
     d.setMinutes(m + mins);
-    return d.toTimeString().slice(0, 5);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
   };
 
-  const capitalize = (s) =>
-    s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
   const usesDeposit =
-    business &&
-    business.deposit_enabled &&
-    Number(business.deposit_value) > 0;
+    business && business.deposit_enabled && Number(business.deposit_value) > 0;
 
   const calculateDepositAmount = () => {
     if (!usesDeposit || !selectedService) return 0;
 
-    const value = Number(business.deposit_value || 0);
-    const price = Number(selectedService.price || 0);
+    const value = Number(business.deposit_value);
+    const price = Number(selectedService.price);
 
     if (business.deposit_type === "percentage") {
       return Math.round((price * value) / 100);
@@ -168,7 +171,7 @@ export default function PublicBooking() {
           service_id: selectedService.id,
           service_name: selectedService.name,
           date: selectedDate,
-          hour: selectedHour + ":00",
+          hour: `${selectedHour}:00`,
           customer_name: name,
           customer_email: email,
           status: "confirmed",
@@ -188,12 +191,6 @@ export default function PublicBooking() {
 
       const depositAmount = calculateDepositAmount();
 
-      if (!depositAmount || depositAmount <= 0) {
-        setError("La seña configurada no es válida.");
-        setIsProcessing(false);
-        return;
-      }
-
       const { data, error: fnError } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
         {
@@ -205,7 +202,7 @@ export default function PublicBooking() {
             service_name: selectedService.name,
             service_price: selectedService.price,
             date: selectedDate,
-            hour: selectedHour + ":00",
+            hour: `${selectedHour}:00`,
             customer_name: name,
             customer_email: email,
             slug: business.slug,
@@ -214,7 +211,6 @@ export default function PublicBooking() {
       );
 
       if (fnError) {
-        console.error(fnError);
         setError("No se pudo iniciar el pago de la seña.");
         setIsProcessing(false);
         return;
@@ -255,14 +251,12 @@ export default function PublicBooking() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1">
-            Servicio
-          </label>
+          <label className="block text-sm font-medium mb-1">Servicio</label>
           <select
             className="border rounded w-full p-2"
             onChange={(e) =>
               setSelectedService(
-                services.find((s) => s.id === e.target.value)
+                services.find((s) => String(s.id) === e.target.value)
               )
             }
           >
@@ -276,9 +270,7 @@ export default function PublicBooking() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">
-            Fecha
-          </label>
+          <label className="block text-sm font-medium mb-1">Fecha</label>
           <input
             type="date"
             className="border rounded w-full p-2"
@@ -323,9 +315,7 @@ export default function PublicBooking() {
         )}
 
         <div>
-          <label className="block text-sm font-medium mb-1">
-            Tus datos
-          </label>
+          <label className="block text-sm font-medium mb-1">Tus datos</label>
           <input
             type="text"
             className="border rounded w-full p-2 mb-2"
@@ -333,6 +323,7 @@ export default function PublicBooking() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+
           <input
             type="email"
             className="border rounded w-full p-2"
