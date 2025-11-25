@@ -1,32 +1,23 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import BusinessSetup from "./pages/BusinessSetup";
-import Services from "./pages/Services";
 import Schedule from "./pages/Schedule";
+import Services from "./pages/Services";
 import PublicBooking from "./pages/PublicBooking";
-import Subscription from "./pages/Subscription";
-import ForgotPassword from "./pages/ForgotPassword";
-import UpdatePassword from "./pages/UpdatePassword";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
-
-        {/* Públicas */}
-        <Route path="/" element={<Login />} />
+        {/* Público */}
+        <Route path="/:slug" element={<PublicBooking />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/update-password" element={<UpdatePassword />} />
-        <Route path="/booking/:slug" element={<PublicBooking />} />
-
-        {/* Suscripción */}
-        <Route path="/subscription" element={<Subscription />} />
 
         {/* Privadas */}
         <Route
@@ -65,7 +56,9 @@ export default function AppRouter() {
           }
         />
 
+        {/* Default */}
+        <Route path="*" element={<Login />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
