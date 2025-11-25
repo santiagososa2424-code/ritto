@@ -14,12 +14,14 @@ export default function AppRouter() {
   return (
     <Router>
       <Routes>
-        {/* Público */}
+        {/* Página pública por slug */}
         <Route path="/:slug" element={<PublicBooking />} />
+
+        {/* Autenticación */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Privadas */}
+        {/* ZONA PRIVADA */}
         <Route
           path="/dashboard"
           element={
