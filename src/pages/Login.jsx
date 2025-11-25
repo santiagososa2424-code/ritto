@@ -5,20 +5,26 @@ import { useNavigate } from "react-router-dom";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
+    setErrorMsg("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    if (!email || !password) {
+      setErrorMsg("Completá todos los campos.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
-      setError(error.message);
+      setErrorMsg("Email o contraseña incorrectos.");
       return;
     }
 
@@ -26,14 +32,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="w-full max-w-5xl bg-white shadow-lg rounded-2xl overflow-hidden flex flex-col md:flex-row">
-        {/* Columna izquierda: branding / beneficios */}
+
+        {/* Columna izquierda (branding + beneficios) */}
         <div className="md:w-1/2 bg-blue-600 text-white p-8 flex flex-col justify-between">
           <div>
+            <div className="flex items-center gap-2 mb-4">
+              <img src="/ritto-logo.svg" alt="Ritto" className="h-10" />
+            </div>
+
             <h1 className="text-3xl font-extrabold tracking-tight">
               Ritto
             </h1>
+
             <p className="mt-2 text-blue-100">
               Tu agenda automática para barberías, salones y consultorios.
             </p>
@@ -49,7 +61,7 @@ export default function Login() {
               </li>
               <li className="flex gap-2">
                 <span className="mt-1 h-2 w-2 rounded-full bg-white"></span>
-                <span>Recordatorios por email y reducción de ausencias.</span>
+                <span>Recordatorios y reducción de ausencias.</span>
               </li>
               <li className="flex gap-2">
                 <span className="mt-1 h-2 w-2 rounded-full bg-white"></span>
@@ -68,8 +80,8 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Columna derecha: login */}
-        <div className="md:w-1/2 p-8">
+        {/* Columna derecha (form) */}
+        <div className="md:w-1/2 p-8 bg-white">
           <h2 className="text-2xl font-bold mb-2 text-slate-800">
             Iniciar sesión
           </h2>
@@ -77,13 +89,11 @@ export default function Login() {
             Accedé a tu panel de reservas y configuración.
           </p>
 
-          {error && <p className="text-red-500 mb-3">{error}</p>}
+          {errorMsg && <p className="text-red-500 mb-3">{errorMsg}</p>}
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm mb-1 text-slate-700">
-                Email
-              </label>
+              <label className="block text-sm mb-1 text-slate-700">Email</label>
               <input
                 type="email"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -93,9 +103,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm mb-1 text-slate-700">
-                Contraseña
-              </label>
+              <label className="block text-sm mb-1 text-slate-700">Contraseña</label>
               <input
                 type="password"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -119,6 +127,7 @@ export default function Login() {
             >
               ¿Olvidaste tu contraseña?
             </button>
+
             <button
               className="text-blue-600 hover:underline text-left"
               onClick={() => navigate("/register")}
