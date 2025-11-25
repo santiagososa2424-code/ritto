@@ -53,7 +53,6 @@ export default function Schedule() {
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    // VALIDACIÓN ANTI SOLAPAMIENTO
     const sameDay = schedules.filter((s) => s.day_of_week === day);
 
     for (let s of sameDay) {
@@ -63,7 +62,6 @@ export default function Schedule() {
       }
     }
 
-    // Insert real
     const { error: insertError } = await supabase.from("schedules").insert({
       business_id: businessId,
       day_of_week: day,
@@ -128,3 +126,13 @@ export default function Schedule() {
 
       <ul className="divide-y">
         {schedules.map((s) => (
+          <li key={s.id} className="py-2 flex justify-between">
+            <span>
+              {s.day_of_week}: {s.start_time} - {s.end_time}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
