@@ -7,7 +7,8 @@ import BusinessSetup from "./pages/BusinessSetup";
 import Schedule from "./pages/Schedule";
 import Services from "./pages/Services";
 import PublicBooking from "./pages/PublicBooking";
-import UpdatePassword from "./pages/UpdatePassword"; // 👈 IMPORT NECESARIO
+import ForgotPassword from "./pages/ForgotPassword"; 
+import UpdatePassword from "./pages/UpdatePassword"; 
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -15,18 +16,16 @@ export default function AppRouter() {
   return (
     <Router>
       <Routes>
-        {/* Página pública por slug */}
+        {/* Página pública */}
         <Route path="/:slug" element={<PublicBooking />} />
 
-        {/* Autenticación */}
+        {/* Auth */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* Recuperar contraseña */}
-        <Route path="/update-password" element={<UpdatePassword />} /> 
-        {/* 👆 AGREGADA ESTA RUTA */}
-
-        {/* ZONA PRIVADA */}
+        {/* Privado */}
         <Route
           path="/dashboard"
           element={
