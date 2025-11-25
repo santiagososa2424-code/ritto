@@ -7,6 +7,12 @@ export default function BusinessSetup() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [error, setError] = useState("");
+
+  // Campos para SEÑA
+  const [depositEnabled, setDepositEnabled] = useState(false);
+  const [depositType, setDepositType] = useState("percentage");
+  const [depositValue, setDepositValue] = useState(0);
+
   const navigate = useNavigate();
 
   const createSlug = (text) =>
@@ -28,6 +34,10 @@ export default function BusinessSetup() {
       phone,
       address,
       slug,
+      // Guardar datos de seña
+      deposit_enabled: depositEnabled,
+      deposit_type: depositType,
+      deposit_value: depositValue,
     });
 
     if (insertError) {
@@ -66,9 +76,50 @@ export default function BusinessSetup() {
           onChange={(e) => setAddress(e.target.value)}
         />
 
+        {/* SECCIÓN DE SEÑA */}
+        <div className="mt-6 p-4 border rounded-lg">
+          <h2 className="text-xl font-bold mb-3">Seña / Depósito</h2>
+
+          <label className="flex items-center gap-3 mb-3">
+            <input
+              type="checkbox"
+              checked={depositEnabled}
+              onChange={(e) => setDepositEnabled(e.target.checked)}
+            />
+            Activar seña para reservas
+          </label>
+
+          {depositEnabled && (
+            <>
+              <label className="block mb-2 font-semibold">
+                Tipo de seña
+              </label>
+              <select
+                className="border p-2 w-full rounded mb-3"
+                value={depositType}
+                onChange={(e) => setDepositType(e.target.value)}
+              >
+                <option value="percentage">Porcentaje (%)</option>
+                <option value="fixed">Monto fijo ($)</option>
+              </select>
+
+              <label className="block mb-2 font-semibold">Valor</label>
+              <input
+                type="number"
+                className="border p-2 w-full rounded"
+                value={depositValue}
+                onChange={(e) =>
+                  setDepositValue(Number(e.target.value))
+                }
+                min="0"
+              />
+            </>
+          )}
+        </div>
+
         <button
           type="submit"
-          className="bg-black text-white p-2 rounded font-semibold"
+          className="bg-black text-white p-2 rounded font-semibold mt-4"
         >
           Guardar
         </button>
