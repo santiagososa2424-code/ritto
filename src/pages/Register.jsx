@@ -23,7 +23,7 @@ export default function Register() {
       return;
     }
 
-    // Crear usuario en Auth
+    // Crear usuario en AUTH
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -44,7 +44,7 @@ export default function Register() {
 
     const userId = data.user.id;
 
-    // CREAR TRIAL DE 30 DÍAS
+    // Trial de 30 días
     const now = new Date();
     const expires = new Date();
     expires.setDate(now.getDate() + 30);
@@ -53,67 +53,106 @@ export default function Register() {
       user_id: userId,
       started_at: now.toISOString(),
       expires_at: expires.toISOString(),
-      active: true, // trial activo
+      active: true,
     });
 
-    // Redirigir al dashboard
+    // Redirigir al Dashboard
     navigate("/dashboard");
   };
 
   return (
-    <div className="p-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Crear cuenta</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8 border border-gray-100">
 
-      {error && <p className="text-red-600 mb-3">{error}</p>}
+        {/* LOGO */}
+        <div className="flex justify-center mb-6">
+          <img src="/ritto-logo.svg" alt="Ritto" className="h-12" />
+        </div>
 
-      <form onSubmit={handleRegister} className="flex flex-col gap-3">
-        <input
-          type="text"
-          placeholder="Nombre"
-          className="border p-2 rounded"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <h1 className="text-2xl font-bold text-center text-blue-700 mb-2">
+          Crear tu cuenta
+        </h1>
 
-        <input
-          type="text"
-          placeholder="Apellido"
-          className="border p-2 rounded"
-          value={lastname}
-          onChange={(e) => setLastname(e.target.value)}
-        />
+        <p className="text-center text-gray-500 mb-6">
+          Comenzá gratis — 30 días de prueba
+        </p>
 
-        <input
-          type="text"
-          placeholder="Teléfono"
-          className="border p-2 rounded"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
+        {error && (
+          <p className="text-red-600 text-center font-medium mb-4">{error}</p>
+        )}
 
-        <input
-          type="email"
-          placeholder="Email"
-          className="border p-2 rounded"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <form onSubmit={handleRegister} className="space-y-4">
 
-        <input
-          type="password"
-          placeholder="Contraseña"
-          className="border p-2 rounded"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">Nombre</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Juan"
+            />
+          </div>
 
-        <button
-          type="submit"
-          className="bg-black text-white p-2 rounded font-semibold"
-        >
-          Registrarme
-        </button>
-      </form>
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">Apellido</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              value={lastname}
+              onChange={(e) => setLastname(e.target.value)}
+              placeholder="Pérez"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">Teléfono</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="09X XXX XXX"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">Email</label>
+            <input
+              type="email"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tucorreo@email.com"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">Contraseña</label>
+            <input
+              type="password"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="********"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            Crear cuenta
+          </button>
+        </form>
+
+        <p className="text-center text-gray-500 text-sm mt-6">
+          ¿Ya tenés cuenta?{" "}
+          <a href="/login" className="text-blue-600 font-medium hover:underline">
+            Iniciar sesión
+          </a>
+        </p>
+      </div>
     </div>
   );
 }
