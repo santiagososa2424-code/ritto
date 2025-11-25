@@ -26,16 +26,14 @@ export default function PublicBooking() {
   }, []);
 
   const loadData = async () => {
-    setError("");
-
     try {
-      const { data: biz, error: bizError } = await supabase
+      const { data: biz } = await supabase
         .from("businesses")
         .select("*")
         .eq("slug", slug)
         .single();
 
-      if (bizError || !biz) {
+      if (!biz) {
         setError("No se encontró el negocio.");
         return;
       }
@@ -57,7 +55,6 @@ export default function PublicBooking() {
 
       setSchedules(scheds || []);
     } catch (err) {
-      console.error(err);
       setError("Error cargando datos.");
     }
   };
@@ -81,10 +78,7 @@ export default function PublicBooking() {
       (s) => String(s.day_of_week || "").toLowerCase() === dayOfWeekName
     );
 
-    if (todays.length === 0) {
-      setAvailableHours([]);
-      return;
-    }
+    if (todays.length === 0) return setAvailableHours([]);
 
     const { data: bookings } = await supabase
       .from("bookings")
@@ -102,13 +96,9 @@ export default function PublicBooking() {
 
       while (current < end) {
         const normalized = current.endsWith(":00") ? current : `${current}:00`;
+        if (!takenHours.includes(normalized)) hours.push(current);
 
-        if (!takenHours.includes(normalized)) {
-          hours.push(current);
-        }
-
-        const step = Number(selectedService.duration || 0);
-        current = addMinutes(current, step);
+        current = addMinutes(current, Number(selectedService.duration || 0));
       }
     });
 
@@ -120,13 +110,13 @@ export default function PublicBooking() {
     const d = new Date();
     d.setHours(h);
     d.setMinutes(m + mins);
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes()
+    ).padStart(2, "0")}`;
   };
 
   const usesDeposit =
-    business && business.deposit_enabled && Number(business.deposit_value) > 0;
+    business?.deposit_enabled && Number(business.deposit_value) > 0;
 
   const calculateDepositAmount = () => {
     if (!usesDeposit || !selectedService) return 0;
@@ -134,11 +124,9 @@ export default function PublicBooking() {
     const value = Number(business.deposit_value);
     const price = Number(selectedService.price);
 
-    if (business.deposit_type === "percentage") {
-      return Math.round((price * value) / 100);
-    }
-
-    return value;
+    return business.deposit_type === "percentage"
+      ? Math.round((price * value) / 100)
+      : value;
   };
 
   const handleSubmit = async (e) => {
@@ -153,12 +141,7 @@ export default function PublicBooking() {
       !name.trim() ||
       !email.trim()
     ) {
-      setError("Completa todos los campos para reservar.");
-      return;
-    }
-
-    if (!business) {
-      setError("Negocio no encontrado.");
+      setError("Completa todos los campos.");
       return;
     }
 
@@ -178,13 +161,9 @@ export default function PublicBooking() {
           deposit_paid: false,
         });
 
-        if (insertError) {
-          setError(insertError.message);
-          setIsProcessing(false);
-          return;
-        }
+        if (insertError) throw insertError;
 
-        setSuccess("Reserva creada con éxito. ¡Te esperamos!");
+        setSuccess("Reserva confirmada. ¡Te esperamos!");
         setIsProcessing(false);
         return;
       }
@@ -210,144 +189,146 @@ export default function PublicBooking() {
         }
       );
 
-      if (fnError) {
-        setError("No se pudo iniciar el pago de la seña.");
-        setIsProcessing(false);
-        return;
-      }
+      if (fnError) throw fnError;
 
       const checkoutUrl = data?.init_point || data?.url;
-
-      if (!checkoutUrl) {
-        setError("No se recibió la URL de pago.");
-        setIsProcessing(false);
-        return;
-      }
-
       window.location.href = checkoutUrl;
     } catch (err) {
-      console.error(err);
-      setError("Ocurrió un error al procesar la reserva.");
+      setError("No se pudo completar la reserva.");
       setIsProcessing(false);
     }
   };
 
-  if (!business) {
-    return (
-      <div className="p-6 max-w-lg mx-auto">
-        {error || "Cargando negocio..."}
-      </div>
-    );
-  }
+  if (!business) return <div className="p-6 text-center">{error}</div>;
 
   const depositAmount = calculateDepositAmount();
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold mb-2">{business.name}</h1>
-      <p className="text-sm text-gray-600 mb-4">
-        Reservá tu turno en pocos pasos.
-      </p>
+    <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center">
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Servicio</label>
-          <select
-            className="border rounded w-full p-2"
-            onChange={(e) =>
-              setSelectedService(
-                services.find((s) => String(s.id) === e.target.value)
-              )
-            }
-          >
-            <option value="">Elegí un servicio</option>
-            {services.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} — ${s.price}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Fecha</label>
-          <input
-            type="date"
-            className="border rounded w-full p-2"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Horario disponible
-          </label>
-          <select
-            className="border rounded w-full p-2"
-            value={selectedHour}
-            onChange={(e) => setSelectedHour(e.target.value)}
-          >
-            <option value="">Elegí un horario</option>
-            {availableHours.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-          {selectedDate && selectedService && availableHours.length === 0 && (
-            <p className="text-xs text-gray-500 mt-1">
-              No hay horarios disponibles para ese día.
-            </p>
-          )}
-        </div>
-
-        {usesDeposit && selectedService && (
-          <div className="border rounded p-3 bg-gray-50 text-sm">
-            <p className="font-semibold mb-1">Seña requerida</p>
-            <p>
-              Para confirmar tu turno, deberás abonar una seña de{" "}
-              <span className="font-bold">${depositAmount}</span>{" "}
-              {business.deposit_type === "percentage" &&
-                `(${business.deposit_value}% del servicio)`}.
-            </p>
-          </div>
+      {/* HEADER DEL NEGOCIO */}
+      <div className="w-full max-w-2xl bg-white shadow-md rounded-xl p-6 mb-6">
+        <h1 className="text-3xl font-bold text-blue-700">{business.name}</h1>
+        {business.address && (
+          <p className="text-sm text-gray-600 mt-1">{business.address}</p>
         )}
+        {business.phone && (
+          <p className="text-sm text-gray-600">{business.phone}</p>
+        )}
+        <p className="text-sm text-gray-500 mt-3">
+          Reservá tu turno en pocos pasos:
+        </p>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Tus datos</label>
-          <input
-            type="text"
-            className="border rounded w-full p-2 mb-2"
-            placeholder="Nombre completo"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+      {/* FORMULARIO */}
+      <div className="w-full max-w-2xl bg-white shadow-lg p-6 rounded-xl">
+        <form className="space-y-6" onSubmit={handleSubmit}>
 
-          <input
-            type="email"
-            className="border rounded w-full p-2"
-            placeholder="Tu email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+          {/* Servicio */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Servicio</label>
+            <select
+              className="border p-2 w-full rounded-lg"
+              onChange={(e) =>
+                setSelectedService(
+                  services.find((s) => String(s.id) === e.target.value)
+                )
+              }
+            >
+              <option value="">Elegí un servicio</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — ${s.price}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        {success && <p className="text-green-600 text-sm">{success}</p>}
+          {/* Fecha */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Fecha</label>
+            <input
+              type="date"
+              className="border p-2 w-full rounded-lg"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+          </div>
 
-        <button
-          type="submit"
-          disabled={isProcessing}
-          className="bg-black text-white px-4 py-2 rounded font-semibold w-full disabled:opacity-60"
-        >
-          {isProcessing
-            ? "Procesando..."
-            : usesDeposit
-            ? "Ir a pagar la seña"
-            : "Confirmar reserva"}
-        </button>
-      </form>
+          {/* Horario */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Horarios disponibles</label>
+            <select
+              className="border p-2 w-full rounded-lg"
+              value={selectedHour}
+              onChange={(e) => setSelectedHour(e.target.value)}
+            >
+              <option value="">Elegí un horario</option>
+              {availableHours.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+
+            {selectedDate && selectedService && availableHours.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                No hay horarios disponibles.
+              </p>
+            )}
+          </div>
+
+          {/* Seña */}
+          {usesDeposit && selectedService && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+              <p className="font-semibold text-blue-800 mb-1">Seña requerida</p>
+              <p className="text-gray-700">
+                Para confirmar tu turno deberás abonar
+                {" "}
+                <b>${depositAmount}</b>
+                {business.deposit_type === "percentage" &&
+                  ` (${business.deposit_value}% del servicio)`}
+                .
+              </p>
+            </div>
+          )}
+
+          {/* Datos del cliente */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Tus datos</label>
+            <input
+              type="text"
+              placeholder="Nombre completo"
+              className="border rounded-lg w-full p-2 mb-2"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+
+            <input
+              type="email"
+              placeholder="Tu email"
+              className="border rounded-lg w-full p-2"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          {/* Errores */}
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {success && <p className="text-green-600 text-sm">{success}</p>}
+
+          {/* BOTÓN */}
+          <button
+            type="submit"
+            disabled={isProcessing}
+            className="bg-blue-700 hover:bg-blue-800 text-white w-full p-3 rounded-lg font-semibold transition disabled:opacity-50"
+          >
+            {isProcessing
+              ? "Procesando..."
+              : usesDeposit
+              ? "Ir a pagar seña"
+              : "Confirmar reserva"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
