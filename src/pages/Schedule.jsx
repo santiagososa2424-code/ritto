@@ -50,6 +50,11 @@ export default function Schedule() {
     e.preventDefault();
     setError("");
 
+    if (!startTime || !endTime) {
+      setError("Completá todos los campos.");
+      return;
+    }
+
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
@@ -75,60 +80,78 @@ export default function Schedule() {
     }
 
     await loadData();
-
     setStartTime("");
     setEndTime("");
   };
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Horarios del negocio</h1>
+    <div className="p-8 max-w-3xl mx-auto">
+      <h1 className="text-3xl font-bold text-blue-700 mb-6">
+        Horarios de atención
+      </h1>
 
-      {error && <p className="text-red-500">{error}</p>}
+      {/* Error */}
+      {error && (
+        <p className="mb-4 text-red-600 font-medium bg-red-50 p-3 rounded">
+          {error}
+        </p>
+      )}
 
-      <form onSubmit={handleAdd} className="flex flex-col gap-3 mb-6">
-        <select
-          className="border p-2 rounded"
-          value={day}
-          onChange={(e) => setDay(e.target.value)}
-        >
-          <option>Lunes</option>
-          <option>Martes</option>
-          <option>Miércoles</option>
-          <option>Jueves</option>
-          <option>Viernes</option>
-          <option>Sábado</option>
-          <option>Domingo</option>
-        </select>
-
-        <input
-          type="time"
-          className="border p-2 rounded"
-          value={startTime}
-          onChange={(e) => setStartTime(e.target.value)}
-        />
-
-        <input
-          type="time"
-          className="border p-2 rounded"
-          value={endTime}
-          onChange={(e) => setEndTime(e.target.value)}
-        />
-
-        <button className="bg-black text-white p-2 rounded font-semibold">
+      {/* Formulario */}
+      <div className="bg-white border rounded-xl shadow-sm p-6 mb-8">
+        <h2 className="text-xl font-semibold text-blue-700 mb-4">
           Agregar horario
-        </button>
-      </form>
+        </h2>
 
-      <h2 className="text-xl font-semibold mb-2">Horarios creados</h2>
+        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <select
+            className="border p-2 rounded"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+          >
+            <option>Lunes</option>
+            <option>Martes</option>
+            <option>Miércoles</option>
+            <option>Jueves</option>
+            <option>Viernes</option>
+            <option>Sábado</option>
+            <option>Domingo</option>
+          </select>
 
-      {schedules.length === 0 && <p>No hay horarios aún.</p>}
+          <input
+            type="time"
+            className="border p-2 rounded"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+          />
 
-      <ul className="divide-y">
+          <input
+            type="time"
+            className="border p-2 rounded"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+          />
+
+          <button className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold">
+            Agregar
+          </button>
+        </form>
+      </div>
+
+      {/* Lista */}
+      <h2 className="text-2xl font-semibold text-blue-700 mb-3">
+        Horarios creados
+      </h2>
+
+      {schedules.length === 0 && (
+        <p className="text-gray-600">No hay horarios aún.</p>
+      )}
+
+      <ul className="divide-y bg-white border rounded-xl shadow-sm">
         {schedules.map((s) => (
-          <li key={s.id} className="py-2 flex justify-between">
-            <span>
-              {s.day_of_week}: {s.start_time} - {s.end_time}
+          <li key={s.id} className="flex justify-between p-4 items-center">
+            <span className="font-medium text-gray-700">
+              {s.day_of_week}: {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}
             </span>
           </li>
         ))}
