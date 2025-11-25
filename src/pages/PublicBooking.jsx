@@ -93,7 +93,7 @@ export default function PublicBooking() {
 
     const takenHours = bookings?.map((b) => b.hour) || [];
 
-    const hours = [];
+    const hours: string[] = [];
 
     todays.forEach((slot) => {
       let current = slot.start_time.slice(0, 5);
@@ -135,8 +135,7 @@ export default function PublicBooking() {
       return Math.round((price * value) / 100);
     }
 
-    // fixed
-    return value;
+    return value; // fixed
   };
 
   const handleSubmit = async (e) => {
