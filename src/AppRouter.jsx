@@ -13,6 +13,7 @@ import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 
 import BookingSuccess from "./pages/BookingSuccess.jsx";
 import PaymentSuccess from "./pages/PaymentSuccess.jsx";
+import Landing from "./pages/Landing.jsx";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
@@ -20,6 +21,9 @@ export default function AppRouter() {
   return (
     <Router>
       <Routes>
+
+        {/* Landing inicial */}
+        <Route path="/" element={<Landing />} />
 
         {/* Páginas públicas */}
         <Route path="/success" element={<BookingSuccess />} />
@@ -79,7 +83,8 @@ export default function AppRouter() {
         />
 
         {/* Default */}
-        <Route path="*" element={<Login />} />
+        <Route path="*" element={<Landing />} />
+
       </Routes>
     </Router>
   );
