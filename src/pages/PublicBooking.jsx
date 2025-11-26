@@ -26,21 +26,21 @@ export default function PublicBooking() {
     loadData();
   }, []);
 
-  // -------------------------------------------------
-  // CARGAR TODO DEL NEGOCIO
-  // -------------------------------------------------
+  // ----------------------------------
+  // CARGAR DATOS DEL NEGOCIO
+  // ----------------------------------
   const loadData = async () => {
     try {
       setError("");
 
       // Negocio
-      const { data: biz } = await supabase
+      const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("*")
         .eq("slug", slug)
         .single();
 
-      if (!biz) {
+      if (bizError || !biz) {
         setError("No se encontró el negocio.");
         return;
       }
@@ -56,7 +56,7 @@ export default function PublicBooking() {
 
       setServices(servs || []);
 
-      // Horarios del negocio
+      // Horarios
       const { data: scheds } = await supabase
         .from("schedules")
         .select("*")
@@ -64,7 +64,7 @@ export default function PublicBooking() {
 
       setSchedules(scheds || []);
 
-      // Bloqueos
+      // Bloqueos de fechas
       const { data: blks } = await supabase
         .from("schedule_blocks")
         .select("*")
@@ -73,51 +73,41 @@ export default function PublicBooking() {
       setBlocks(blks || []);
     } catch (err) {
       console.error(err);
-      setError("Ocurrió un error cargando el negocio.");
+      setError("Error cargando datos.");
     }
   };
 
-  // -------------------------------------------------
+  // ----------------------------------
   // REGENERAR HORARIOS DISPONIBLES
-  // -------------------------------------------------
+  // ----------------------------------
   useEffect(() => {
     if (selectedDate && selectedService) {
       calculateAvailableHours();
     } else {
       setAvailableHours([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, selectedService]);
 
   const calculateAvailableHours = async () => {
     if (!business || !selectedService || !selectedDate) return;
 
-    const today = new Date(selectedDate).toISOString().slice(0, 10);
+    const todayStr = new Date(selectedDate).toISOString().slice(0, 10);
 
-    // 🔥 bloquear fechas específicas
-    const isBlocked = blocks.some((b) => b.date === today);
+    // Día bloqueado completamente
+    const isBlocked = blocks.some((b) => b.date === todayStr);
     if (isBlocked) {
       setAvailableHours([]);
       return;
     }
 
-    // 🔥 bloquear días no laborales
-    const dayName = new Date(selectedDate)
+    // Nombre del día: lunes, martes, etc.
+    const dayOfWeekName = new Date(selectedDate)
       .toLocaleDateString("es-UY", { weekday: "long" })
-      .charAt(0)
-      .toUpperCase() +
-      new Date(selectedDate)
-        .toLocaleDateString("es-UY", { weekday: "long" })
-        .slice(1)
-        .toLowerCase();
+      .toLowerCase();
 
-    if (!business.working_days?.[dayName]) {
-      setAvailableHours([]);
-      return;
-    }
-
-    // Horarios creados
     const todays = schedules.filter(
-      (s) => s.day_of_week.toLowerCase() === dayName.toLowerCase()
+      (s) => String(s.day_of_week || "").toLowerCase() === dayOfWeekName
     );
 
     if (todays.length === 0) {
@@ -125,7 +115,7 @@ export default function PublicBooking() {
       return;
     }
 
-    // Reservas existentes
+    // Reservas existentes para ese día
     const { data: bookings } = await supabase
       .from("bookings")
       .select("*")
@@ -139,17 +129,19 @@ export default function PublicBooking() {
       const end = slot.end_time.slice(0, 5);
 
       while (current < end) {
-        const normalizedHour = `${current}:00`;
+        const normalized = `${current}:00`;
 
-        // capacidad
-        const taken = bookings?.filter((b) => b.hour === normalizedHour).length || 0;
+        const countThisHour =
+          bookings?.filter((b) => b.hour === normalized).length || 0;
+
+        // capacidad por franja (columna capacity_per_slot en schedules, default 1)
         const capacity = slot.capacity_per_slot || 1;
 
-        if (taken < capacity) {
+        if (countThisHour < capacity) {
           hours.push(current);
         }
 
-        // sumar duración del servicio
+        // sumamos la duración del servicio
         current = addMinutes(current, selectedService.duration);
       }
     });
@@ -161,16 +153,15 @@ export default function PublicBooking() {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
     d.setHours(h);
-    d.setMinutes(m + mins);
-
-    return `${String(d.getHours()).padStart(2, "0")}:${String(
-      d.getMinutes()
-    ).padStart(2, "0")}`;
+    d.setMinutes(m + Number(mins || 0));
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
   };
 
-  // -------------------------------------------------
-  // SEÑA
-  // -------------------------------------------------
+  // ----------------------------------
+  // SEÑA (DEPOSIT)
+  // ----------------------------------
   const usesDeposit =
     business && business.deposit_enabled && Number(business.deposit_value) > 0;
 
@@ -187,9 +178,9 @@ export default function PublicBooking() {
     return value;
   };
 
-  // -------------------------------------------------
-  // CREAR RESERVA
-  // -------------------------------------------------
+  // ----------------------------------
+  // GUARDAR RESERVA
+  // ----------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -214,24 +205,49 @@ export default function PublicBooking() {
     setIsProcessing(true);
 
     try {
-      // 🔵 SIN SEÑA
+      // ⚡ CASO 1: SIN SEÑA → insert + email inmediato
       if (!usesDeposit) {
-        const { error: insertError } = await supabase.from("bookings").insert({
-          business_id: business.id,
-          service_id: selectedService.id,
-          service_name: selectedService.name,
-          date: selectedDate,
-          hour: `${selectedHour}:00`,
-          customer_name: name,
-          customer_email: email,
-          status: "confirmed",
-          deposit_paid: false,
-        });
+        const { data: inserted, error: insertError } = await supabase
+          .from("bookings")
+          .insert({
+            business_id: business.id,
+            service_id: selectedService.id,
+            service_name: selectedService.name,
+            date: selectedDate,
+            hour: `${selectedHour}:00`,
+            customer_name: name,
+            customer_email: email,
+            status: "confirmed",
+            deposit_paid: false,
+          })
+          .select()
+          .single();
 
         if (insertError) {
+          console.error(insertError);
           setError(insertError.message);
           setIsProcessing(false);
           return;
+        }
+
+        // ⚡ Enviar email de confirmación (Resend)
+        try {
+          await supabase.functions.invoke("send-booking-confirmation", {
+            body: {
+              to: email,
+              customer_name: name,
+              business_name: business.name,
+              business_address: business.address,
+              business_slug: business.slug,
+              map_url: business.map_url,
+              date: selectedDate,
+              hour: inserted.hour || `${selectedHour}:00`,
+              service_name: selectedService.name,
+            },
+          });
+        } catch (mailErr) {
+          console.error("Error enviando email de confirmación:", mailErr);
+          // No tiramos error al usuario si falla el mail, la reserva ya está hecha
         }
 
         setSuccess("Reserva creada con éxito. ¡Te esperamos!");
@@ -239,8 +255,15 @@ export default function PublicBooking() {
         return;
       }
 
-      // 🟣 CON SEÑA → MERCADO PAGO
+      // ⚡ CASO 2: CON SEÑA → Mercado Pago (email lo agregamos cuando
+      // integremos bien el webhook de pago para no romper tu flujo actual)
       const depositAmount = calculateDepositAmount();
+
+      if (!depositAmount || depositAmount <= 0) {
+        setError("La seña configurada no es válida.");
+        setIsProcessing(false);
+        return;
+      }
 
       const { data, error: fnError } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
@@ -262,6 +285,7 @@ export default function PublicBooking() {
       );
 
       if (fnError) {
+        console.error(fnError);
         setError("No se pudo iniciar el pago de la seña.");
         setIsProcessing(false);
         return;
@@ -270,7 +294,7 @@ export default function PublicBooking() {
       const checkoutUrl = data?.init_point || data?.url;
 
       if (!checkoutUrl) {
-        setError("Error recibiendo URL de pago.");
+        setError("No se recibió la URL de pago.");
         setIsProcessing(false);
         return;
       }
@@ -278,15 +302,15 @@ export default function PublicBooking() {
       window.location.href = checkoutUrl;
     } catch (err) {
       console.error(err);
-      setError("Ocurrió un error al procesar la reserva.");
+      setError("Error al procesar la reserva.");
     }
 
     setIsProcessing(false);
   };
 
-  // -------------------------------------------------
+  // ----------------------------------
   // UI
-  // -------------------------------------------------
+  // ----------------------------------
   if (!business) {
     return (
       <div className="p-6 max-w-lg mx-auto">
@@ -299,24 +323,7 @@ export default function PublicBooking() {
 
   return (
     <div className="p-6 max-w-lg mx-auto">
-      <h1 className="text-3xl font-bold mb-2">{business.name}</h1>
-
-      {/* Dirección + mapa */}
-      {business.address && (
-        <p className="text-gray-700 mb-1">📍 {business.address}</p>
-      )}
-
-      {business.map_url && (
-        <a
-          href={business.map_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 underline text-sm mb-4 inline-block"
-        >
-          Ver en Google Maps
-        </a>
-      )}
-
+      <h1 className="text-2xl font-bold mb-2">{business.name}</h1>
       <p className="text-sm text-gray-600 mb-4">
         Reservá tu turno en pocos pasos.
       </p>
@@ -353,10 +360,10 @@ export default function PublicBooking() {
           />
         </div>
 
-        {/* Horarios */}
+        {/* Horario */}
         <div>
           <label className="block text-sm font-medium mb-1">
-            Horarios disponibles
+            Horario disponible
           </label>
 
           <select
@@ -376,7 +383,7 @@ export default function PublicBooking() {
             selectedService &&
             availableHours.length === 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                No hay horarios disponibles.
+                No hay horarios disponibles para ese día.
               </p>
             )}
         </div>
@@ -394,7 +401,7 @@ export default function PublicBooking() {
           </div>
         )}
 
-        {/* Datos usuario */}
+        {/* Tus datos */}
         <div>
           <label className="block text-sm font-medium mb-1">Tus datos</label>
 
@@ -420,8 +427,8 @@ export default function PublicBooking() {
 
         <button
           type="submit"
-          disabled={isProcessing}
           className="bg-black text-white px-4 py-2 rounded font-semibold w-full disabled:opacity-60"
+          disabled={isProcessing}
         >
           {isProcessing
             ? "Procesando..."
