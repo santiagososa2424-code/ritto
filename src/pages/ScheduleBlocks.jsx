@@ -28,7 +28,6 @@ export default function ScheduleBlocks() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // obtener negocio
     const { data: biz } = await supabase
       .from("businesses")
       .select("*")
@@ -42,7 +41,6 @@ export default function ScheduleBlocks() {
 
     setBusinessId(biz.id);
 
-    // obtener bloqueos
     const { data: blk } = await supabase
       .from("schedule_blocks")
       .select("*")
@@ -133,98 +131,136 @@ export default function ScheduleBlocks() {
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Bloquear días / Licencias</h1>
+    <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
+      <div className="max-w-xl mx-auto space-y-8">
 
-      {error && <p className="text-red-600 mb-3">{error}</p>}
-      {success && <p className="text-green-600 mb-3">{success}</p>}
+        {/* Título */}
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Bloquear días y licencias
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Usá esta sección para bloquear días en los que no vas a trabajar.
+          </p>
+        </div>
 
-      {/* BLOQUEAR UN DÍA */}
-      <div className="border rounded p-4 mb-6 bg-white shadow">
-        <h2 className="text-lg font-semibold mb-3">Bloquear un día</h2>
+        {/* Alertas */}
+        {error && (
+          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[12px] text-emerald-200">
+            {success}
+          </div>
+        )}
 
-        <input
-          type="date"
-          className="border rounded w-full p-2 mb-3"
-          value={singleDate}
-          onChange={(e) => setSingleDate(e.target.value)}
-        />
+        {/* Bloquear día */}
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
+            Bloquear un día
+          </h2>
 
-        <input
-          type="text"
-          placeholder="Motivo (opcional)"
-          className="border rounded w-full p-2 mb-3"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
+          <input
+            type="date"
+            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+            value={singleDate}
+            onChange={(e) => setSingleDate(e.target.value)}
+          />
 
-        <button
-          onClick={addSingleDay}
-          className="bg-black text-white px-4 py-2 rounded w-full"
-        >
-          Bloquear día
-        </button>
-      </div>
+          <input
+            type="text"
+            placeholder="Motivo (opcional)"
+            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
 
-      {/* BLOQUEAR RANGO */}
-      <div className="border rounded p-4 mb-6 bg-white shadow">
-        <h2 className="text-lg font-semibold mb-3">Bloquear un rango</h2>
-
-        <label className="block text-sm mb-1">Desde</label>
-        <input
-          type="date"
-          className="border rounded w-full p-2 mb-3"
-          value={rangeStart}
-          onChange={(e) => setRangeStart(e.target.value)}
-        />
-
-        <label className="block text-sm mb-1">Hasta</label>
-        <input
-          type="date"
-          className="border rounded w-full p-2 mb-3"
-          value={rangeEnd}
-          onChange={(e) => setRangeEnd(e.target.value)}
-        />
-
-        <input
-          type="text"
-          placeholder="Motivo (opcional)"
-          className="border rounded w-full p-2 mb-3"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-
-        <button
-          onClick={addRange}
-          className="bg-black text-white px-4 py-2 rounded w-full"
-        >
-          Bloquear rango
-        </button>
-      </div>
-
-      {/* LISTA DE BLOQUEOS */}
-      <h2 className="text-lg font-semibold mb-2">Días bloqueados</h2>
-      <ul className="space-y-2">
-        {blocks.map((b) => (
-          <li
-            key={b.id}
-            className="border bg-white rounded p-3 flex justify-between"
+          <button
+            onClick={addSingleDay}
+            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
           >
-            <span>
-              {b.date}{" "}
-              {b.reason && (
-                <span className="text-gray-500 text-sm">— {b.reason}</span>
-              )}
-            </span>
-            <button
-              onClick={() => deleteBlock(b.id)}
-              className="text-red-600 text-sm"
+            Bloquear día
+          </button>
+        </div>
+
+        {/* Bloquear rango */}
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
+            Bloquear un rango
+          </h2>
+
+          <div>
+            <label className="text-[12px] text-slate-300">Desde</label>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              value={rangeStart}
+              onChange={(e) => setRangeStart(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-[12px] text-slate-300">Hasta</label>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              value={rangeEnd}
+              onChange={(e) => setRangeEnd(e.target.value)}
+            />
+          </div>
+
+          <input
+            type="text"
+            placeholder="Motivo (opcional)"
+            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+
+          <button
+            onClick={addRange}
+            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
+          >
+            Bloquear rango
+          </button>
+        </div>
+
+        {/* Lista de bloqueos */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-50">
+            Días bloqueados
+          </h2>
+
+          {blocks.length === 0 && (
+            <p className="text-sm text-slate-400">
+              No hay días bloqueados.
+            </p>
+          )}
+
+          {blocks.map((b) => (
+            <div
+              key={b.id}
+              className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow flex justify-between items-center px-5 py-4"
             >
-              Eliminar
-            </button>
-          </li>
-        ))}
-      </ul>
+              <div>
+                <p className="text-sm text-slate-50">{b.date}</p>
+                {b.reason && (
+                  <p className="text-[12px] text-slate-400">{b.reason}</p>
+                )}
+              </div>
+
+              <button
+                onClick={() => deleteBlock(b.id)}
+                className="text-sm px-4 py-1.5 rounded-2xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition"
+              >
+                Eliminar
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
