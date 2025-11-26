@@ -3,12 +3,17 @@ import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
 export default function Schedule() {
+  const [business, setBusiness] = useState(null);
   const [businessId, setBusinessId] = useState(null);
+
   const [day, setDay] = useState("Lunes");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [interval, setInterval] = useState(30); // intervalo entre turnos
+
   const [schedules, setSchedules] = useState([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const navigate = useNavigate();
 
@@ -17,27 +22,32 @@ export default function Schedule() {
   }, []);
 
   const loadData = async () => {
+    setError("");
+    setSuccess("");
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { data: business } = await supabase
+    const { data: biz } = await supabase
       .from("businesses")
       .select("*")
       .eq("owner_id", user.id)
       .single();
 
-    if (!business) {
+    if (!biz) {
       navigate("/setup");
       return;
     }
 
-    setBusinessId(business.id);
+    setBusiness(biz);
+    setBusinessId(biz.id);
 
     const { data: scheduleData } = await supabase
       .from("schedules")
       .select("*")
-      .eq("business_id", business.id);
+      .eq("business_id", biz.id)
+      .order("day_of_week", { ascending: true });
 
     setSchedules(scheduleData || []);
   };
@@ -49,6 +59,7 @@ export default function Schedule() {
   const handleAdd = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!startTime || !endTime) {
       setError("Completá todos los campos.");
@@ -72,6 +83,7 @@ export default function Schedule() {
       day_of_week: day,
       start_time: newStart,
       end_time: newEnd,
+      interval_minutes: interval,
     });
 
     if (insertError) {
@@ -79,9 +91,15 @@ export default function Schedule() {
       return;
     }
 
-    await loadData();
+    setSuccess("Horario agregado correctamente.");
     setStartTime("");
     setEndTime("");
+    loadData();
+  };
+
+  const deleteSchedule = async (id) => {
+    await supabase.from("schedules").delete().eq("id", id);
+    loadData();
   };
 
   return (
@@ -90,10 +108,14 @@ export default function Schedule() {
         Horarios de atención
       </h1>
 
-      {/* Error */}
       {error && (
         <p className="mb-4 text-red-600 font-medium bg-red-50 p-3 rounded">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mb-4 text-green-600 font-medium bg-green-50 p-3 rounded">
+          {success}
         </p>
       )}
 
@@ -103,7 +125,10 @@ export default function Schedule() {
           Agregar horario
         </h2>
 
-        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <form
+          onSubmit={handleAdd}
+          className="grid grid-cols-1 md:grid-cols-5 gap-4"
+        >
           <select
             className="border p-2 rounded"
             value={day}
@@ -132,6 +157,17 @@ export default function Schedule() {
             onChange={(e) => setEndTime(e.target.value)}
           />
 
+          <input
+            type="number"
+            min="5"
+            max="240"
+            step="5"
+            className="border p-2 rounded"
+            value={interval}
+            onChange={(e) => setInterval(e.target.value)}
+            placeholder="Intervalo"
+          />
+
           <button className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold">
             Agregar
           </button>
@@ -149,10 +185,26 @@ export default function Schedule() {
 
       <ul className="divide-y bg-white border rounded-xl shadow-sm">
         {schedules.map((s) => (
-          <li key={s.id} className="flex justify-between p-4 items-center">
-            <span className="font-medium text-gray-700">
-              {s.day_of_week}: {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}
-            </span>
+          <li
+            key={s.id}
+            className="flex justify-between p-4 items-center text-sm"
+          >
+            <div>
+              <span className="font-medium text-gray-700">
+                {s.day_of_week}: {s.start_time.slice(0, 5)} –{" "}
+                {s.end_time.slice(0, 5)}
+              </span>
+              <p className="text-gray-500 text-xs">
+                Intervalo: {s.interval_minutes || 30} min
+              </p>
+            </div>
+
+            <button
+              className="text-red-600 text-xs hover:underline"
+              onClick={() => deleteSchedule(s.id)}
+            >
+              Eliminar
+            </button>
           </li>
         ))}
       </ul>
