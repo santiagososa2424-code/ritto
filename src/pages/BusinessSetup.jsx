@@ -8,6 +8,7 @@ export default function BusinessSetup() {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [mapUrl, setMapUrl] = useState("");
+  const [email, setEmail] = useState("");
 
   const [depositEnabled, setDepositEnabled] = useState(false);
   const [depositType, setDepositType] = useState("fixed");
@@ -35,7 +36,7 @@ export default function BusinessSetup() {
   }, []);
 
   // ----------------------------------------
-  // CARGAR NEGOCIO
+  // CARGAR DATOS DEL NEGOCIO
   // ----------------------------------------
   const loadData = async () => {
     setError("");
@@ -62,6 +63,7 @@ export default function BusinessSetup() {
     setName(biz.name || "");
     setAddress(biz.address || "");
     setMapUrl(biz.map_url || "");
+    setEmail(biz.email || "");
 
     setDepositEnabled(biz.deposit_enabled || false);
     setDepositType(biz.deposit_type || "fixed");
@@ -86,12 +88,18 @@ export default function BusinessSetup() {
       return;
     }
 
+    if (!email.trim()) {
+      setError("El email del negocio es obligatorio.");
+      return;
+    }
+
     const { error: updateError } = await supabase
       .from("businesses")
       .update({
         name,
         address,
         map_url: mapUrl,
+        email,
         deposit_enabled: depositEnabled,
         deposit_type: depositType,
         deposit_value: depositValue,
@@ -132,6 +140,7 @@ export default function BusinessSetup() {
 
       {/* FORMULARIO */}
       <div className="bg-white border rounded-xl shadow-sm p-6">
+        
         {/* Nombre */}
         <label className="block mb-2 font-semibold text-gray-700">
           Nombre del negocio
@@ -152,7 +161,19 @@ export default function BusinessSetup() {
           onChange={(e) => setAddress(e.target.value)}
         />
 
-        {/* Mapa URL */}
+        {/* Email */}
+        <label className="block mb-2 font-semibold text-gray-700">
+          Email del negocio (para notificaciones)
+        </label>
+        <input
+          type="email"
+          className="border rounded w-full p-2 mb-4"
+          placeholder="tubeneficio@ritto.lat"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+
+        {/* Mapa */}
         <label className="block mb-2 font-semibold text-gray-700">
           Google Maps (URL)
         </label>
@@ -201,9 +222,9 @@ export default function BusinessSetup() {
           )}
         </div>
 
-        {/* INTERVALO BASE */}
+        {/* INTERVALO */}
         <label className="block text-sm font-semibold mb-2 text-gray-700">
-          Intervalo base para la agenda
+          Intervalo base de agenda
         </label>
         <select
           className="border p-2 rounded mb-6"
@@ -221,7 +242,6 @@ export default function BusinessSetup() {
         <h3 className="text-sm font-semibold mb-2 text-gray-700">
           Días que trabaja el negocio
         </h3>
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
           {Object.keys(workingDays).map((d) => (
             <label key={d} className="flex items-center gap-2 text-sm">
@@ -237,7 +257,7 @@ export default function BusinessSetup() {
           ))}
         </div>
 
-        {/* BOTÓN GUARDAR */}
+        {/* GUARDAR */}
         <button
           onClick={handleSave}
           className="bg-blue-700 hover:bg-blue-800 text-white w-full py-3 rounded font-semibold"
