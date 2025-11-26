@@ -21,7 +21,7 @@ export default function ProtectedRoute({ children }) {
         .eq("user_id", user.id)
         .single();
 
-      // Si hay error raro, por ahora dejamos pasar
+      // Si hay error (pero no es "no rows"), dejamos pasar
       if (error && error.code !== "PGRST116") {
         console.error(error);
         setAllowed(true);
@@ -29,7 +29,7 @@ export default function ProtectedRoute({ children }) {
       }
 
       if (!sub) {
-        // No tiene suscripción creada → recién registrado → permitir trial
+        // Recién registrado → tiene trial
         setAllowed(true);
         return;
       }
@@ -38,10 +38,10 @@ export default function ProtectedRoute({ children }) {
       const expires = new Date(sub.expires_at);
 
       if (expires > now || sub.active === true) {
-        // Trial todavía vigente o suscripción activa
+        // Trial vigente o suscripción activa
         setAllowed(true);
       } else {
-        // Trial vencido y suscripción inactiva
+        // Trial vencido / suscripción inactiva
         setAllowed(false);
       }
     };
@@ -51,13 +51,23 @@ export default function ProtectedRoute({ children }) {
     }
   }, [user, loading]);
 
+  // ⏳ LOADER DISEÑO APPLE
   if (loading || allowed === null) {
-    return <div className="p-6">Cargando...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.6)] backdrop-blur-xl text-xs text-slate-200 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          Verificando acceso...
+        </div>
+      </div>
+    );
   }
 
+  // ❌ NO AUTORIZADO
   if (!user || !allowed) {
     return <Navigate to="/login" replace />;
   }
 
+  // ✔️ AUTORIZADO
   return children;
 }
