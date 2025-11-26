@@ -11,6 +11,9 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import UpdatePassword from "./pages/UpdatePassword.jsx";
 import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 
+import BookingSuccess from "./pages/BookingSuccess.jsx";
+import PaymentSuccess from "./pages/PaymentSuccess.jsx";
+
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 export default function AppRouter() {
@@ -18,7 +21,9 @@ export default function AppRouter() {
     <Router>
       <Routes>
 
-        {/* Página pública */}
+        {/* Páginas públicas */}
+        <Route path="/success" element={<BookingSuccess />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
         <Route path="/:slug" element={<PublicBooking />} />
 
         {/* Auth */}
@@ -27,7 +32,7 @@ export default function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* Privadas con protección */}
+        {/* Privadas */}
         <Route
           path="/dashboard"
           element={
