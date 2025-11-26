@@ -1,5 +1,3 @@
-// ⚡⚡ CÓDIGO COMPLETO ACTUALIZADO CON CAPACIDAD POR HORARIO ⚡⚡
-
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
@@ -10,6 +8,7 @@ export default function PublicBooking() {
   const [business, setBusiness] = useState(null);
   const [services, setServices] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [blocks, setBlocks] = useState([]);
 
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -27,25 +26,27 @@ export default function PublicBooking() {
     loadData();
   }, []);
 
+  // ----------------------------------
+  // CARGAR DATOS DEL NEGOCIO
+  // ----------------------------------
   const loadData = async () => {
-    setError("");
-
     try {
-      // NEGOCIO
-      const { data: biz } = await supabase
+      setError("");
+
+      const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("*")
         .eq("slug", slug)
         .single();
 
-      if (!biz) {
+      if (bizError || !biz) {
         setError("No se encontró el negocio.");
         return;
       }
 
       setBusiness(biz);
 
-      // SERVICIOS
+      // Servicios
       const { data: servs } = await supabase
         .from("services")
         .select("*")
@@ -54,19 +55,30 @@ export default function PublicBooking() {
 
       setServices(servs || []);
 
-      // HORARIOS
+      // Horarios del negocio
       const { data: scheds } = await supabase
         .from("schedules")
         .select("*")
         .eq("business_id", biz.id);
 
       setSchedules(scheds || []);
+
+      // Bloqueos de días
+      const { data: blks } = await supabase
+        .from("schedule_blocks")
+        .select("*")
+        .eq("business_id", biz.id);
+
+      setBlocks(blks || []);
     } catch (err) {
       console.error(err);
       setError("Error cargando datos.");
     }
   };
 
+  // ----------------------------------
+  // REGENERAR HORARIOS DISPONIBLES
+  // ----------------------------------
   useEffect(() => {
     if (selectedDate && selectedService) {
       calculateAvailableHours();
@@ -78,12 +90,22 @@ export default function PublicBooking() {
   const calculateAvailableHours = async () => {
     if (!business || !selectedService || !selectedDate) return;
 
+    const today = new Date(selectedDate).toISOString().slice(0, 10);
+
+    // ● Verificar si el día está BLOQUEADO
+    const isBlocked = blocks.some((b) => b.date === today);
+    if (isBlocked) {
+      setAvailableHours([]);
+      return;
+    }
+
+    // Nombre del día
     const dayOfWeekName = new Date(selectedDate)
       .toLocaleDateString("es-UY", { weekday: "long" })
       .toLowerCase();
 
     const todays = schedules.filter(
-      (s) => (s.day_of_week || "").toLowerCase() === dayOfWeekName
+      (s) => String(s.day_of_week || "").toLowerCase() === dayOfWeekName
     );
 
     if (todays.length === 0) {
@@ -91,7 +113,7 @@ export default function PublicBooking() {
       return;
     }
 
-    // RESERVAS EXISTENTES
+    // Reservas existentes
     const { data: bookings } = await supabase
       .from("bookings")
       .select("*")
@@ -105,19 +127,18 @@ export default function PublicBooking() {
       const end = slot.end_time.slice(0, 5);
 
       while (current < end) {
-        const normalized = current.endsWith(":00") ? current : `${current}:00`;
+        const normalized = current + ":00";
 
-        // ⚡ CAPACIDAD POR HORARIO
-        const takenThisHour = bookings?.filter((b) => b.hour === normalized).length;
-        const capacity = business.capacity_per_slot || 1;
+        // Revisar cuántas reservas hay en esa hora
+        const count = bookings?.filter((b) => b.hour === normalized).length || 0;
 
-        if (takenThisHour < capacity) {
+        const capacity = slot.capacity_per_slot || 1;
+
+        if (count < capacity) {
           hours.push(current);
         }
 
-        // sumar duración del servicio
-        const step = Number(selectedService.duration);
-        current = addMinutes(current, step);
+        current = addMinutes(current, selectedService.duration);
       }
     });
 
@@ -129,9 +150,14 @@ export default function PublicBooking() {
     const d = new Date();
     d.setHours(h);
     d.setMinutes(m + mins);
-    return d.toISOString().slice(11, 16);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes()
+    ).padStart(2, "0")}`;
   };
 
+  // ----------------------------------
+  // SEÑA (DEPOSIT)
+  // ----------------------------------
   const usesDeposit =
     business && business.deposit_enabled && Number(business.deposit_value) > 0;
 
@@ -148,12 +174,21 @@ export default function PublicBooking() {
     return value;
   };
 
+  // ----------------------------------
+  // GUARDAR RESERVA
+  // ----------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!selectedService || !selectedDate || !selectedHour || !name.trim() || !email.trim()) {
+    if (
+      !selectedService ||
+      !selectedDate ||
+      !selectedHour ||
+      !name.trim() ||
+      !email.trim()
+    ) {
       setError("Completa todos los campos para reservar.");
       return;
     }
@@ -166,8 +201,9 @@ export default function PublicBooking() {
     setIsProcessing(true);
 
     try {
+      // SIN SEÑA
       if (!usesDeposit) {
-        await supabase.from("bookings").insert({
+        const { error: insertError } = await supabase.from("bookings").insert({
           business_id: business.id,
           service_id: selectedService.id,
           service_name: selectedService.name,
@@ -179,14 +215,21 @@ export default function PublicBooking() {
           deposit_paid: false,
         });
 
+        if (insertError) {
+          setError(insertError.message);
+          setIsProcessing(false);
+          return;
+        }
+
         setSuccess("Reserva creada con éxito. ¡Te esperamos!");
         setIsProcessing(false);
         return;
       }
 
+      // CON SEÑA
       const depositAmount = calculateDepositAmount();
 
-      const { data } = await supabase.functions.invoke(
+      const { data, error: fnError } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
         {
           body: {
@@ -205,17 +248,38 @@ export default function PublicBooking() {
         }
       );
 
+      if (fnError) {
+        setError("No se pudo iniciar el pago de la seña.");
+        setIsProcessing(false);
+        return;
+      }
+
       const checkoutUrl = data?.init_point || data?.url;
+
+      if (!checkoutUrl) {
+        setError("No se recibió la URL de pago.");
+        setIsProcessing(false);
+        return;
+      }
+
       window.location.href = checkoutUrl;
     } catch (err) {
+      setError("Error al procesar la reserva.");
       console.error(err);
-      setError("Error procesando la reserva.");
-      setIsProcessing(false);
     }
+
+    setIsProcessing(false);
   };
 
+  // ----------------------------------
+  // UI
+  // ----------------------------------
   if (!business) {
-    return <div className="p-6 max-w-lg mx-auto">{error || "Cargando negocio..."}</div>;
+    return (
+      <div className="p-6 max-w-lg mx-auto">
+        {error || "Cargando negocio..."}
+      </div>
+    );
   }
 
   const depositAmount = calculateDepositAmount();
@@ -223,7 +287,9 @@ export default function PublicBooking() {
   return (
     <div className="p-6 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold mb-2">{business.name}</h1>
-      <p className="text-sm text-gray-600 mb-4">Reservá tu turno en pocos pasos.</p>
+      <p className="text-sm text-gray-600 mb-4">
+        Reservá tu turno en pocos pasos.
+      </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Servicio */}
@@ -259,7 +325,10 @@ export default function PublicBooking() {
 
         {/* Horarios */}
         <div>
-          <label className="block text-sm font-medium mb-1">Horarios disponibles</label>
+          <label className="block text-sm font-medium mb-1">
+            Horario disponible
+          </label>
+
           <select
             className="border rounded w-full p-2"
             value={selectedHour}
@@ -272,11 +341,33 @@ export default function PublicBooking() {
               </option>
             ))}
           </select>
+
+          {selectedDate &&
+            selectedService &&
+            availableHours.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                No hay horarios disponibles.
+              </p>
+            )}
         </div>
 
-        {/* Datos */}
+        {/* Seña */}
+        {usesDeposit && selectedService && (
+          <div className="border rounded p-3 bg-gray-50 text-sm">
+            <p className="font-semibold mb-1">Seña requerida</p>
+            <p>
+              Para confirmar tu turno, aboná una seña de{" "}
+              <span className="font-bold">${depositAmount}</span>{" "}
+              {business.deposit_type === "percentage" &&
+                `(${business.deposit_value}% del servicio)`}.
+            </p>
+          </div>
+        )}
+
+        {/* Tus datos */}
         <div>
           <label className="block text-sm font-medium mb-1">Tus datos</label>
+
           <input
             type="text"
             className="border rounded w-full p-2 mb-2"
@@ -294,22 +385,13 @@ export default function PublicBooking() {
           />
         </div>
 
-        {/* Seña */}
-        {usesDeposit && selectedService && (
-          <div className="border rounded p-3 bg-gray-50 text-sm">
-            <p className="font-semibold mb-1">Seña requerida</p>
-            <p>
-              Deberás pagar una seña de{" "}
-              <span className="font-bold">${depositAmount}</span>
-            </p>
-          </div>
-        )}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {success && <p className="text-green-600 text-sm">{success}</p>}
 
-        {/* Botón */}
         <button
           type="submit"
-          disabled={isProcessing}
           className="bg-black text-white px-4 py-2 rounded font-semibold w-full disabled:opacity-60"
+          disabled={isProcessing}
         >
           {isProcessing
             ? "Procesando..."
