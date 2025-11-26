@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import Stats from "../components/Stats.jsx";
 
 export default function Dashboard() {
   const [business, setBusiness] = useState(null);
@@ -20,7 +21,7 @@ export default function Dashboard() {
         .single();
 
       if (!data) {
-        navigate("/setup"); // si no tiene negocio → lo manda a crearlo
+        navigate("/setup");
         return;
       }
 
@@ -99,6 +100,9 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-blue-800 mb-3">
           Dashboard de {business.name}
         </h1>
+
+        {/* 🔥 ESTADÍSTICAS INTEGRADAS */}
+        <Stats businessId={business.id} />
 
         <p className="text-gray-600 mb-6">
           Link público:{" "}
