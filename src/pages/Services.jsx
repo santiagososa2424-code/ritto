@@ -132,108 +132,162 @@ export default function Services() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600 text-lg">Cargando servicios...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-lg text-xs text-slate-200 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          Cargando servicios...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-10 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-blue-800 mb-6">Servicios</h1>
+    <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
+      <div className="max-w-4xl mx-auto space-y-8">
 
-      {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
-      {success && <p className="mb-3 text-green-600 text-sm">{success}</p>}
-
-      {/* FORM CARD */}
-      <div className="bg-white border rounded-xl p-6 shadow-sm mb-10">
-        <h2 className="text-xl font-semibold text-blue-700 mb-4">
-          Agregar servicio
-        </h2>
-
-        <form onSubmit={handleCreate} className="grid md:grid-cols-4 gap-4">
-          <input
-            type="text"
-            className="border rounded-lg p-2 md:col-span-1"
-            placeholder="Nombre"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-
-          <input
-            type="number"
-            className="border rounded-lg p-2 md:col-span-1"
-            placeholder="Precio"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-
-          <input
-            type="number"
-            className="border rounded-lg p-2 md:col-span-1"
-            placeholder="Duración (min)"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-          />
-
-          <button
-            type="submit"
-            className="bg-blue-600 text-white rounded-lg font-semibold p-2 md:col-span-1 hover:bg-blue-700 transition"
-          >
-            Agregar
-          </button>
-
-          <textarea
-            className="border rounded-lg p-2 md:col-span-4"
-            placeholder="Descripción (opcional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </form>
-      </div>
-
-      {/* LISTA DE SERVICIOS */}
-      <div className="space-y-3">
-        {services.length === 0 && (
-          <p className="text-sm text-gray-600">
-            No tenés servicios cargados.
+        {/* TÍTULO */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Servicios del negocio
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Administrá los servicios que tus clientes pueden reservar.
           </p>
+        </div>
+
+        {/* ALERTAS */}
+        {error && (
+          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[12px] text-emerald-200">
+            {success}
+          </div>
         )}
 
-        {services.map((s) => (
-          <div
-            key={s.id}
-            className="bg-white border rounded-xl p-4 shadow-sm flex items-center justify-between"
+        {/* FORMULARIO DE CREACIÓN */}
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-lg p-6 space-y-6">
+
+          <h2 className="text-lg font-semibold tracking-tight text-emerald-300">
+            Agregar nuevo servicio
+          </h2>
+
+          <form
+            onSubmit={handleCreate}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           >
             <div>
-              <p className="font-semibold text-blue-700 text-lg">
-                {s.name} — ${s.price} ({s.duration} min)
-              </p>
+              <label className="text-[11px] text-slate-300">Nombre</label>
+              <input
+                type="text"
+                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+                placeholder="Corte clásico"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
 
-              {s.description && (
-                <p className="text-sm text-gray-600 mt-1">{s.description}</p>
-              )}
+            <div>
+              <label className="text-[11px] text-slate-300">Precio (UYU)</label>
+              <input
+                type="number"
+                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+                placeholder="650"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
 
-              <p className="text-xs mt-2">
-                Estado:{" "}
-                <span
-                  className={
-                    s.is_active ? "text-green-600" : "text-gray-500"
-                  }
-                >
-                  {s.is_active ? "Activo" : "Inactivo"}
-                </span>
-              </p>
+            <div>
+              <label className="text-[11px] text-slate-300">
+                Duración (minutos)
+              </label>
+              <input
+                type="number"
+                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+                placeholder="30"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-[11px] text-slate-300">
+                Descripción (opcional)
+              </label>
+              <textarea
+                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm resize-none"
+                placeholder="Descripción breve del servicio..."
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
 
             <button
-              onClick={() => toggleActive(s)}
-              className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-100 transition"
+              type="submit"
+              className="sm:col-span-2 mt-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
             >
-              {s.is_active ? "Desactivar" : "Activar"}
+              Crear servicio
             </button>
-          </div>
-        ))}
+          </form>
+        </div>
+
+        {/* LISTA DE SERVICIOS */}
+        <div className="space-y-3">
+          {services.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-6">
+              No tenés servicios cargados todavía.
+            </p>
+          )}
+
+          {services.map((s) => (
+            <div
+              key={s.id}
+              className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between"
+            >
+              <div>
+                <p className="font-semibold text-lg text-slate-50 tracking-tight">
+                  {s.name}
+                </p>
+
+                <p className="text-[13px] text-slate-300 mt-0.5">
+                  ${s.price} · {s.duration} min
+                </p>
+
+                {s.description && (
+                  <p className="text-[12px] text-slate-400 mt-1">
+                    {s.description}
+                  </p>
+                )}
+
+                <p className="text-[11px] mt-2">
+                  Estado:{" "}
+                  <span
+                    className={
+                      s.is_active ? "text-emerald-300" : "text-slate-500"
+                    }
+                  >
+                    {s.is_active ? "Activo" : "Inactivo"}
+                  </span>
+                </p>
+              </div>
+
+              <button
+                onClick={() => toggleActive(s)}
+                className={`text-xs px-4 py-2 rounded-2xl border backdrop-blur-lg transition ${
+                  s.is_active
+                    ? "text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10"
+                    : "text-slate-300 border-white/10 hover:bg-white/5"
+                }`}
+              >
+                {s.is_active ? "Desactivar" : "Activar"}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
