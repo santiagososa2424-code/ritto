@@ -1,46 +1,29 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 export default function BusinessSetup() {
-  const [loading, setLoading] = useState(true);
   const [business, setBusiness] = useState(null);
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-
-  // ⚡ NUEVO → Días laborales
-  const [workingDays, setWorkingDays] = useState([
-    "lunes",
-    "martes",
-    "miércoles",
-    "jueves",
-    "viernes",
-    "sábado",
-  ]);
-
-  const weekDays = [
-    "lunes",
-    "martes",
-    "miércoles",
-    "jueves",
-    "viernes",
-    "sábado",
-    "domingo",
-  ];
-
-  const toggleDay = (day) => {
-    if (workingDays.includes(day)) {
-      setWorkingDays(workingDays.filter((d) => d !== day));
-    } else {
-      setWorkingDays([...workingDays, day]);
-    }
-  };
+  const [mapUrl, setMapUrl] = useState("");
 
   const [depositEnabled, setDepositEnabled] = useState(false);
   const [depositType, setDepositType] = useState("fixed");
   const [depositValue, setDepositValue] = useState(0);
+
+  const [slotInterval, setSlotInterval] = useState(30);
+
+  const [workingDays, setWorkingDays] = useState({
+    Lunes: true,
+    Martes: true,
+    Miércoles: true,
+    Jueves: true,
+    Viernes: true,
+    Sábado: true,
+    Domingo: false,
+  });
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -48,253 +31,220 @@ export default function BusinessSetup() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadBusiness();
+    loadData();
   }, []);
 
-  const createSlug = (text) =>
-    text
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9\-]/g, "");
-
-  const loadBusiness = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError("No se pudo obtener el usuario.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: biz } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("owner_id", user.id)
-        .single();
-
-      if (biz) {
-        setBusiness(biz);
-        setName(biz.name || "");
-        setPhone(biz.phone || "");
-        setAddress(biz.address || "");
-
-        // ⚡ cargar días laborales
-        if (biz.working_days) {
-          setWorkingDays(biz.working_days);
-        }
-
-        setDepositEnabled(Boolean(biz.deposit_enabled));
-        setDepositType(biz.deposit_type || "fixed");
-        setDepositValue(Number(biz.deposit_value || 0));
-      }
-
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setError("Error cargando los datos del negocio.");
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // ----------------------------------------
+  // CARGAR NEGOCIO
+  // ----------------------------------------
+  const loadData = async () => {
     setError("");
     setSuccess("");
 
-    if (!name) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data: biz } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("owner_id", user.id)
+      .single();
+
+    if (!biz) {
+      setError("No tenés un negocio creado.");
+      return;
+    }
+
+    setBusiness(biz);
+
+    // completar campos
+    setName(biz.name || "");
+    setAddress(biz.address || "");
+    setMapUrl(biz.map_url || "");
+
+    setDepositEnabled(biz.deposit_enabled || false);
+    setDepositType(biz.deposit_type || "fixed");
+    setDepositValue(biz.deposit_value || 0);
+
+    setSlotInterval(biz.slot_interval_minutes || 30);
+
+    if (biz.working_days) {
+      setWorkingDays(biz.working_days);
+    }
+  };
+
+  // ----------------------------------------
+  // GUARDAR CAMBIOS
+  // ----------------------------------------
+  const handleSave = async () => {
+    setError("");
+    setSuccess("");
+
+    if (!name.trim()) {
       setError("El nombre del negocio es obligatorio.");
       return;
     }
 
-    if (depositEnabled && (!depositValue || Number(depositValue) <= 0)) {
-      setError("La seña debe ser mayor a 0.");
+    const { error: updateError } = await supabase
+      .from("businesses")
+      .update({
+        name,
+        address,
+        map_url: mapUrl,
+        deposit_enabled: depositEnabled,
+        deposit_type: depositType,
+        deposit_value: depositValue,
+        slot_interval_minutes: slotInterval,
+        working_days: workingDays,
+      })
+      .eq("id", business.id);
+
+    if (updateError) {
+      setError(updateError.message);
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError("No se pudo obtener el usuario.");
-        setLoading(false);
-        return;
-      }
-
-      const slug = business?.slug || createSlug(name);
-
-      const payload = {
-        owner_id: user.id,
-        name,
-        phone,
-        address,
-        slug,
-
-        // ⚡ guardar días laborales
-        working_days: workingDays,
-
-        deposit_enabled: depositEnabled,
-        deposit_type: depositEnabled ? depositType : null,
-        deposit_value: depositEnabled ? Number(depositValue) : 0,
-        requires_deposit: depositEnabled,
-      };
-
-      let query = supabase.from("businesses");
-      let result;
-
-      if (business?.id) {
-        result = await query.update(payload).eq("id", business.id).select().single();
-      } else {
-        result = await query.insert(payload).select().single();
-      }
-
-      if (result.error) {
-        setError(result.error.message);
-        setLoading(false);
-        return;
-      }
-
-      setBusiness(result.data);
-      setSuccess("Datos del negocio guardados correctamente.");
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setError("Ocurrió un error al guardar los datos.");
-      setLoading(false);
-    }
+    setSuccess("Cambios guardados correctamente.");
   };
 
-  if (loading) {
-    return <div className="p-6">Cargando configuración del negocio...</div>;
+  if (!business) {
+    return (
+      <div className="p-6 max-w-xl mx-auto">
+        {error || "Cargando negocio..."}
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Configuración del negocio</h1>
+    <div className="p-8 max-w-3xl mx-auto">
+      <h1 className="text-3xl font-bold text-blue-700 mb-6">
+        Configuración del negocio
+      </h1>
 
-      {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
-      {success && <p className="mb-3 text-green-600 text-sm">{success}</p>}
+      {/* Errores */}
+      {error && (
+        <p className="mb-4 text-red-600 bg-red-50 p-3 rounded">{error}</p>
+      )}
+      {success && (
+        <p className="mb-4 text-green-600 bg-green-50 p-3 rounded">{success}</p>
+      )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* FORMULARIO */}
+      <div className="bg-white border rounded-xl shadow-sm p-6">
         {/* Nombre */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Nombre del negocio</label>
-          <input
-            type="text"
-            className="border rounded w-full p-2"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-
-        {/* Teléfono */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Teléfono del local</label>
-          <input
-            type="text"
-            className="border rounded w-full p-2"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
+        <label className="block mb-2 font-semibold text-gray-700">
+          Nombre del negocio
+        </label>
+        <input
+          type="text"
+          className="border rounded w-full p-2 mb-4"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
 
         {/* Dirección */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Dirección del local</label>
-          <input
-            type="text"
-            className="border rounded w-full p-2"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-        </div>
+        <label className="block mb-2 font-semibold text-gray-700">Dirección</label>
+        <input
+          type="text"
+          className="border rounded w-full p-2 mb-4"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
 
-        {/* ⚡ NUEVO: DÍAS LABORALES */}
-        <div className="mt-6 border rounded p-4 bg-gray-50">
-          <h2 className="text-lg font-semibold mb-3">Días laborales</h2>
-          <p className="text-sm text-gray-600 mb-3">
-            Seleccioná los días en los que tu negocio recibe reservas.
-          </p>
+        {/* Mapa URL */}
+        <label className="block mb-2 font-semibold text-gray-700">
+          Google Maps (URL)
+        </label>
+        <input
+          type="text"
+          className="border rounded w-full p-2 mb-6"
+          placeholder="https://maps.google.com/..."
+          value={mapUrl}
+          onChange={(e) => setMapUrl(e.target.value)}
+        />
 
-          <div className="grid grid-cols-2 gap-2">
-            {weekDays.map((day) => (
-              <label key={day} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={workingDays.includes(day)}
-                  onChange={() => toggleDay(day)}
-                />
-                {day.charAt(0).toUpperCase() + day.slice(1)}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Seña */}
-        <div className="mt-6 border-t pt-4">
-          <h2 className="text-lg font-semibold mb-2">Seña para reservar turno</h2>
-
-          <div className="flex items-center gap-2 mb-3">
+        {/* SEÑA */}
+        <div className="border rounded-lg p-4 mb-6">
+          <label className="flex items-center gap-2 font-semibold text-gray-700 mb-3">
             <input
-              id="depositEnabled"
               type="checkbox"
               checked={depositEnabled}
               onChange={(e) => setDepositEnabled(e.target.checked)}
             />
-            <label htmlFor="depositEnabled" className="text-sm">
-              Requerir seña para confirmar las reservas
-            </label>
-          </div>
+            Requerir seña para reservar
+          </label>
 
           {depositEnabled && (
-            <div className="space-y-3 ml-1 border rounded p-3 bg-gray-50">
-              <div>
-                <label className="block text-sm font-medium mb-1">Tipo de seña</label>
-                <select
-                  className="border rounded w-full p-2"
-                  value={depositType}
-                  onChange={(e) => setDepositType(e.target.value)}
-                >
-                  <option value="fixed">Monto fijo (en pesos)</option>
-                  <option value="percentage">Porcentaje del valor del servicio</option>
-                </select>
-              </div>
+            <>
+              <label className="block text-sm font-medium mb-1">Tipo de seña</label>
+              <select
+                className="border rounded w-full p-2 mb-3"
+                value={depositType}
+                onChange={(e) => setDepositType(e.target.value)}
+              >
+                <option value="fixed">Monto fijo</option>
+                <option value="percentage">Porcentaje del servicio</option>
+              </select>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {depositType === "fixed"
-                    ? "Monto de la seña (en pesos)"
-                    : "Porcentaje de seña (%)"}
-                </label>
-                <input
-                  type="number"
-                  className="border rounded w-full p-2"
-                  value={depositValue}
-                  onChange={(e) => setDepositValue(e.target.value)}
-                />
-              </div>
-            </div>
+              <label className="block text-sm font-medium mb-1">
+                Valor de seña
+              </label>
+              <input
+                type="number"
+                min={1}
+                className="border rounded w-full p-2 mb-2"
+                value={depositValue}
+                onChange={(e) => setDepositValue(Number(e.target.value))}
+              />
+            </>
           )}
         </div>
 
-        {/* Guardar */}
+        {/* INTERVALO BASE */}
+        <label className="block text-sm font-semibold mb-2 text-gray-700">
+          Intervalo base para la agenda
+        </label>
+        <select
+          className="border p-2 rounded mb-6"
+          value={slotInterval}
+          onChange={(e) => setSlotInterval(Number(e.target.value))}
+        >
+          <option value={15}>Cada 15 min</option>
+          <option value={20}>Cada 20 min</option>
+          <option value={30}>Cada 30 min (recomendado)</option>
+          <option value={45}>Cada 45 min</option>
+          <option value={60}>Cada 60 min</option>
+        </select>
+
+        {/* DÍAS HÁBILES */}
+        <h3 className="text-sm font-semibold mb-2 text-gray-700">
+          Días que trabaja el negocio
+        </h3>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+          {Object.keys(workingDays).map((d) => (
+            <label key={d} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={workingDays[d]}
+                onChange={(e) =>
+                  setWorkingDays({ ...workingDays, [d]: e.target.checked })
+                }
+              />
+              {d}
+            </label>
+          ))}
+        </div>
+
+        {/* BOTÓN GUARDAR */}
         <button
-          type="submit"
-          className="bg-black text-white px-4 py-2 rounded font-semibold w-full"
+          onClick={handleSave}
+          className="bg-blue-700 hover:bg-blue-800 text-white w-full py-3 rounded font-semibold"
         >
           Guardar cambios
         </button>
-      </form>
+      </div>
     </div>
   );
 }
