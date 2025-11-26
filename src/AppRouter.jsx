@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
-import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -10,6 +9,7 @@ import Services from "./pages/Services.jsx";
 import PublicBooking from "./pages/PublicBooking.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import UpdatePassword from "./pages/UpdatePassword.jsx";
+import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
@@ -17,9 +17,6 @@ export default function AppRouter() {
   return (
     <Router>
       <Routes>
-        
-        {/* LANDING NUEVA */}
-        <Route path="/" element={<Landing />} />
 
         {/* Página pública */}
         <Route path="/:slug" element={<PublicBooking />} />
@@ -30,7 +27,7 @@ export default function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* Rutas protegidas */}
+        {/* Privadas */}
         <Route
           path="/dashboard"
           element={
@@ -67,8 +64,17 @@ export default function AppRouter() {
           }
         />
 
+        <Route
+          path="/schedule-blocks"
+          element={
+            <ProtectedRoute>
+              <ScheduleBlocks />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Default */}
-        <Route path="*" element={<Landing />} />
+        <Route path="*" element={<Login />} />
       </Routes>
     </Router>
   );
