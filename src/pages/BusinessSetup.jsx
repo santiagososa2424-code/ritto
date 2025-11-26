@@ -10,11 +10,37 @@ export default function BusinessSetup() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
+  // ⚡ NUEVO → Días laborales
+  const [workingDays, setWorkingDays] = useState([
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+  ]);
+
+  const weekDays = [
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo",
+  ];
+
+  const toggleDay = (day) => {
+    if (workingDays.includes(day)) {
+      setWorkingDays(workingDays.filter((d) => d !== day));
+    } else {
+      setWorkingDays([...workingDays, day]);
+    }
+  };
+
   const [depositEnabled, setDepositEnabled] = useState(false);
   const [depositType, setDepositType] = useState("fixed");
   const [depositValue, setDepositValue] = useState(0);
-
-  const [capacity, setCapacity] = useState(1); // ⚡ NUEVO
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -41,6 +67,12 @@ export default function BusinessSetup() {
         data: { user },
       } = await supabase.auth.getUser();
 
+      if (!user) {
+        setError("No se pudo obtener el usuario.");
+        setLoading(false);
+        return;
+      }
+
       const { data: biz } = await supabase
         .from("businesses")
         .select("*")
@@ -53,11 +85,14 @@ export default function BusinessSetup() {
         setPhone(biz.phone || "");
         setAddress(biz.address || "");
 
+        // ⚡ cargar días laborales
+        if (biz.working_days) {
+          setWorkingDays(biz.working_days);
+        }
+
         setDepositEnabled(Boolean(biz.deposit_enabled));
         setDepositType(biz.deposit_type || "fixed");
         setDepositValue(Number(biz.deposit_value || 0));
-
-        setCapacity(biz.capacity_per_slot || 1); // ⚡ NUEVO
       }
 
       setLoading(false);
@@ -83,17 +118,18 @@ export default function BusinessSetup() {
       return;
     }
 
-    if (capacity < 1) {
-      setError("La capacidad mínima es 1.");
-      return;
-    }
-
     setLoading(true);
 
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError("No se pudo obtener el usuario.");
+        setLoading(false);
+        return;
+      }
 
       const slug = business?.slug || createSlug(name);
 
@@ -103,12 +139,14 @@ export default function BusinessSetup() {
         phone,
         address,
         slug,
+
+        // ⚡ guardar días laborales
+        working_days: workingDays,
+
         deposit_enabled: depositEnabled,
         deposit_type: depositEnabled ? depositType : null,
         deposit_value: depositEnabled ? Number(depositValue) : 0,
         requires_deposit: depositEnabled,
-
-        capacity_per_slot: Number(capacity), // ⚡ NUEVO
       };
 
       let query = supabase.from("businesses");
@@ -120,14 +158,13 @@ export default function BusinessSetup() {
         result = await query.insert(payload).select().single();
       }
 
-      const { error: upsertError } = result;
-
-      if (upsertError) {
-        setError(upsertError.message);
+      if (result.error) {
+        setError(result.error.message);
         setLoading(false);
         return;
       }
 
+      setBusiness(result.data);
       setSuccess("Datos del negocio guardados correctamente.");
       setLoading(false);
     } catch (err) {
@@ -137,7 +174,7 @@ export default function BusinessSetup() {
     }
   };
 
-  if (loading && !business && !name) {
+  if (loading) {
     return <div className="p-6">Cargando configuración del negocio...</div>;
   }
 
@@ -182,38 +219,45 @@ export default function BusinessSetup() {
           />
         </div>
 
-        {/* CAPACIDAD POR HORARIO */}
-        <div className="mt-4 border-t pt-4">
-          <h2 className="text-lg font-semibold mb-1">Capacidad por franja horaria</h2>
-          <p className="text-xs text-gray-600 mb-2">
-            ¿Cuántas reservas aceptás al mismo tiempo por horario?
+        {/* ⚡ NUEVO: DÍAS LABORALES */}
+        <div className="mt-6 border rounded p-4 bg-gray-50">
+          <h2 className="text-lg font-semibold mb-3">Días laborales</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Seleccioná los días en los que tu negocio recibe reservas.
           </p>
 
-          <input
-            type="number"
-            className="border rounded w-full p-2"
-            min="1"
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-          />
+          <div className="grid grid-cols-2 gap-2">
+            {weekDays.map((day) => (
+              <label key={day} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={workingDays.includes(day)}
+                  onChange={() => toggleDay(day)}
+                />
+                {day.charAt(0).toUpperCase() + day.slice(1)}
+              </label>
+            ))}
+          </div>
         </div>
 
-        {/* DEPÓSITO */}
+        {/* Seña */}
         <div className="mt-6 border-t pt-4">
           <h2 className="text-lg font-semibold mb-2">Seña para reservar turno</h2>
 
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <input
+              id="depositEnabled"
               type="checkbox"
-              className="h-4 w-4"
               checked={depositEnabled}
               onChange={(e) => setDepositEnabled(e.target.checked)}
             />
-            <label className="text-sm">Requerir seña para confirmar reservas</label>
+            <label htmlFor="depositEnabled" className="text-sm">
+              Requerir seña para confirmar las reservas
+            </label>
           </div>
 
           {depositEnabled && (
-            <div className="border rounded p-3 bg-gray-50 space-y-3">
+            <div className="space-y-3 ml-1 border rounded p-3 bg-gray-50">
               <div>
                 <label className="block text-sm font-medium mb-1">Tipo de seña</label>
                 <select
@@ -221,14 +265,16 @@ export default function BusinessSetup() {
                   value={depositType}
                   onChange={(e) => setDepositType(e.target.value)}
                 >
-                  <option value="fixed">Monto fijo</option>
-                  <option value="percentage">Porcentaje</option>
+                  <option value="fixed">Monto fijo (en pesos)</option>
+                  <option value="percentage">Porcentaje del valor del servicio</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  {depositType === "fixed" ? "Monto" : "Porcentaje"}
+                  {depositType === "fixed"
+                    ? "Monto de la seña (en pesos)"
+                    : "Porcentaje de seña (%)"}
                 </label>
                 <input
                   type="number"
@@ -241,9 +287,10 @@ export default function BusinessSetup() {
           )}
         </div>
 
+        {/* Guardar */}
         <button
           type="submit"
-          className="bg-black text-white px-4 py-2 rounded font-semibold"
+          className="bg-black text-white px-4 py-2 rounded font-semibold w-full"
         >
           Guardar cambios
         </button>
