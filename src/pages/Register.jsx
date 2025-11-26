@@ -11,7 +11,6 @@ export default function Register() {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
-
   const CREATOR_CODE = "lafamiliaspinelli";
 
   const handleRegister = async (e) => {
@@ -56,101 +55,129 @@ export default function Register() {
       active: true,
     });
 
-    // Redirigir al Dashboard
     navigate("/dashboard");
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8 border border-gray-100">
+    <div className="min-h-screen bg-[#0A0F1F] flex items-center justify-center px-6">
+
+      {/* CONTENEDOR PRINCIPAL */}
+      <div className="w-full max-w-xl bg-[#0D1326] border border-[#1C243A]
+                      rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.25)]
+                      p-10 text-white">
 
         {/* LOGO */}
         <div className="flex justify-center mb-6">
-          <img src="/ritto-logo.svg" alt="Ritto" className="h-12" />
+          <img src="/ritto-logo.svg" className="h-14 drop-shadow-xl" />
         </div>
 
-        <h1 className="text-2xl font-bold text-center text-blue-700 mb-2">
-          Crear tu cuenta
+        <h1 className="text-3xl font-semibold text-center mb-2">
+          Crear cuenta
         </h1>
 
-        <p className="text-center text-gray-500 mb-6">
-          Comenzá gratis — 30 días de prueba
+        <p className="text-center text-blue-100/60 mb-6">
+          Empezá gratis — 30 días sin tarjeta
         </p>
 
         {error && (
-          <p className="text-red-600 text-center font-medium mb-4">{error}</p>
+          <p className="text-red-400 bg-red-400/10 border border-red-400/20
+                        px-3 py-2 rounded-lg mb-4 text-center text-sm">
+            {error}
+          </p>
         )}
 
+        {/* FORM */}
         <form onSubmit={handleRegister} className="space-y-4">
 
+          {/* NOMBRE */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">Nombre</label>
+            <label className="block mb-1 text-blue-100/80 text-sm">Nombre</label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-[#0D142A] border border-[#1D2844] 
+                         text-blue-100 rounded-xl px-3 py-2.5 text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Juan"
             />
           </div>
 
+          {/* APELLIDO */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">Apellido</label>
+            <label className="block mb-1 text-blue-100/80 text-sm">Apellido</label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-[#0D142A] border border-[#1D2844] 
+                         text-blue-100 rounded-xl px-3 py-2.5 text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={lastname}
               onChange={(e) => setLastname(e.target.value)}
               placeholder="Pérez"
             />
           </div>
 
+          {/* TELEFONO */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">Teléfono</label>
+            <label className="block mb-1 text-blue-100/80 text-sm">Teléfono</label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-[#0D142A] border border-[#1D2844] 
+                         text-blue-100 rounded-xl px-3 py-2.5 text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="09X XXX XXX"
             />
           </div>
 
+          {/* EMAIL */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">Email</label>
+            <label className="block mb-1 text-blue-100/80 text-sm">Email</label>
             <input
               type="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-[#0D142A] border border-[#1D2844] 
+                         text-blue-100 rounded-xl px-3 py-2.5 text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tucorreo@email.com"
             />
           </div>
 
+          {/* PASSWORD */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">Contraseña</label>
+            <label className="block mb-1 text-blue-100/80 text-sm">Contraseña</label>
             <input
               type="password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-[#0D142A] border border-[#1D2844] 
+                         text-blue-100 rounded-xl px-3 py-2.5 text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="********"
             />
           </div>
 
+          {/* BOTON */}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3
+                       rounded-xl font-semibold text-sm transition active:scale-[0.97]"
           >
             Crear cuenta
           </button>
         </form>
 
-        <p className="text-center text-gray-500 text-sm mt-6">
+        {/* LINK LOGIN */}
+        <p className="text-center text-blue-100/60 text-sm mt-6">
           ¿Ya tenés cuenta?{" "}
-          <a href="/login" className="text-blue-600 font-medium hover:underline">
+          <button
+            className="text-blue-400 hover:text-blue-300 underline"
+            onClick={() => navigate("/login")}
+          >
             Iniciar sesión
-          </a>
+          </button>
         </p>
       </div>
     </div>
