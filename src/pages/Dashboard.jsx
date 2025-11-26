@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 export default function Dashboard() {
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const [loadingStats, setLoadingStats] = useState(true);
   const [stats, setStats] = useState({
     monthTotal: 0,
@@ -18,8 +19,13 @@ export default function Dashboard() {
     todayBookings: [],
   });
 
+  const [showTodayList, setShowTodayList] = useState(false);
+
   const navigate = useNavigate();
 
+  // =====================================================
+  // CARGAR NEGOCIO + ESTADÍSTICAS
+  // =====================================================
   useEffect(() => {
     const fetchBusinessAndStats = async () => {
       const {
@@ -46,35 +52,42 @@ export default function Dashboard() {
     fetchBusinessAndStats();
   }, []);
 
+  // =====================================================
+  // ESTADÍSTICAS DEL MES / TOP SERVICIO / HOY
+  // =====================================================
   const fetchStats = async (businessId) => {
     try {
       setLoadingStats(true);
 
       const now = new Date();
 
-      // Mes actual
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const startOfNextMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        1
+      );
 
       const startOfMonthStr = startOfMonth.toISOString().slice(0, 10);
       const startOfNextMonthStr = startOfNextMonth.toISOString().slice(0, 10);
 
       // Mes anterior
-      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const startOfThisMonth = startOfMonth;
-
+      const startOfPrevMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1
+      );
       const startOfPrevMonthStr = startOfPrevMonth.toISOString().slice(0, 10);
-      const startOfThisMonthStr = startOfThisMonth.toISOString().slice(0, 10);
+      const startOfThisMonthStr = startOfMonth.toISOString().slice(0, 10);
 
-      // Hoy
       const todayStr = now.toISOString().slice(0, 10);
 
-      // Últimos 30 días para top servicio
+      // Últimos 30 días
       const last30 = new Date();
       last30.setDate(last30.getDate() - 30);
       const last30Str = last30.toISOString();
 
-      // Reservas mes actual
+      // Mes actual
       const { data: bookingsMonth } = await supabase
         .from("bookings")
         .select("*")
@@ -82,7 +95,6 @@ export default function Dashboard() {
         .gte("date", startOfMonthStr)
         .lt("date", startOfNextMonthStr);
 
-      // Reservas mes anterior
       const { data: bookingsPrevMonth } = await supabase
         .from("bookings")
         .select("*")
@@ -92,13 +104,13 @@ export default function Dashboard() {
 
       const monthTotal = bookingsMonth?.length || 0;
       const monthPrevTotal = bookingsPrevMonth?.length || 0;
-      const monthDiff = monthTotal - monthPrevTotal;
 
+      const monthDiff = monthTotal - monthPrevTotal;
       let monthTrend = "igual";
       if (monthTotal > monthPrevTotal) monthTrend = "subiendo";
       if (monthTotal < monthPrevTotal) monthTrend = "bajando";
 
-      // Reservas últimos 30 días
+      // TOP Servicio últimos 30 días
       const { data: bookingsLast30 } = await supabase
         .from("bookings")
         .select("*")
@@ -109,23 +121,24 @@ export default function Dashboard() {
       let topServiceCount = 0;
       let topServicePercent = 0;
 
-      if (bookingsLast30 && bookingsLast30.length > 0) {
-        const counts = {};
+      if (bookingsLast30?.length > 0) {
+        const counter = {};
         bookingsLast30.forEach((b) => {
           const key = b.service_name || "Sin nombre";
-          counts[key] = (counts[key] || 0) + 1;
+          counter[key] = (counter[key] || 0) + 1;
         });
 
-        const entries = Object.entries(counts);
-        entries.sort((a, b) => b[1] - a[1]);
+        const sorted = Object.entries(counter).sort((a, b) => b[1] - a[1]);
+        const [name, count] = sorted[0];
 
-        const [name, count] = entries[0];
         topServiceName = name;
         topServiceCount = count;
-        topServicePercent = Math.round((count / bookingsLast30.length) * 100);
+        topServicePercent = Math.round(
+          (count / bookingsLast30.length) * 100
+        );
       }
 
-      // Reservas de hoy
+      // Turnos HOY
       const { data: bookingsToday } = await supabase
         .from("bookings")
         .select("*")
@@ -146,25 +159,35 @@ export default function Dashboard() {
         todayTotal,
         todayBookings: bookingsToday || [],
       });
-    } catch (err) {
-      console.error("Error cargando estadísticas", err);
+    } catch (error) {
+      console.error("Error cargando estadísticas:", error);
     } finally {
       setLoadingStats(false);
     }
   };
 
+  // =====================================================
+  // LOGOUT
+  // =====================================================
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
   };
 
-  if (loading)
+  // =====================================================
+  // LOADING
+  // =====================================================
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-gray-600 text-lg">Cargando...</p>
       </div>
     );
+  }
 
+  // =====================================================
+  // UI
+  // =====================================================
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* SIDEBAR */}
@@ -174,45 +197,31 @@ export default function Dashboard() {
         </div>
 
         <nav className="flex flex-col gap-4 text-blue-100">
-          <button
-            className="text-left hover:text-white"
-            onClick={() => navigate("/dashboard")}
-          >
+          <button onClick={() => navigate("/dashboard")} className="text-left hover:text-white">
             Inicio
           </button>
 
-          <button
-            className="text-left hover:text-white"
-            onClick={() => navigate("/services")}
-          >
+          <button onClick={() => navigate("/services")} className="text-left hover:text-white">
             Servicios
           </button>
 
-          <button
-            className="text-left hover:text-white"
-            onClick={() => navigate("/schedule")}
-          >
+          <button onClick={() => navigate("/schedule")} className="text-left hover:text-white">
             Horarios
           </button>
 
-          <button
-            className="text-left hover:text-white"
-            onClick={() => navigate("/schedule-blocks")}
-          >
+          <button onClick={() => navigate("/schedule-blocks")} className="text-left hover:text-white">
             Bloquear días
           </button>
 
-          <button
-            className="text-left hover:text-white"
-            onClick={() => navigate("/setup")}
-          >
+          <button onClick={() => setShowTodayList(!showTodayList)} className="text-left hover:text-white">
+            Turnos de hoy
+          </button>
+
+          <button onClick={() => navigate("/setup")} className="text-left hover:text-white">
             Configuración del negocio
           </button>
 
-          <button
-            className="text-left hover:text-white"
-            onClick={handleLogout}
-          >
+          <button onClick={handleLogout} className="text-left hover:text-white">
             Cerrar sesión
           </button>
         </nav>
@@ -246,7 +255,7 @@ export default function Dashboard() {
             <p className="text-gray-500 text-sm">Cargando estadísticas...</p>
           ) : (
             <div className="grid md:grid-cols-4 gap-4">
-              {/* Reservas este mes */}
+              {/* Mes actual */}
               <div className="bg-white border rounded-xl p-4 shadow-sm">
                 <p className="text-xs text-gray-500 mb-1">
                   Reservas este mes
@@ -254,6 +263,7 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold text-blue-700">
                   {stats.monthTotal}
                 </p>
+
                 <p className="text-xs mt-1 text-gray-600">
                   Mes anterior: {stats.monthPrevTotal}{" "}
                   {stats.monthTrend === "subiendo" && (
@@ -269,14 +279,15 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              {/* Servicio más reservado */}
+              {/* TOP servicio */}
               <div className="bg-white border rounded-xl p-4 shadow-sm">
                 <p className="text-xs text-gray-500 mb-1">
                   Servicio más reservado (30 días)
                 </p>
+
                 {stats.topServiceName ? (
                   <>
-                    <p className="text-sm font-semibold text-slate-800">
+                    <p className="text-sm font-semibold">
                       {stats.topServiceName}
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
@@ -286,14 +297,16 @@ export default function Dashboard() {
                   </>
                 ) : (
                   <p className="text-xs text-gray-500">
-                    Aún no hay reservas suficientes.
+                    No hay suficientes datos aún.
                   </p>
                 )}
               </div>
 
-              {/* Reservas de hoy */}
+              {/* Turnos HOY */}
               <div className="bg-white border rounded-xl p-4 shadow-sm">
-                <p className="text-xs text-gray-500 mb-1">Reservas hoy</p>
+                <p className="text-xs text-gray-500 mb-1">
+                  Reservas hoy
+                </p>
                 <p className="text-2xl font-bold text-blue-700">
                   {stats.todayTotal}
                 </p>
@@ -302,97 +315,21 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              {/* Placeholder futuro: Ingresos o uso de seña */}
+              {/* Tip */}
               <div className="bg-white border rounded-xl p-4 shadow-sm">
-                <p className="text-xs text-gray-500 mb-1">
-                  Tip
-                </p>
+                <p className="text-xs text-gray-500 mb-1">Tip del día</p>
                 <p className="text-sm text-gray-600">
-                  Podés usar estas métricas para ajustar horarios, precios y
-                  promociones.
+                  Controlá tus horarios según tu demanda real.
                 </p>
               </div>
             </div>
           )}
         </section>
 
-        {/* ACCESOS RÁPIDOS */}
-        <section>
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">
-            Configuración rápida
-          </h2>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Servicios */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-semibold text-blue-700 mb-2">
-                Servicios
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Añadí o editá los servicios que ofrecés.
-              </p>
-              <button
-                className="text-blue-600 font-semibold hover:underline"
-                onClick={() => navigate("/services")}
-              >
-                Ir a Servicios →
-              </button>
-            </div>
-
-            {/* Horarios */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-semibold text-blue-700 mb-2">
-                Horarios
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Configurá tus horarios disponibles.
-              </p>
-              <button
-                className="text-blue-600 font-semibold hover:underline"
-                onClick={() => navigate("/schedule")}
-              >
-                Ir a Horarios →
-              </button>
-            </div>
-
-            {/* Bloqueo de días */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-semibold text-blue-700 mb-2">
-                Bloquear días
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Licencias, vacaciones y fechas que no querés recibir reservas.
-              </p>
-              <button
-                className="text-blue-600 font-semibold hover:underline"
-                onClick={() => navigate("/schedule-blocks")}
-              >
-                Ir a bloqueos →
-              </button>
-            </div>
-
-            {/* Configuración */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm md:col-span-3">
-              <h3 className="text-xl font-semibold text-blue-700 mb-2">
-                Configuración del negocio
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Cambiá el nombre del negocio, ubicación, seña y otras políticas.
-              </p>
-              <button
-                className="text-blue-600 font-semibold hover:underline"
-                onClick={() => navigate("/setup")}
-              >
-                Ir a Configuración →
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* LISTA DE TURNOS DE HOY */}
-        {!loadingStats && (
+        {/* LISTA DE TURNOS HOY */}
+        {showTodayList && !loadingStats && (
           <section className="mt-10">
-            <h2 className="text-xl font-semibold text-slate-800 mb-3">
+            <h2 className="text-xl font-semibold mb-3">
               Turnos de hoy
             </h2>
 
@@ -404,17 +341,20 @@ export default function Dashboard() {
               <div className="bg-white border rounded-xl p-4 shadow-sm">
                 <ul className="divide-y">
                   {stats.todayBookings.map((b) => (
-                    <li key={b.id} className="py-2 flex justify-between text-sm">
+                    <li
+                      key={b.id}
+                      className="py-3 flex justify-between text-sm"
+                    >
                       <div>
-                        <p className="font-semibold">
-                          {b.hour?.slice(0, 5)} — {b.service_name}
+                        <p className="font-semibold text-blue-700">
+                          {b.hour.slice(0, 5)} — {b.service_name}
                         </p>
                         <p className="text-gray-600 text-xs">
                           {b.customer_name} ({b.customer_email})
                         </p>
                       </div>
                       <span className="text-xs text-gray-500">
-                        {b.status || "confirmado"}
+                        {b.status}
                       </span>
                     </li>
                   ))}
