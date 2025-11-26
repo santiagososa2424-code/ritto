@@ -27,7 +27,7 @@ export default function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* Privadas */}
+        {/* Privadas con protección */}
         <Route
           path="/dashboard"
           element={
