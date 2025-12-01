@@ -1,14 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------- */
+/* ESTILOS DE RITTO */
+/* ------------------- */
+
+/* Input Apple Blue */
 .input-ritto {
-  @apply w-full bg-white/5 border border-white/20 text-white rounded-2xl p-3 text-sm
-  focus:ring-2 focus:ring-blue-400 transition-all duration-300
-  focus:scale-[1.02] hover:scale-[1.01];
+  @apply 
+    w-full
+    bg-white/5
+    border
+    border-white/20
+    text-white
+    rounded-2xl
+    p-3
+    text-sm
+    focus:ring-2
+    focus:ring-blue-400
+    transition-all
+    duration-300
+    focus:scale-[1.02]
+    hover:scale-[1.01];
 }
 
+/* Botón Apple Blue */
 .button-ritto {
-  @apply w-full mt-2 bg-gradient-to-r from-blue-400 to-cyan-400 text-black font-semibold py-3 
-  rounded-2xl text-sm hover:opacity-90 transition-all duration-300 shadow-lg hover:scale-[1.02];
+  @apply 
+    w-full
+    mt-2
+    bg-gradient-to-r
+    from-blue-400
+    to-cyan-400
+    text-black
+    font-semibold
+    py-3
+    rounded-2xl
+    text-sm
+    hover:opacity-90
+    transition-all
+    duration-300
+    shadow-lg
+    hover:scale-[1.02];
 }
 
+/* Animaciones */
 .animate-fadeIn {
   animation: fadeIn 0.6s ease-out forwards;
 }
