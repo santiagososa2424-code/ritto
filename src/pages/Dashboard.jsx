@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
@@ -12,6 +14,8 @@ export default function Dashboard() {
 
   const [business, setBusiness] = useState(null);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -20,70 +24,96 @@ export default function Dashboard() {
     try {
       setIsLoading(true);
 
-      // usuario actual
+      // Usuario actual
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError || !user) return;
+      if (userError || !user) {
+        toast.error("Tenés que iniciar sesión.");
+        setIsLoading(false);
+        navigate("/login");
+        return;
+      }
 
-      // negocio
-      const { data: biz } = await supabase
+      // Negocio del dueño
+      const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("*")
         .eq("owner_id", user.id)
         .single();
 
-      if (!biz) return;
+      if (bizError || !biz) {
+        toast.error("No se encontró tu negocio. Revisá la configuración.");
+        setIsLoading(false);
+        return;
+      }
 
       setBusiness(biz);
 
       const todayStr = new Date().toISOString().slice(0, 10);
       const monthStart = todayStr.slice(0, 7) + "-01";
 
-      // servicios
-      const { data: servicesData } = await supabase
+      // Servicios del negocio
+      const { data: servicesData, error: servicesError } = await supabase
         .from("services")
         .select("id, name, price, duration")
         .eq("business_id", biz.id);
 
+      if (servicesError) {
+        console.error(servicesError);
+      }
+
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
 
-      // turnos hoy
-      const { data: bookingsToday } = await supabase
+      // Turnos de hoy
+      const { data: bookingsToday, error: bookingsTodayError } = await supabase
         .from("bookings")
         .select("*")
         .eq("business_id", biz.id)
         .eq("date", todayStr)
         .order("hour", { ascending: true });
 
+      if (bookingsTodayError) {
+        console.error(bookingsTodayError);
+      }
+
       setAppointmentsToday(bookingsToday || []);
 
-      // no-shows
-      const { data: noShows } = await supabase
+      // No-shows del mes
+      const { data: noShows, error: noShowsError } = await supabase
         .from("bookings")
         .select("id")
         .eq("business_id", biz.id)
         .eq("status", "no_show")
         .gte("date", monthStart);
 
+      if (noShowsError) {
+        console.error(noShowsError);
+      }
+
       setNoShowsThisMonth(noShows?.length || 0);
 
-      // últimos 30 días
+      // Últimos 30 días
       const date30 = new Date(Date.now() - 30 * 86400000)
         .toISOString()
         .slice(0, 10);
 
-      const { data: recentBookings } = await supabase
-        .from("bookings")
-        .select("service_id, service_name, status")
-        .eq("business_id", biz.id)
-        .gte("date", date30)
-        .lte("date", todayStr);
+      const { data: recentBookings, error: recentBookingsError } =
+        await supabase
+          .from("bookings")
+          .select("service_id, service_name, status")
+          .eq("business_id", biz.id)
+          .gte("date", date30)
+          .lte("date", todayStr);
 
-      // top servicios
+      if (recentBookingsError) {
+        console.error(recentBookingsError);
+      }
+
+      // Top servicios
       const counts = {};
       (recentBookings || []).forEach((b) => {
         const key = b.service_id || b.service_name;
@@ -109,7 +139,7 @@ export default function Dashboard() {
 
       setTopServices(top);
 
-      // ingresos últimos 30 días
+      // Ingresos últimos 30 días (solo confirmados)
       let totalRev = 0;
 
       (recentBookings || [])
@@ -121,11 +151,12 @@ export default function Dashboard() {
 
       setEstimatedRevenue(totalRev);
 
-      // ocupación
+      // Ocupación de hoy
       const occupationValue = await calculateOccupation(biz.id, todayStr, biz);
       setOccupation(occupationValue);
     } catch (err) {
       console.error("Dashboard error", err);
+      toast.error("Hubo un problema cargando el panel.");
     } finally {
       setIsLoading(false);
     }
@@ -137,10 +168,15 @@ export default function Dashboard() {
         .toLocaleDateString("es-UY", { weekday: "long" })
         .toLowerCase();
 
-      const { data: schedules } = await supabase
+      const { data: schedules, error: schedulesError } = await supabase
         .from("schedules")
         .select("*")
         .eq("business_id", businessId);
+
+      if (schedulesError) {
+        console.error(schedulesError);
+        return 0;
+      }
 
       const todays = (schedules || []).filter(
         (s) => (s.day_of_week || "").toLowerCase() === dayName
@@ -161,12 +197,19 @@ export default function Dashboard() {
         }
       });
 
-      const { data: used } = await supabase
+      if (totalSlots === 0) return 0;
+
+      const { data: used, error: usedError } = await supabase
         .from("bookings")
         .select("id")
         .eq("business_id", businessId)
         .eq("date", dateStr)
         .eq("status", "confirmed");
+
+      if (usedError) {
+        console.error(usedError);
+        return 0;
+      }
 
       return Math.round(((used?.length || 0) / totalSlots) * 100);
     } catch {
@@ -190,14 +233,69 @@ export default function Dashboard() {
 
   const occupationLabel = `${occupation || 0}%`;
 
+  // 🔐 Lógica de plan / trial
+  const today = new Date();
+  const trialEndsDate = business?.trial_ends_at
+    ? new Date(business.trial_ends_at)
+    : null;
+
+  const msDiff =
+    trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
+      ? trialEndsDate.getTime() - today.getTime()
+      : null;
+
+  const daysLeft =
+    msDiff !== null ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : null;
+
+  const isLifetime = business?.plan === "lifetime_free";
+  const isTrial = business?.plan === "trial";
+  const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
+  const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
+
+  // Loader inicial Apple-style si todavía está cargando y no hay negocio
+  if (isLoading && !business) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
+        <div className="flex flex-col items-center gap-4 animate-fadeIn">
+          <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-blue-400 to-cyan-300 flex items-center justify-center text-black text-4xl font-extrabold animate-pulse shadow-xl">
+            R
+          </div>
+          <p className="text-white/80 animate-pulse">Cargando tu panel...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-slate-950 text-slate-50 flex">
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
+
+      {/* Overlay si el trial venció */}
+      {trialExpired && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-xl">
+          <div className="max-w-sm w-full bg-slate-900/90 border border-emerald-400/40 rounded-3xl p-6 text-center shadow-[0_18px_60px_rgba(16,185,129,0.4)]">
+            <p className="text-sm font-semibold mb-2">
+              Tu prueba gratuita finalizó
+            </p>
+            <p className="text-xs text-slate-300 mb-4">
+              Para seguir usando Ritto y que tus clientes puedan reservar,
+              activá tu plan por{" "}
+              <span className="font-semibold">$690/mes</span>.
+            </p>
+            <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition">
+              Activar plan ahora
+            </button>
+            <p className="text-[10px] text-slate-400 mt-3">
+              Sin permanencia · Cancelás cuando quieras.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
 
         <div className="flex items-center gap-3 mb-10">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-sky-400 text-slate-950 font-semibold flex items-center justify-center">
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
             R
           </div>
           <div>
@@ -217,10 +315,42 @@ export default function Dashboard() {
 
         <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
           <p className="text-slate-500 mb-1">Plan actual</p>
-          <div className="flex items-center justify-between">
-            <span className="text-xs">Prueba gratuita</span>
-            <span className="text-emerald-400">30 días</span>
-          </div>
+
+          {business && (
+            <>
+              {isLifetime && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Acceso de por vida</span>
+                  <span className="text-cyan-300 font-medium">Lifetime</span>
+                </div>
+              )}
+
+              {trialActive && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Prueba gratuita</span>
+                  <span className="text-emerald-400 font-medium">
+                    {daysLeft} días restantes
+                  </span>
+                </div>
+              )}
+
+              {trialExpired && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Prueba finalizada</span>
+                  <span className="text-rose-400 font-medium">Bloqueado</span>
+                </div>
+              )}
+
+              {!isLifetime && !isTrial && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Plan activo</span>
+                  <span className="text-emerald-400 font-medium">
+                    {business.plan || "Personalizado"}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </aside>
 
@@ -243,7 +373,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10">
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              Agenda activa
+              {trialExpired ? "Agenda bloqueada" : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -313,6 +443,8 @@ export default function Dashboard() {
                             ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
                             : item.status === "no_show"
                             ? "border-rose-500/60 bg-rose-500/10 text-rose-300"
+                            : item.status === "cancelled"
+                            ? "border-slate-500/60 bg-slate-500/10 text-slate-300"
                             : "border-slate-500/60 bg-slate-500/10 text-slate-200"
                         }`}
                       >
@@ -338,16 +470,45 @@ export default function Dashboard() {
 
             {/* PLAN */}
             <div className="rounded-3xl bg-slate-900/70 border border-emerald-500/40 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.25)] p-5">
-              <p className="text-[11px] text-emerald-300">Prueba gratuita activa</p>
+              {isLifetime && (
+                <>
+                  <p className="text-[11px] text-cyan-300">Acceso de por vida</p>
+                  <h2 className="text-sm font-semibold mt-1">
+                    Gracias por ser parte de la familia Ritto
+                  </h2>
+                  <p className="text-[12px] text-slate-300 mt-2">
+                    Tu cuenta está liberada para siempre por usar el código{" "}
+                    <span className="font-semibold">lafamiliaspinelli</span>.
+                  </p>
+                </>
+              )}
 
-              <h2 className="text-sm font-semibold mt-1">30 días para enamorarte de Ritto</h2>
+              {isTrial && !trialExpired && (
+                <>
+                  <p className="text-[11px] text-emerald-300">Prueba gratuita activa</p>
+                  <h2 className="text-sm font-semibold mt-1">
+                    {daysLeft} días para enamorarte de Ritto
+                  </h2>
+                  <p className="text-[12px] text-slate-300 mt-2">
+                    Usá la agenda sin límites. Después solo{" "}
+                    <span className="font-semibold">$690/mes</span>.
+                  </p>
+                </>
+              )}
 
-              <p className="text-[12px] text-slate-300 mt-2">
-                Usá la agenda sin límites. Después solo{" "}
-                <span className="font-semibold">$690/mes</span>.
-              </p>
+              {!isLifetime && !isTrial && (
+                <>
+                  <p className="text-[11px] text-emerald-300">Plan activo</p>
+                  <h2 className="text-sm font-semibold mt-1">
+                    Estás usando Ritto sin restricciones
+                  </h2>
+                  <p className="text-[12px] text-slate-300 mt-2">
+                    Podés gestionar turnos, servicios y horarios sin límites.
+                  </p>
+                </>
+              )}
 
-              <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3">
+              <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition">
                 Configurar método de pago
               </button>
 
@@ -402,9 +563,9 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* LOADING */}
+        {/* LOADING CHIP */}
         {isLoading && (
-          <div className="fixed bottom-5 inset-x-0 flex justify-center">
+          <div className="fixed bottom-5 inset-x-0 flex justify-center pointer-events-none">
             <div className="px-4 py-2 bg-slate-900/80 border border-white/10 rounded-full text-[11px]">
               Cargando datos...
             </div>
@@ -448,7 +609,7 @@ function MetricCard({ label, value, sublabel, pill }) {
 
 function QuickAction({ label }) {
   return (
-    <button className="w-full px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-left">
+    <button className="w-full px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-left transition">
       {label}
     </button>
   );
