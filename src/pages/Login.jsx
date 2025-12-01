@@ -35,7 +35,6 @@ export default function Login() {
     navigate("/dashboard");
   };
 
-  // ⭐ LOADER APPLE RITTO
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -51,8 +50,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-6">
-      
-      {/* CARD */}
+
       <div className="
         w-full max-w-md 
         bg-white/10 
@@ -63,8 +61,7 @@ export default function Login() {
         shadow-2xl
         animate-fadeIn
       ">
-        
-        {/* Logo */}
+
         <div className="flex flex-col items-center mb-10">
           <div className="
             h-16 w-16 rounded-3xl 
@@ -85,7 +82,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="text-sm text-slate-200">Email</label>
@@ -117,7 +113,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Links */}
         <div className="flex justify-between text-xs text-slate-400 mt-6 px-1">
           <Link to="/forgot-password" className="hover:text-white transition">
             ¿Olvidaste tu contraseña?
