@@ -1,21 +1,33 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");        // mensaje de error / éxito
+  const [messageType, setMessageType] = useState(""); // "error" | "success"
 
   const navigate = useNavigate();
+
+  const showError = (text) => {
+    setMessage(text);
+    setMessageType("error");
+  };
+
+  const showSuccess = (text) => {
+    setMessage(text);
+    setMessageType("success");
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMessage("");
 
     if (!email || !password) {
-      toast.error("Completá todos los campos.");
+      showError("Completá todos los campos.");
       setLoading(false);
       return;
     }
@@ -26,15 +38,19 @@ export default function Login() {
     });
 
     if (error) {
-      toast.error("Email o contraseña incorrectos.");
+      showError("Email o contraseña incorrectos.");
       setLoading(false);
       return;
     }
 
-    toast.success("¡Bienvenido de nuevo!");
-    navigate("/dashboard");
+    showSuccess("¡Bienvenido de nuevo!");
+    // pequeño delay solo para que se vea el mensaje
+    setTimeout(() => {
+      navigate("/dashboard");
+    }, 600);
   };
 
+  // Loader estilo Apple
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -50,27 +66,30 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-6">
-
-      <div className="
-        w-full max-w-md 
-        bg-white/10 
-        border border-white/20 
-        backdrop-blur-2xl 
-        rounded-3xl 
-        p-10 
-        shadow-2xl
-        animate-fadeIn
-      ">
-
-        <div className="flex flex-col items-center mb-10">
-          <div className="
-            h-16 w-16 rounded-3xl 
-            bg-gradient-to-br from-blue-400 to-cyan-300
-            flex items-center justify-center
-            text-black text-3xl font-bold
-            shadow-inner
-            animate-popIn
-          ">
+      <div
+        className="
+          w-full max-w-md 
+          bg-white/10 
+          border border-white/20 
+          backdrop-blur-2xl 
+          rounded-3xl 
+          p-10 
+          shadow-2xl
+          animate-fadeIn
+        "
+      >
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div
+            className="
+              h-16 w-16 rounded-3xl 
+              bg-gradient-to-br from-blue-400 to-cyan-300
+              flex items-center justify-center
+              text-black text-3xl font-bold
+              shadow-inner
+              animate-popIn
+            "
+          >
             R
           </div>
 
@@ -82,6 +101,20 @@ export default function Login() {
           </p>
         </div>
 
+        {/* Mensaje */}
+        {message && (
+          <div
+            className={`mb-4 text-sm px-3 py-2 rounded-2xl border ${
+              messageType === "error"
+                ? "bg-red-500/10 border-red-400/40 text-red-200"
+                : "bg-emerald-500/10 border-emerald-400/40 text-emerald-200"
+            }`}
+          >
+            {message}
+          </div>
+        )}
+
+        {/* Form */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="text-sm text-slate-200">Email</label>
@@ -105,14 +138,12 @@ export default function Login() {
             />
           </div>
 
-          <button
-            type="submit"
-            className="button-ritto"
-          >
+          <button type="submit" className="button-ritto">
             Ingresar
           </button>
         </form>
 
+        {/* Links */}
         <div className="flex justify-between text-xs text-slate-400 mt-6 px-1">
           <Link to="/forgot-password" className="hover:text-white transition">
             ¿Olvidaste tu contraseña?
@@ -122,7 +153,6 @@ export default function Login() {
             Crear cuenta
           </Link>
         </div>
-
       </div>
     </div>
   );
