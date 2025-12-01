@@ -1,19 +1,24 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
+
+    if (!email || !password) {
+      toast.error("Completá todos los campos.");
+      setLoading(false);
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -21,42 +26,61 @@ export default function Login() {
     });
 
     if (error) {
-      setError("Email o contraseña incorrectos.");
+      toast.error("Email o contraseña incorrectos.");
       setLoading(false);
       return;
     }
 
+    toast.success("¡Bienvenido de nuevo!");
     navigate("/dashboard");
   };
 
+  // ⭐ LOADER APPLE RITTO
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
+        <div className="flex flex-col items-center gap-4 animate-fadeIn">
+          <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-blue-400 to-cyan-300 flex items-center justify-center text-black text-4xl font-extrabold animate-pulse shadow-xl">
+            R
+          </div>
+          <p className="text-white/70 animate-pulse">Ingresando...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0A0F1F] text-white flex items-center justify-center px-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-6">
       
       {/* CARD */}
       <div className="
         w-full max-w-md 
-        bg-white/5 
-        border border-white/10 
+        bg-white/10 
+        border border-white/20 
         backdrop-blur-2xl 
         rounded-3xl 
         p-10 
-        shadow-[0_18px_60px_rgba(0,0,0,0.6)]
+        shadow-2xl
+        animate-fadeIn
       ">
         
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
           <div className="
-            h-14 w-14 rounded-2xl 
-            bg-white flex items-center justify-center
+            h-16 w-16 rounded-3xl 
+            bg-gradient-to-br from-blue-400 to-cyan-300
+            flex items-center justify-center
+            text-black text-3xl font-bold
             shadow-inner
+            animate-popIn
           ">
-            <span className="text-[#0A0F1F] text-3xl">📅</span>
+            R
           </div>
 
           <h1 className="text-2xl font-semibold mt-4 tracking-tight">
             Iniciar sesión
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-300 text-sm mt-1">
             Accedé a tu panel Ritto
           </p>
         </div>
@@ -64,19 +88,10 @@ export default function Login() {
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="text-sm text-slate-300">Email</label>
+            <label className="text-sm text-slate-200">Email</label>
             <input
               type="email"
-              className="
-                w-full mt-1 
-                bg-white/5 
-                border border-white/10 
-                rounded-2xl 
-                px-3 py-3 
-                text-sm text-white 
-                focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 
-                outline-none transition
-              "
+              className="input-ritto mt-1"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tucorreo@gmail.com"
@@ -84,56 +99,31 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="text-sm text-slate-300">Contraseña</label>
+            <label className="text-sm text-slate-200">Contraseña</label>
             <input
               type="password"
-              className="
-                w-full mt-1 
-                bg-white/5 
-                border border-white/10 
-                rounded-2xl 
-                px-3 py-3 
-                text-sm text-white
-                focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 
-                outline-none transition
-              "
+              className="input-ritto mt-1"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
             />
           </div>
 
-          {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
-          )}
-
           <button
             type="submit"
-            disabled={loading}
-            className="
-              w-full 
-              bg-emerald-400 
-              text-[#0A0F1F] 
-              font-semibold 
-              py-3 
-              rounded-2xl 
-              text-sm 
-              hover:bg-emerald-300 
-              transition 
-              disabled:opacity-50
-            "
+            className="button-ritto"
           >
-            {loading ? "Ingresando..." : "Ingresar"}
+            Ingresar
           </button>
         </form>
 
         {/* Links */}
         <div className="flex justify-between text-xs text-slate-400 mt-6 px-1">
-          <Link to="/forgot-password" className="hover:text-white">
+          <Link to="/forgot-password" className="hover:text-white transition">
             ¿Olvidaste tu contraseña?
           </Link>
 
-          <Link to="/register" className="hover:text-white">
+          <Link to="/register" className="hover:text-white transition">
             Crear cuenta
           </Link>
         </div>
@@ -142,3 +132,36 @@ export default function Login() {
     </div>
   );
 }
+
+
+/* AGREGA ESTO EN TU CSS GLOBAL COMO EN EL REGISTER */
+
+.input-ritto {
+  @apply w-full bg-white/5 border border-white/20 text-white rounded-2xl p-3 text-sm 
+  focus:ring-2 focus:ring-blue-400 transition-all duration-300
+  focus:scale-[1.02] hover:scale-[1.01];
+}
+
+.button-ritto {
+  @apply w-full mt-2 bg-gradient-to-r from-blue-400 to-cyan-400 text-black font-semibold py-3 
+  rounded-2xl text-sm hover:opacity-90 transition-all duration-300 shadow-lg hover:scale-[1.02];
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-popIn {
+  animation: popIn 0.5s ease-out;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
