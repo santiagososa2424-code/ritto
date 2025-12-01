@@ -30,24 +30,53 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-slate-950 text-white flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-slate-900/70 border border-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-[0_18px_60px_rgba(0,0,0,0.6)]">
-
+    <div className="min-h-screen bg-[#0A0F1F] text-white flex items-center justify-center px-6">
+      
+      {/* CARD */}
+      <div className="
+        w-full max-w-md 
+        bg-white/5 
+        border border-white/10 
+        backdrop-blur-2xl 
+        rounded-3xl 
+        p-10 
+        shadow-[0_18px_60px_rgba(0,0,0,0.6)]
+      ">
+        
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-sky-400 flex items-center justify-center text-slate-950 text-2xl font-bold shadow-inner">
-            R
+        <div className="flex flex-col items-center mb-10">
+          <div className="
+            h-14 w-14 rounded-2xl 
+            bg-white flex items-center justify-center
+            shadow-inner
+          ">
+            <span className="text-[#0A0F1F] text-3xl">📅</span>
           </div>
-          <h1 className="text-xl font-semibold mt-3">Iniciar sesión</h1>
-          <p className="text-slate-400 text-sm mt-1">Accedé a tu panel</p>
+
+          <h1 className="text-2xl font-semibold mt-4 tracking-tight">
+            Iniciar sesión
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Accedé a tu panel Ritto
+          </p>
         </div>
 
+        {/* Form */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="text-sm text-slate-300">Email</label>
             <input
               type="email"
-              className="w-full mt-1 bg-slate-900/50 border border-white/10 text-white rounded-2xl p-3 text-sm"
+              className="
+                w-full mt-1 
+                bg-white/5 
+                border border-white/10 
+                rounded-2xl 
+                px-3 py-3 
+                text-sm text-white 
+                focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 
+                outline-none transition
+              "
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tucorreo@gmail.com"
@@ -58,7 +87,16 @@ export default function Login() {
             <label className="text-sm text-slate-300">Contraseña</label>
             <input
               type="password"
-              className="w-full mt-1 bg-slate-900/50 border border-white/10 text-white rounded-2xl p-3 text-sm"
+              className="
+                w-full mt-1 
+                bg-white/5 
+                border border-white/10 
+                rounded-2xl 
+                px-3 py-3 
+                text-sm text-white
+                focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 
+                outline-none transition
+              "
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -72,20 +110,34 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-emerald-400 text-slate-950 font-semibold py-3 rounded-2xl text-sm hover:bg-emerald-300 transition disabled:opacity-50"
+            className="
+              w-full 
+              bg-emerald-400 
+              text-[#0A0F1F] 
+              font-semibold 
+              py-3 
+              rounded-2xl 
+              text-sm 
+              hover:bg-emerald-300 
+              transition 
+              disabled:opacity-50
+            "
           >
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
 
-        <div className="flex justify-between text-xs text-slate-400 mt-5 px-1">
+        {/* Links */}
+        <div className="flex justify-between text-xs text-slate-400 mt-6 px-1">
           <Link to="/forgot-password" className="hover:text-white">
             ¿Olvidaste tu contraseña?
           </Link>
+
           <Link to="/register" className="hover:text-white">
             Crear cuenta
           </Link>
         </div>
+
       </div>
     </div>
   );
