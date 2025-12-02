@@ -18,6 +18,9 @@ export default function Services() {
     loadData();
   }, []);
 
+  // ----------------------------------------
+  // 🔥 CARGA DE DATOS
+  // ----------------------------------------
   const loadData = async () => {
     setLoading(true);
     setError("");
@@ -29,11 +32,12 @@ export default function Services() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        setError("No se pudo obtener el usuario.");
+        setError("Tenés que iniciar sesión.");
         setLoading(false);
         return;
       }
 
+      // Traer negocio
       const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("*")
@@ -48,6 +52,7 @@ export default function Services() {
 
       setBusiness(biz);
 
+      // Traer servicios
       const { data: servs, error: servError } = await supabase
         .from("services")
         .select("*")
@@ -69,15 +74,13 @@ export default function Services() {
     }
   };
 
+  // ----------------------------------------
+  // ➕ CREAR SERVICIO
+  // ----------------------------------------
   const handleCreate = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
-    if (!business) {
-      setError("No se encontró el negocio.");
-      return;
-    }
 
     if (!name || !price || !duration) {
       setError("Completá nombre, precio y duración.");
@@ -105,6 +108,7 @@ export default function Services() {
     }
 
     setServices((prev) => [...prev, data]);
+
     setName("");
     setPrice("");
     setDuration(30);
@@ -112,14 +116,17 @@ export default function Services() {
     setSuccess("Servicio creado correctamente.");
   };
 
+  // ----------------------------------------
+  // 🔄 ACTIVAR / DESACTIVAR
+  // ----------------------------------------
   const toggleActive = async (service) => {
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from("services")
       .update({ is_active: !service.is_active })
       .eq("id", service.id);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (error) {
+      setError(error.message);
       return;
     }
 
@@ -130,6 +137,9 @@ export default function Services() {
     );
   };
 
+  // ----------------------------------------
+  // 🌀 LOADING SCREEN
+  // ----------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -141,36 +151,33 @@ export default function Services() {
     );
   }
 
+  // ----------------------------------------
+  // 🧪 UI
+  // ----------------------------------------
   return (
-    <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
+      <div className="max-w-4xl mx-auto space-y-10">
 
         {/* TÍTULO */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Servicios del negocio
-          </h1>
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold tracking-tight">Servicios</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Administrá los servicios que tus clientes pueden reservar.
+            Administrá todos tus servicios desde aquí.
           </p>
         </div>
 
         {/* ALERTAS */}
         {error && (
-          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
-            {error}
-          </div>
+          <Alert text={error} type="error" />
         )}
         {success && (
-          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[12px] text-emerald-200">
-            {success}
-          </div>
+          <Alert text={success} type="success" />
         )}
 
-        {/* FORMULARIO DE CREACIÓN */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-lg p-6 space-y-6">
+        {/* FORM NUEVO SERVICIO */}
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
 
-          <h2 className="text-lg font-semibold tracking-tight text-emerald-300">
+          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
             Agregar nuevo servicio
           </h2>
 
@@ -178,57 +185,47 @@ export default function Services() {
             onSubmit={handleCreate}
             className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           >
-            <div>
-              <label className="text-[11px] text-slate-300">Nombre</label>
+            <Field label="Nombre">
               <input
                 type="text"
-                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+                className="input-ritto"
                 placeholder="Corte clásico"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="text-[11px] text-slate-300">Precio (UYU)</label>
+            <Field label="Precio (UYU)">
               <input
                 type="number"
-                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+                className="input-ritto"
                 placeholder="650"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="text-[11px] text-slate-300">
-                Duración (minutos)
-              </label>
+            <Field label="Duración (min)">
               <input
                 type="number"
-                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
-                placeholder="30"
+                className="input-ritto"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="sm:col-span-2">
-              <label className="text-[11px] text-slate-300">
-                Descripción (opcional)
-              </label>
+            <Field label="Descripción (opcional)" full>
               <textarea
-                className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm resize-none"
-                placeholder="Descripción breve del servicio..."
-                rows={2}
+                className="input-ritto resize-none h-20"
+                placeholder="Descripción breve..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            </div>
+            </Field>
 
             <button
               type="submit"
-              className="sm:col-span-2 mt-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
+              className="button-ritto sm:col-span-2 mt-2"
             >
               Crear servicio
             </button>
@@ -236,10 +233,10 @@ export default function Services() {
         </div>
 
         {/* LISTA DE SERVICIOS */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           {services.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-6">
-              No tenés servicios cargados todavía.
+              Todavía no agregaste servicios.
             </p>
           )}
 
@@ -249,20 +246,17 @@ export default function Services() {
               className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between"
             >
               <div>
-                <p className="font-semibold text-lg text-slate-50 tracking-tight">
+                <p className="font-semibold text-lg tracking-tight">
                   {s.name}
                 </p>
-
-                <p className="text-[13px] text-slate-300 mt-0.5">
+                <p className="text-[13px] text-slate-300">
                   ${s.price} · {s.duration} min
                 </p>
-
                 {s.description && (
-                  <p className="text-[12px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1">
                     {s.description}
                   </p>
                 )}
-
                 <p className="text-[11px] mt-2">
                   Estado:{" "}
                   <span
@@ -277,7 +271,7 @@ export default function Services() {
 
               <button
                 onClick={() => toggleActive(s)}
-                className={`text-xs px-4 py-2 rounded-2xl border backdrop-blur-lg transition ${
+                className={`px-4 py-2 rounded-2xl text-xs border backdrop-blur-xl transition ${
                   s.is_active
                     ? "text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10"
                     : "text-slate-300 border-white/10 hover:bg-white/5"
@@ -289,6 +283,33 @@ export default function Services() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ----------------------------------------
+// SUB-COMPONENTES
+// ----------------------------------------
+
+function Field({ label, children, full }) {
+  return (
+    <div className={`${full ? "sm:col-span-2" : ""} space-y-1`}>
+      <label className="text-[11px] text-slate-300">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Alert({ text, type }) {
+  return (
+    <div
+      className={`rounded-2xl px-4 py-3 text-[12px] ${
+        type === "error"
+          ? "border border-rose-500/40 bg-rose-500/10 text-rose-200"
+          : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+      }`}
+    >
+      {text}
     </div>
   );
 }
