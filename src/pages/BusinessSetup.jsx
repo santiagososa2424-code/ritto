@@ -32,25 +32,30 @@ export default function BusinessSetup() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadData();
+    loadBusiness();
   }, []);
 
-  const loadData = async () => {
+  const loadBusiness = async () => {
     setError("");
     setSuccess("");
 
     const {
-      data: { user },
+      data: { user }
     } = await supabase.auth.getUser();
 
-    const { data: biz } = await supabase
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    const { data: biz, error: bizError } = await supabase
       .from("businesses")
       .select("*")
       .eq("owner_id", user.id)
       .single();
 
-    if (!biz) {
-      setError("Todavía no creaste un negocio.");
+    if (bizError || !biz) {
+      setError("No se encontró tu negocio. Revisá tu cuenta.");
       return;
     }
 
@@ -64,10 +69,13 @@ export default function BusinessSetup() {
     setDepositType(biz.deposit_type || "fixed");
     setDepositValue(biz.deposit_value || 0);
     setSlotInterval(biz.slot_interval_minutes || 30);
-    if (biz.working_days) setWorkingDays(biz.working_days);
+
+    if (biz.working_days) {
+      setWorkingDays(biz.working_days);
+    }
   };
 
-  const handleSave = async () => {
+  const saveBusiness = async () => {
     setError("");
     setSuccess("");
 
@@ -97,7 +105,7 @@ export default function BusinessSetup() {
       .eq("id", business.id);
 
     if (updateError) {
-      setError(updateError.message);
+      setError("Error guardando los cambios.");
       return;
     }
 
@@ -106,9 +114,9 @@ export default function BusinessSetup() {
 
   if (!business) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-lg text-xs flex items-center gap-2">
-          <span className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl text-xs text-slate-200 flex items-center gap-2">
+          <span className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></span>
           Cargando negocio...
         </div>
       </div>
@@ -116,20 +124,18 @@ export default function BusinessSetup() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* TÍTULO */}
+        {/* Título */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Configuración del negocio
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Configuración del negocio</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Ajustá tu negocio para que los clientes siempre encuentren turnos.
+            Ajustá la información y reglas principales de tu negocio.
           </p>
         </div>
 
-        {/* NOTIFICACIONES */}
+        {/* Notificaciones */}
         {error && (
           <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
             {error}
@@ -141,58 +147,54 @@ export default function BusinessSetup() {
           </div>
         )}
 
-        {/* CARD PRINCIPAL */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6">
+        {/* Card principal */}
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6 space-y-6">
 
           {/* Nombre */}
-          <div>
-            <label className="text-[12px] text-slate-300">Nombre del negocio</label>
+          <Field label="Nombre del negocio">
             <input
               type="text"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+              className="input-ritto"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-          </div>
+          </Field>
 
           {/* Dirección */}
-          <div>
-            <label className="text-[12px] text-slate-300">Dirección</label>
+          <Field label="Dirección">
             <input
               type="text"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+              className="input-ritto"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
-          </div>
+          </Field>
 
-          {/* Email del negocio */}
-          <div>
-            <label className="text-[12px] text-slate-300">Email de contacto</label>
+          {/* Email */}
+          <Field label="Email de contacto">
             <input
               type="email"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+              className="input-ritto"
               placeholder="tubeneficio@correo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </div>
+          </Field>
 
-          {/* Mapa */}
-          <div>
-            <label className="text-[12px] text-slate-300">Google Maps URL</label>
+          {/* Google Maps */}
+          <Field label="Google Maps URL">
             <input
               type="text"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 transition"
+              className="input-ritto"
               placeholder="https://maps.google.com/..."
               value={mapUrl}
               onChange={(e) => setMapUrl(e.target.value)}
             />
-          </div>
+          </Field>
 
-          {/* SEÑA */}
-          <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-4 space-y-3">
-            <label className="flex items-center gap-2 text-[12px] text-slate-300 font-medium">
+          {/* Seña */}
+          <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 space-y-3">
+            <label className="flex items-center gap-2 text-[12px] text-slate-300">
               <input
                 type="checkbox"
                 checked={depositEnabled}
@@ -203,36 +205,33 @@ export default function BusinessSetup() {
 
             {depositEnabled && (
               <div className="space-y-3">
-                <div>
-                  <label className="text-[12px] text-slate-300">Tipo de seña</label>
+                <Field label="Tipo de seña">
                   <select
-                    className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+                    className="input-ritto"
                     value={depositType}
                     onChange={(e) => setDepositType(e.target.value)}
                   >
                     <option value="fixed">Monto fijo</option>
                     <option value="percentage">Porcentaje del servicio</option>
                   </select>
-                </div>
+                </Field>
 
-                <div>
-                  <label className="text-[12px] text-slate-300">Valor de seña</label>
+                <Field label="Valor de la seña">
                   <input
                     type="number"
-                    className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+                    className="input-ritto"
                     value={depositValue}
                     onChange={(e) => setDepositValue(Number(e.target.value))}
                   />
-                </div>
+                </Field>
               </div>
             )}
           </div>
 
-          {/* INTERVALO */}
-          <div>
-            <label className="text-[12px] text-slate-300">Intervalo base</label>
+          {/* Intervalo */}
+          <Field label="Intervalo base">
             <select
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={slotInterval}
               onChange={(e) => setSlotInterval(Number(e.target.value))}
             >
@@ -242,39 +241,51 @@ export default function BusinessSetup() {
               <option value={45}>Cada 45 min</option>
               <option value={60}>Cada 60 min</option>
             </select>
-          </div>
+          </Field>
 
-          {/* DÍAS HÁBILES */}
-          <div>
-            <label className="text-[12px] text-slate-300">Días de trabajo</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
-              {Object.keys(workingDays).map((d) => (
+          {/* Días hábiles */}
+          <Field label="Días de trabajo">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {Object.keys(workingDays).map((day) => (
                 <label
-                  key={d}
+                  key={day}
                   className="flex items-center gap-2 text-[12px] text-slate-300"
                 >
                   <input
                     type="checkbox"
-                    checked={workingDays[d]}
+                    checked={workingDays[day]}
                     onChange={(e) =>
-                      setWorkingDays({ ...workingDays, [d]: e.target.checked })
+                      setWorkingDays({
+                        ...workingDays,
+                        [day]: e.target.checked
+                      })
                     }
                   />
-                  {d}
+                  {day}
                 </label>
               ))}
             </div>
-          </div>
+          </Field>
 
-          {/* GUARDAR */}
+          {/* Guardar */}
           <button
-            onClick={handleSave}
-            className="w-full mt-4 rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-3 hover:bg-emerald-300 transition"
+            onClick={saveBusiness}
+            className="button-ritto mt-4"
           >
             Guardar cambios
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* SUB-COMPONENTE PARA UN ESTILO MÁS PRO */
+function Field({ label, children }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[12px] text-slate-300">{label}</label>
+      {children}
     </div>
   );
 }
