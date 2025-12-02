@@ -27,7 +27,7 @@ export default function Register() {
 
     setChecking(true);
 
-    // 1️⃣ VALIDAR SI EL NEGOCIO YA EXISTE
+    // Verificar si ya existe el negocio
     const { data: existingBiz, error: bizCheckError } = await supabase
       .from("businesses")
       .select("id")
@@ -48,7 +48,10 @@ export default function Register() {
     setChecking(false);
     setLoading(true);
 
-    // 2️⃣ CREAR USUARIO
+    // Detectar si el código es válido
+    const validCreator = creatorCode.trim() === SPECIAL_CODE;
+
+    // Crear usuario
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -58,8 +61,8 @@ export default function Register() {
           lastname,
           phone,
           businessName,
-          creator_code: creatorCode || null,
-          lifetime_free: creatorCode === SPECIAL_CODE,
+          creator_code: validCreator ? SPECIAL_CODE : null,
+          lifetime_free: validCreator,
         },
       },
     });
@@ -77,12 +80,14 @@ export default function Register() {
       return;
     }
 
-    // 3️⃣ CREAR NEGOCIO
+    // Fecha de trial si NO es lifetime
     const now = new Date();
     const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const plan = creatorCode === SPECIAL_CODE ? "lifetime_free" : "trial";
+    // Plan correcto
+    const plan = validCreator ? "lifetime_free" : "trial";
 
+    // Crear negocio
     const { error: businessError } = await supabase
       .from("businesses")
       .insert([
@@ -93,8 +98,8 @@ export default function Register() {
           phone,
           is_active: true,
           plan,
-          trial_starts_at: plan === "trial" ? now.toISOString() : null,
-          trial_ends_at: plan === "trial" ? trialEnds.toISOString() : null,
+          trial_starts_at: validCreator ? null : now.toISOString(),
+          trial_ends_at: validCreator ? null : trialEnds.toISOString(),
         },
       ]);
 
@@ -104,12 +109,17 @@ export default function Register() {
       return;
     }
 
-    toast.success("Cuenta creada con éxito 🎉");
+    toast.success(
+      validCreator
+        ? "Acceso GRATIS para siempre activado 🎉"
+        : "Cuenta creada con éxito 🎉"
+    );
+
     setLoading(false);
     navigate("/dashboard");
   };
 
-  // ⭐ LOADER ANIMADO RITTO (APPLE STYLE)
+  // Loader cuando crea la cuenta
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -145,73 +155,36 @@ export default function Register() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm text-slate-200">Nombre</label>
-              <input
-                type="text"
-                className="input-ritto"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Santiago"
-              />
+              <input type="text" className="input-ritto" value={name} onChange={(e)=>setName(e.target.value)} />
             </div>
-
             <div>
               <label className="text-sm text-slate-200">Apellido</label>
-              <input
-                type="text"
-                className="input-ritto"
-                value={lastname}
-                onChange={(e) => setLastname(e.target.value)}
-                placeholder="Sosa"
-              />
+              <input type="text" className="input-ritto" value={lastname} onChange={(e)=>setLastname(e.target.value)} />
             </div>
           </div>
 
           {/* Negocio */}
           <div>
             <label className="text-sm text-slate-200">Nombre del negocio</label>
-            <input
-              type="text"
-              className="input-ritto"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Barbería Ritto"
-            />
+            <input type="text" className="input-ritto" value={businessName} onChange={(e)=>setBusinessName(e.target.value)} />
           </div>
 
           {/* Teléfono */}
           <div>
             <label className="text-sm text-slate-200">Teléfono</label>
-            <input
-              type="tel"
-              className="input-ritto"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="09X XXX XXX"
-            />
+            <input type="tel" className="input-ritto" value={phone} onChange={(e)=>setPhone(e.target.value)} />
           </div>
 
           {/* Email */}
           <div>
             <label className="text-sm text-slate-200">Email</label>
-            <input
-              type="email"
-              className="input-ritto"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@mail.com"
-            />
+            <input type="email" className="input-ritto" value={email} onChange={(e)=>setEmail(e.target.value)} />
           </div>
 
           {/* Password */}
           <div>
             <label className="text-sm text-slate-200">Contraseña</label>
-            <input
-              type="password"
-              className="input-ritto"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
+            <input type="password" className="input-ritto" value={password} onChange={(e)=>setPassword(e.target.value)} />
           </div>
 
           {/* Creator Code */}
@@ -222,14 +195,11 @@ export default function Register() {
               className="input-ritto"
               value={creatorCode}
               onChange={(e) => setCreatorCode(e.target.value)}
-              placeholder="lafamiliaspinelli"
+              placeholder="Ingresá un código si tenés uno"
             />
           </div>
 
-          <button
-            type="submit"
-            className="button-ritto"
-          >
+          <button type="submit" className="button-ritto">
             Crear cuenta GRATIS
           </button>
         </form>
@@ -238,37 +208,3 @@ export default function Register() {
     </div>
   );
 }
-
-/* TAILWIND CLASSES PERSONALIZADAS: AGREGA ESTO EN TU CSS GLOBAL
-
-.input-ritto {
-  @apply w-full bg-white/5 border border-white/20 text-white rounded-2xl p-3 text-sm 
-  focus:ring-2 focus:ring-blue-400 transition-all duration-300
-  focus:scale-[1.02] hover:scale-[1.01];
-}
-
-.button-ritto {
-  @apply w-full mt-2 bg-gradient-to-r from-blue-400 to-cyan-400 text-black font-semibold py-3 
-  rounded-2xl text-sm hover:opacity-90 transition-all duration-300 shadow-lg hover:scale-[1.02];
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.6s ease-out forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-popIn {
-  animation: popIn 0.5s ease-out;
-}
-
-@keyframes popIn {
-  0% { transform: scale(0.6); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-*/
-
