@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 export default function Bookings() {
   const [businessId, setBusinessId] = useState(null);
   const [reservations, setReservations] = useState([]);
+
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
@@ -57,7 +58,6 @@ export default function Bookings() {
     loadReservations(businessId, date);
   };
 
-  // Agrupar reservas por día
   const grouped = reservations.reduce((acc, r) => {
     if (!acc[r.date]) acc[r.date] = [];
     acc[r.date].push(r);
@@ -66,118 +66,149 @@ export default function Bookings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600 text-lg">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
+        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 shadow-lg backdrop-blur-xl text-xs flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          Cargando reservas...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
+      <div className="max-w-3xl mx-auto space-y-10">
 
-      {/* Volver */}
-      <button
-        className="text-blue-600 mb-6 hover:underline"
-        onClick={() => navigate("/dashboard")}
-      >
-        ← Volver al Dashboard
-      </button>
+        {/* Volver */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="text-slate-300 hover:text-emerald-300 text-sm transition"
+        >
+          ← Volver al Dashboard
+        </button>
 
-      <h1 className="text-3xl font-bold text-blue-700 mb-6">Reservas</h1>
-
-      {/* FILTRO */}
-      <div className="bg-white border rounded-xl shadow-sm p-5 mb-8 flex flex-col md:flex-row gap-4 md:items-center">
-
-        <input
-          type="date"
-          className="border p-2 rounded w-full md:w-auto"
-          onChange={(e) => setDate(e.target.value)}
+        {/* Header */}
+        <Header
+          title="Reservas"
+          subtitle="Acá podés ver todos los turnos filtrados por fecha."
         />
 
-        <button
-          onClick={handleFilter}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded font-semibold"
-        >
-          Filtrar
-        </button>
+        {/* FILTRO */}
+        <Card title="Filtrar reservas">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-        <button
-          onClick={() => { setDate(""); loadReservations(businessId, ""); }}
-          className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded font-semibold"
-        >
-          Limpiar filtro
-        </button>
+            <input
+              type="date"
+              className="input-ritto"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
 
-        <button
-          onClick={() => loadReservations(businessId, date)}
-          className="bg-black text-white px-4 py-2 rounded font-semibold"
-        >
-          Actualizar ahora
-        </button>
-      </div>
+            <button onClick={handleFilter} className="button-ritto">
+              Filtrar
+            </button>
 
-      {/* LISTA */}
-      {loadingList ? (
-        <p className="text-gray-500 text-sm">Cargando reservas...</p>
-      ) : reservations.length === 0 ? (
-        <p className="text-gray-600">No hay reservas para esta fecha.</p>
-      ) : (
-        Object.keys(grouped).map((day) => (
-          <div key={day} className="mb-10">
-            
-            {/* Título del día */}
-            <h2 className="text-xl font-semibold text-blue-700 mb-3">
-              {day}
-            </h2>
+            <button
+              onClick={() => {
+                setDate("");
+                loadReservations(businessId, "");
+              }}
+              className="w-full mt-0 bg-white/10 text-slate-300 rounded-2xl text-sm py-3 border border-white/20 hover:bg-white/20 transition"
+            >
+              Limpiar
+            </button>
 
-            <div className="space-y-3">
-              {grouped[day].map((r) => (
-                <div
-                  key={r.id}
-                  className="bg-white border rounded-xl shadow-sm p-4 flex justify-between"
-                >
-
-                  <div>
-                    <p className="text-lg font-bold text-gray-800">
-                      {r.hour.slice(0, 5)} — {r.service_name}
-                    </p>
-
-                    <p className="font-semibold mt-1">{r.customer_name}</p>
-
-                    <p className="text-sm text-gray-600">
-                      {r.customer_email}
-                    </p>
-
-                    {r.customer_phone && (
-                      <p className="text-sm text-gray-600">
-                        Tel: {r.customer_phone}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="text-right">
-
-                    <span
-                      className={`px-3 py-1 text-xs rounded-full font-semibold ${
-                        r.deposit_paid
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-200 text-gray-700"
-                      }`}
-                    >
-                      {r.deposit_paid ? "Con seña" : "Sin seña"}
-                    </span>
-
-                    <p className="text-xs text-gray-500 mt-1">
-                      {r.status || "confirmado"}
-                    </p>
-                  </div>
-
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={() => loadReservations(businessId, date)}
+              className="w-full mt-0 bg-black text-white rounded-2xl text-sm py-3 border border-white/20 hover:bg-white/10 transition"
+            >
+              Actualizar
+            </button>
           </div>
-        ))
+        </Card>
+
+        {/* LISTA */}
+        {loadingList ? (
+          <div className="text-slate-400 text-sm">Cargando reservas...</div>
+        ) : reservations.length === 0 ? (
+          <div className="text-slate-400 text-sm">No hay reservas para esta fecha.</div>
+        ) : (
+          Object.keys(grouped).map((day) => (
+            <Card key={day} title={day}>
+
+              <div className="space-y-3">
+                {grouped[day].map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="font-semibold text-lg text-slate-50 tracking-tight">
+                        {r.hour.slice(0, 5)} — {r.service_name}
+                      </p>
+
+                      <p className="text-sm font-semibold mt-1 text-slate-200">
+                        {r.customer_name}
+                      </p>
+
+                      <p className="text-[12px] text-slate-400">{r.customer_email}</p>
+
+                      {r.customer_phone && (
+                        <p className="text-[12px] text-slate-400">
+                          Tel: {r.customer_phone}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <span
+                        className={`px-3 py-1 text-xs rounded-full font-semibold ${
+                          r.deposit_paid
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            : "bg-white/10 text-slate-300 border border-white/20"
+                        }`}
+                      >
+                        {r.deposit_paid ? "Con seña" : "Sin seña"}
+                      </span>
+
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {r.status || "confirmado"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------
+   COMPONENTES
+---------------------------------------------------- */
+
+function Header({ title, subtitle }) {
+  return (
+    <div className="text-center space-y-1">
+      <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+      <p className="text-xs text-slate-400">{subtitle}</p>
+    </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
+      {title && (
+        <h2 className="text-xl font-semibold tracking-tight text-emerald-300">
+          {title}
+        </h2>
       )}
+      {children}
     </div>
   );
 }
