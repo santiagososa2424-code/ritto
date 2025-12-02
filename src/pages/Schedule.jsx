@@ -31,6 +31,9 @@ export default function Schedule() {
     loadData();
   }, []);
 
+  // ------------------------------------
+  // 🔥 Cargar datos iniciales
+  // ------------------------------------
   const loadData = async () => {
     setError("");
     setSuccess("");
@@ -51,7 +54,6 @@ export default function Schedule() {
     }
 
     setBusiness(biz);
-
     if (biz.slot_interval_minutes) setSlotInterval(biz.slot_interval_minutes);
     if (biz.working_days) setWorkingDays(biz.working_days);
 
@@ -64,6 +66,9 @@ export default function Schedule() {
     setSchedules(scheduleData || []);
   };
 
+  // ------------------------------------
+  // 💾 Guardar configuración general
+  // ------------------------------------
   const saveBusinessSettings = async () => {
     const { error: updateError } = await supabase
       .from("businesses")
@@ -82,10 +87,16 @@ export default function Schedule() {
     loadData();
   };
 
+  // ------------------------------------
+  // ↔️ Solape de horarios
+  // ------------------------------------
   const overlap = (aStart, aEnd, bStart, bEnd) => {
     return aStart < bEnd && bStart < aEnd;
   };
 
+  // ------------------------------------
+  // ➕ Agregar horario
+  // ------------------------------------
   const handleAdd = async (e) => {
     e.preventDefault();
     setError("");
@@ -97,7 +108,7 @@ export default function Schedule() {
     }
 
     if (!workingDays[day]) {
-      setError("Este día está deshabilitado en la configuración.");
+      setError("Este día está deshabilitado.");
       return;
     }
 
@@ -108,7 +119,7 @@ export default function Schedule() {
 
     for (let s of sameDay) {
       if (overlap(newStart, newEnd, s.start_time, s.end_time)) {
-        setError("Este horario se solapa con uno ya creado.");
+        setError("Este horario se superpone con uno existente.");
         return;
       }
     }
@@ -133,50 +144,36 @@ export default function Schedule() {
     loadData();
   };
 
+  // ------------------------------------
+  // ❌ Eliminar horario
+  // ------------------------------------
   const deleteSchedule = async (id) => {
     await supabase.from("schedules").delete().eq("id", id);
     loadData();
   };
 
+  // ------------------------------------
+  // 🖥️ UI
+  // ------------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-10">
 
-        {/* TÍTULO */}
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-            Horarios del negocio
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Configurá los días y horarios disponibles para tus clientes.
-          </p>
-        </div>
+        {/* TÍTULO PRINCIPAL */}
+        <Header
+          title="Horarios del negocio"
+          subtitle="Configurá los días y horarios disponibles para tus clientes."
+        />
 
         {/* ALERTAS */}
-        {error && (
-          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[12px] text-emerald-200">
-            {success}
-          </div>
-        )}
+        {error && <Alert type="error" text={error} />}
+        {success && <Alert type="success" text={success} />}
 
-        {/* CONFIGURACIÓN GENERAL */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-
-          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
-            Configuración general
-          </h2>
-
-          {/* DÍAS HÁBILES */}
-          <div>
-            <label className="text-[12px] text-slate-300">
-              Días que trabaja el negocio:
-            </label>
-            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+        {/* CARD — CONFIGURACIÓN GENERAL */}
+        <Card title="Configuración general">
+          {/* DÍAS */}
+          <Field label="Días que trabaja el negocio">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
               {Object.keys(workingDays).map((d) => (
                 <label
                   key={d}
@@ -193,15 +190,12 @@ export default function Schedule() {
                 </label>
               ))}
             </div>
-          </div>
+          </Field>
 
-          {/* INTERVALO */}
-          <div>
-            <label className="text-[12px] text-slate-300">
-              Intervalo base:
-            </label>
+          {/* INTERVALO BASE */}
+          <Field label="Intervalo base">
             <select
-              className="mt-2 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={slotInterval}
               onChange={(e) => setSlotInterval(Number(e.target.value))}
             >
@@ -211,29 +205,24 @@ export default function Schedule() {
               <option value={45}>Cada 45 min</option>
               <option value={60}>Cada 60 min</option>
             </select>
-          </div>
+          </Field>
 
           <button
             onClick={saveBusinessSettings}
-            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-3 hover:bg-emerald-300 transition"
+            className="button-ritto w-full mt-2"
           >
             Guardar configuración
           </button>
-        </div>
+        </Card>
 
-        {/* AGREGAR HORARIO */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-
-          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
-            Agregar horario
-          </h2>
-
+        {/* CARD — AGREGAR HORARIO */}
+        <Card title="Agregar horario">
           <form
             onSubmit={handleAdd}
             className="grid grid-cols-1 sm:grid-cols-5 gap-4"
           >
             <select
-              className="rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={day}
               onChange={(e) => setDay(e.target.value)}
             >
@@ -244,14 +233,14 @@ export default function Schedule() {
 
             <input
               type="time"
-              className="rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
             />
 
             <input
               type="time"
-              className="rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
             />
@@ -259,58 +248,96 @@ export default function Schedule() {
             <input
               type="number"
               min={1}
-              className="rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               placeholder="Capacidad"
               value={capacity}
               onChange={(e) => setCapacity(Number(e.target.value))}
             />
 
-            <button className="rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2 hover:bg-emerald-300 transition">
-              Agregar
-            </button>
+            <button className="button-ritto">Agregar</button>
           </form>
-        </div>
+        </Card>
 
-        {/* LISTA DE HORARIOS */}
-        <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight text-slate-50">
-            Horarios creados
-          </h2>
-
+        {/* CARD — LISTA DE HORARIOS */}
+        <Card title="Horarios creados">
           {schedules.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No hay horarios aún.
-            </p>
+            <p className="text-sm text-slate-400">No hay horarios aún.</p>
           )}
 
-          {schedules.length > 0 && (
-            <ul className="space-y-3">
-              {schedules.map((s) => (
-                <li
-                  key={s.id}
-                  className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between"
-                >
-                  <span className="font-medium text-slate-50 text-sm">
-                    {s.day_of_week}:{" "}
-                    {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}{" "}
-                    <span className="text-emerald-300 text-xs">
-                      (capacidad: {s.capacity_per_slot || 1})
-                    </span>
+          <ul className="space-y-3 mt-3">
+            {schedules.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between"
+              >
+                <span className="font-medium text-slate-50 text-sm">
+                  {s.day_of_week}: {s.start_time.slice(0, 5)} –{" "}
+                  {s.end_time.slice(0, 5)}{" "}
+                  <span className="text-emerald-300 text-xs">
+                    (capacidad: {s.capacity_per_slot || 1})
                   </span>
+                </span>
 
-                  <button
-                    onClick={() => deleteSchedule(s.id)}
-                    className="text-sm px-4 py-1.5 rounded-2xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition"
-                  >
-                    Eliminar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
+                <button
+                  onClick={() => deleteSchedule(s.id)}
+                  className="text-sm px-4 py-1.5 rounded-2xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition"
+                >
+                  Eliminar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------
+// 🎨 SUB-COMPONENTES
+// ------------------------------------------
+
+function Header({ title, subtitle }) {
+  return (
+    <div className="text-center">
+      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
+        {title}
+      </h1>
+      <p className="text-xs text-slate-400 mt-1">{subtitle}</p>
+    </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
+      <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[12px] text-slate-300">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Alert({ type, text }) {
+  return (
+    <div
+      className={`rounded-2xl px-4 py-3 text-[12px] ${
+        type === "error"
+          ? "border border-rose-500/40 bg-rose-500/10 text-rose-200"
+          : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+      }`}
+    >
+      {text}
     </div>
   );
 }
