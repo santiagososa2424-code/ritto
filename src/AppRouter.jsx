@@ -1,22 +1,26 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
+// 📦 Páginas públicas
 import Landing from "./pages/Landing.jsx";
-
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import UpdatePassword from "./pages/UpdatePassword.jsx";
 
+// 📦 Páginas privadas
 import Dashboard from "./pages/Dashboard.jsx";
 import BusinessSetup from "./pages/BusinessSetup.jsx";
 import Services from "./pages/Services.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
+import Bookings from "./pages/Bookings.jsx";
 
+// 📦 Booking público
 import PublicBooking from "./pages/PublicBooking.jsx";
 import BookingSuccess from "./pages/BookingSuccess.jsx";
 import PaymentSuccess from "./pages/PaymentSuccess.jsx";
 
+// 🔐 Middleware
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 export default function AppRouter() {
@@ -24,23 +28,21 @@ export default function AppRouter() {
     <Router>
       <Routes>
 
-        {/* 🌟 LANDING PRINCIPAL */}
+        {/* 🌟 Página principal */}
         <Route path="/" element={<Landing />} />
 
-        {/* 🌐 PÁGINAS PÚBLICAS */}
+        {/* 🌐 Páginas públicas */}
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/payment-success" element={<PaymentSuccess />} />
-
-        {/* 🔗 LINK PÚBLICO PARA TOMAR TURNOS */}
         <Route path="/book/:slug" element={<PublicBooking />} />
 
-        {/* 🔐 AUTENTICACIÓN */}
+        {/* 🔐 Auth */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* 🔒 SECCIONES PRIVADAS DEL NEGOCIO */}
+        {/* 🔒 Privadas */}
         <Route
           path="/dashboard"
           element={
@@ -86,8 +88,17 @@ export default function AppRouter() {
           }
         />
 
-        {/* 🚧 404 → Redirige a Landing */}
-        <Route path="*" element={<Landing />} />
+        <Route
+          path="/bookings"
+          element={
+            <ProtectedRoute>
+              <Bookings />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🚧 Cualquier ruta → Landing */}
+        <Route path="*" element={<Navigate to="/" />} />
 
       </Routes>
     </Router>
