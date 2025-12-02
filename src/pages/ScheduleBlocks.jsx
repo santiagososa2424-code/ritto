@@ -20,6 +20,9 @@ export default function ScheduleBlocks() {
     loadData();
   }, []);
 
+  // ----------------------------------------------------
+  // 🔥 Cargar negocio + bloqueos
+  // ----------------------------------------------------
   const loadData = async () => {
     setError("");
     setSuccess("");
@@ -50,6 +53,9 @@ export default function ScheduleBlocks() {
     setBlocks(blk || []);
   };
 
+  // ----------------------------------------------------
+  // ➕ Bloquear 1 día
+  // ----------------------------------------------------
   const addSingleDay = async () => {
     setError("");
     setSuccess("");
@@ -78,6 +84,9 @@ export default function ScheduleBlocks() {
     loadData();
   };
 
+  // ----------------------------------------------------
+  // ➕ Bloquear rango
+  // ----------------------------------------------------
   const addRange = async () => {
     setError("");
     setSuccess("");
@@ -89,7 +98,6 @@ export default function ScheduleBlocks() {
 
     const start = new Date(rangeStart);
     const end = new Date(rangeEnd);
-
     if (start > end) {
       setError("El rango es inválido.");
       return;
@@ -97,9 +105,8 @@ export default function ScheduleBlocks() {
 
     const days = [];
     let current = new Date(start);
-
     while (current <= end) {
-      days.push(new Date(current).toISOString().slice(0, 10));
+      days.push(current.toISOString().slice(0, 10));
       current.setDate(current.getDate() + 1);
     }
 
@@ -125,142 +132,169 @@ export default function ScheduleBlocks() {
     loadData();
   };
 
+  // ----------------------------------------------------
+  // ❌ Eliminar bloqueo
+  // ----------------------------------------------------
   const deleteBlock = async (id) => {
     await supabase.from("schedule_blocks").delete().eq("id", id);
     loadData();
   };
 
+  // ----------------------------------------------------
+  // 🖥️ UI
+  // ----------------------------------------------------
   return (
     <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
-      <div className="max-w-xl mx-auto space-y-8">
+      <div className="max-w-xl mx-auto space-y-10">
 
-        {/* Título */}
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Bloquear días y licencias
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Usá esta sección para bloquear días en los que no vas a trabajar.
-          </p>
-        </div>
+        {/* Header */}
+        <Header
+          title="Bloquear días y licencias"
+          subtitle="Usá esta sección para bloquear días en los que no vas a trabajar."
+        />
 
         {/* Alertas */}
-        {error && (
-          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-200">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[12px] text-emerald-200">
-            {success}
-          </div>
-        )}
+        {error && <Alert type="error" text={error} />}
+        {success && <Alert type="success" text={success} />}
 
-        {/* Bloquear día */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
-            Bloquear un día
-          </h2>
-
-          <input
-            type="date"
-            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
-            value={singleDate}
-            onChange={(e) => setSingleDate(e.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Motivo (opcional)"
-            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-
-          <button
-            onClick={addSingleDay}
-            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
-          >
-            Bloquear día
-          </button>
-        </div>
-
-        {/* Bloquear rango */}
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
-            Bloquear un rango
-          </h2>
-
-          <div>
-            <label className="text-[12px] text-slate-300">Desde</label>
+        {/* CARD — Bloquear día */}
+        <Card title="Bloquear un día">
+          <Field>
             <input
               type="date"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
+              value={singleDate}
+              onChange={(e) => setSingleDate(e.target.value)}
+            />
+          </Field>
+
+          <Field>
+            <input
+              type="text"
+              placeholder="Motivo (opcional)"
+              className="input-ritto"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
+
+          <button onClick={addSingleDay} className="button-ritto w-full">
+            Bloquear día
+          </button>
+        </Card>
+
+        {/* CARD — Bloquear rango */}
+        <Card title="Bloquear un rango">
+          <Field label="Desde">
+            <input
+              type="date"
+              className="input-ritto"
               value={rangeStart}
               onChange={(e) => setRangeStart(e.target.value)}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="text-[12px] text-slate-300">Hasta</label>
+          <Field label="Hasta">
             <input
               type="date"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={rangeEnd}
               onChange={(e) => setRangeEnd(e.target.value)}
             />
-          </div>
+          </Field>
 
-          <input
-            type="text"
-            placeholder="Motivo (opcional)"
-            className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
+          <Field>
+            <input
+              type="text"
+              placeholder="Motivo (opcional)"
+              className="input-ritto"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
 
-          <button
-            onClick={addRange}
-            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-2.5 hover:bg-emerald-300 transition"
-          >
+          <button onClick={addRange} className="button-ritto w-full">
             Bloquear rango
           </button>
-        </div>
+        </Card>
 
-        {/* Lista de bloqueos */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-50">
-            Días bloqueados
-          </h2>
+        {/* CARD — Lista de bloqueos */}
+        <Card title="Días bloqueados">
+          {blocks.length === 0 ? (
+            <p className="text-sm text-slate-400">No hay días bloqueados.</p>
+          ) : (
+            <ul className="space-y-3 mt-3">
+              {blocks.map((b) => (
+                <li
+                  key={b.id}
+                  className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow flex justify-between items-center px-5 py-4"
+                >
+                  <div>
+                    <p className="text-sm text-slate-50">{b.date}</p>
+                    {b.reason && (
+                      <p className="text-[12px] text-slate-400">{b.reason}</p>
+                    )}
+                  </div>
 
-          {blocks.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No hay días bloqueados.
-            </p>
+                  <button
+                    onClick={() => deleteBlock(b.id)}
+                    className="text-sm px-4 py-1.5 rounded-2xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition"
+                  >
+                    Eliminar
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-
-          {blocks.map((b) => (
-            <div
-              key={b.id}
-              className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow flex justify-between items-center px-5 py-4"
-            >
-              <div>
-                <p className="text-sm text-slate-50">{b.date}</p>
-                {b.reason && (
-                  <p className="text-[12px] text-slate-400">{b.reason}</p>
-                )}
-              </div>
-
-              <button
-                onClick={() => deleteBlock(b.id)}
-                className="text-sm px-4 py-1.5 rounded-2xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition"
-              >
-                Eliminar
-              </button>
-            </div>
-          ))}
-        </div>
+        </Card>
       </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------
+// 🎨 Subcomponentes
+// ----------------------------------------------------
+
+function Header({ title, subtitle }) {
+  return (
+    <div className="text-center">
+      <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+      <p className="text-xs text-slate-400 mt-1">{subtitle}</p>
+    </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
+      <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="space-y-1">
+      {label && <label className="text-[12px] text-slate-300">{label}</label>}
+      {children}
+    </div>
+  );
+}
+
+function Alert({ type, text }) {
+  return (
+    <div
+      className={`rounded-2xl px-4 py-3 text-[12px] ${
+        type === "error"
+          ? "border border-rose-500/40 bg-rose-500/10 text-rose-200"
+          : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+      }`}
+    >
+      {text}
     </div>
   );
 }
