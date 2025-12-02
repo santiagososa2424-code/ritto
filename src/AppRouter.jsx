@@ -31,7 +31,7 @@ export default function AppRouter() {
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/payment-success" element={<PaymentSuccess />} />
 
-        {/* 🔗 LINK PÚBLICO DE NEGOCIOS */}
+        {/* 🔗 LINK PÚBLICO PARA TOMAR TURNOS */}
         <Route path="/book/:slug" element={<PublicBooking />} />
 
         {/* 🔐 AUTENTICACIÓN */}
@@ -40,7 +40,7 @@ export default function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
 
-        {/* 🔒 PÁGINAS PRIVADAS */}
+        {/* 🔒 SECCIONES PRIVADAS DEL NEGOCIO */}
         <Route
           path="/dashboard"
           element={
@@ -86,7 +86,7 @@ export default function AppRouter() {
           }
         />
 
-        {/* 404 → volvemos a la landing */}
+        {/* 🚧 404 → Redirige a Landing */}
         <Route path="*" element={<Landing />} />
 
       </Routes>
