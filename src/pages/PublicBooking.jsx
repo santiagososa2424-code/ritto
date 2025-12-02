@@ -27,27 +27,25 @@ export default function PublicBooking() {
   }, []);
 
   // ────────────────────────────────────────────────
-  // CARGAR DATOS DEL NEGOCIO
+  // CARGAR DATOS
   // ────────────────────────────────────────────────
   const loadData = async () => {
     try {
       setError("");
 
-      // Negocio
-      const { data: biz, error: bizError } = await supabase
+      const { data: biz } = await supabase
         .from("businesses")
         .select("*")
         .eq("slug", slug)
         .single();
 
-      if (bizError || !biz) {
+      if (!biz) {
         setError("No se encontró el negocio.");
         return;
       }
 
       setBusiness(biz);
 
-      // Servicios activos
       const { data: servs } = await supabase
         .from("services")
         .select("*")
@@ -56,7 +54,6 @@ export default function PublicBooking() {
 
       setServices(servs || []);
 
-      // Horarios
       const { data: scheds } = await supabase
         .from("schedules")
         .select("*")
@@ -64,7 +61,6 @@ export default function PublicBooking() {
 
       setSchedules(scheds || []);
 
-      // Bloqueos de fechas
       const { data: blks } = await supabase
         .from("schedule_blocks")
         .select("*")
@@ -72,13 +68,12 @@ export default function PublicBooking() {
 
       setBlocks(blks || []);
     } catch (err) {
-      console.error(err);
       setError("Error cargando datos.");
     }
   };
 
   // ────────────────────────────────────────────────
-  // REGENERAR HORARIOS DISPONIBLES
+  // HORAS DISPONIBLES
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (selectedDate && selectedService) {
@@ -130,12 +125,10 @@ export default function PublicBooking() {
       while (current < end) {
         const normalized = `${current}:00`;
 
-        const countThisHour =
-          bookings?.filter((b) => b.hour === normalized).length || 0;
-
+        const count = bookings?.filter((b) => b.hour === normalized).length || 0;
         const capacity = slot.capacity_per_slot || 1;
 
-        if (countThisHour < capacity) {
+        if (count < capacity) {
           hours.push(current);
         }
 
@@ -157,7 +150,7 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // SEÑA (DEPOSITO)
+  // SEÑA
   // ────────────────────────────────────────────────
   const usesDeposit =
     business && business.deposit_enabled && Number(business.deposit_value) > 0;
@@ -165,18 +158,18 @@ export default function PublicBooking() {
   const calculateDepositAmount = () => {
     if (!usesDeposit || !selectedService) return 0;
 
-    const value = Number(business.deposit_value);
+    const val = Number(business.deposit_value);
     const price = Number(selectedService.price);
 
     if (business.deposit_type === "percentage") {
-      return Math.round((price * value) / 100);
+      return Math.round((price * val) / 100);
     }
 
-    return value;
+    return val;
   };
 
   // ────────────────────────────────────────────────
-  // GUARDAR RESERVA
+  // RESERVAR
   // ────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -194,30 +187,21 @@ export default function PublicBooking() {
       return;
     }
 
-    if (!business) {
-      setError("Negocio no encontrado.");
-      return;
-    }
-
     setIsProcessing(true);
 
-    // Caso sin seña
+    // SIN SEÑA
     if (!usesDeposit) {
-      const { data: inserted, error: insertError } = await supabase
-        .from("bookings")
-        .insert({
-          business_id: business.id,
-          service_id: selectedService.id,
-          service_name: selectedService.name,
-          date: selectedDate,
-          hour: `${selectedHour}:00`,
-          customer_name: name,
-          customer_email: email,
-          status: "confirmed",
-          deposit_paid: false,
-        })
-        .select()
-        .single();
+      const { error: insertError } = await supabase.from("bookings").insert({
+        business_id: business.id,
+        service_id: selectedService.id,
+        service_name: selectedService.name,
+        date: selectedDate,
+        hour: `${selectedHour}:00`,
+        customer_name: name,
+        customer_email: email,
+        status: "confirmed",
+        deposit_paid: false,
+      });
 
       if (insertError) {
         setError(insertError.message);
@@ -230,20 +214,15 @@ export default function PublicBooking() {
       return;
     }
 
-    // Caso con seña
-    const depositAmount = calculateDepositAmount();
-    if (!depositAmount) {
-      setError("La seña configurada no es válida.");
-      setIsProcessing(false);
-      return;
-    }
+    // CON SEÑA
+    const amount = calculateDepositAmount();
 
     const { data, error: fnError } = await supabase.functions.invoke(
       "create-mercadopago-checkout",
       {
         body: {
           business_id: business.id,
-          amount: depositAmount,
+          amount,
           description: `Seña — ${selectedService.name}`,
           service_id: selectedService.id,
           service_name: selectedService.name,
@@ -257,20 +236,13 @@ export default function PublicBooking() {
       }
     );
 
-    if (fnError) {
-      setError("No se pudo iniciar el pago de la seña.");
+    if (fnError || !data?.init_point) {
+      setError("No se pudo iniciar el pago.");
       setIsProcessing(false);
       return;
     }
 
-    const checkoutUrl = data?.init_point || data?.url;
-    if (!checkoutUrl) {
-      setError("No se recibió la URL de pago.");
-      setIsProcessing(false);
-      return;
-    }
-
-    window.location.href = checkoutUrl;
+    window.location.href = data.init_point;
   };
 
   // ────────────────────────────────────────────────
@@ -284,36 +256,35 @@ export default function PublicBooking() {
     );
   }
 
-  // ────────────────────────────────────────────────
-  // UI APPLE
-  // ────────────────────────────────────────────────
   const depositAmount = calculateDepositAmount();
 
+  // ────────────────────────────────────────────────
+  // UI PREMIUM
+  // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
-      <div className="max-w-lg mx-auto space-y-8">
+      <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
 
         {/* HEADER */}
-        <div className="text-center">
+        <div className="text-center space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">
             {business.name}
           </h1>
 
           {business.address && (
-            <p className="text-xs text-slate-400 mt-1">{business.address}</p>
+            <p className="text-xs text-slate-400">{business.address}</p>
           )}
         </div>
 
-        {/* FORMULARIO */}
+        {/* FORM */}
         <form
           onSubmit={handleSubmit}
-          className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6"
+          className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
-          {/* Servicio */}
-          <div>
-            <label className="text-[12px] text-slate-300">Servicio</label>
+          {/* SERVICIO */}
+          <Field label="Servicio">
             <select
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               onChange={(e) =>
                 setSelectedService(
                   services.find((s) => String(s.id) === e.target.value)
@@ -327,24 +298,22 @@ export default function PublicBooking() {
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
-          {/* Fecha */}
-          <div>
-            <label className="text-[12px] text-slate-300">Fecha</label>
+          {/* FECHA */}
+          <Field label="Fecha">
             <input
               type="date"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
-          </div>
+          </Field>
 
-          {/* Horarios */}
-          <div>
-            <label className="text-[12px] text-slate-300">Horario</label>
+          {/* HORARIO */}
+          <Field label="Horario">
             <select
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               value={selectedHour}
               onChange={(e) => setSelectedHour(e.target.value)}
             >
@@ -363,14 +332,14 @@ export default function PublicBooking() {
                   No hay horarios disponibles para ese día.
                 </p>
               )}
-          </div>
+          </Field>
 
-          {/* Seña */}
+          {/* SEÑA */}
           {usesDeposit && selectedService && (
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200">
               <p className="font-semibold">Seña requerida</p>
               <p>
-                Para confirmar el turno aboná:{" "}
+                Para confirmar el turno aboná{" "}
                 <span className="font-bold text-emerald-300">
                   ${depositAmount}
                 </span>
@@ -378,15 +347,11 @@ export default function PublicBooking() {
             </div>
           )}
 
-          {/* Datos personales */}
-          <div>
-            <label className="text-[12px] text-slate-300">
-              Tus datos
-            </label>
-
+          {/* DATOS PERSONALES */}
+          <Field label="Tus datos">
             <input
               type="text"
-              className="mt-1 w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm mb-2"
+              className="input-ritto mb-2"
               placeholder="Nombre completo"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -394,32 +359,32 @@ export default function PublicBooking() {
 
             <input
               type="email"
-              className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-3 py-2 text-sm"
+              className="input-ritto"
               placeholder="Tu email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </div>
+          </Field>
 
-          {/* Error */}
+          {/* ERROR */}
           {error && (
-            <p className="text-[12px] text-rose-300">
+            <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-[12px] text-rose-200">
               {error}
-            </p>
+            </div>
           )}
 
-          {/* Success */}
+          {/* SUCCESS */}
           {success && (
-            <p className="text-[12px] text-emerald-300">
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-[12px] text-emerald-200">
               {success}
-            </p>
+            </div>
           )}
 
           {/* BOTÓN */}
           <button
             type="submit"
             disabled={isProcessing}
-            className="w-full rounded-2xl bg-emerald-400 text-slate-950 font-semibold text-sm py-3 hover:bg-emerald-300 disabled:opacity-60 transition"
+            className="button-ritto mt-2 disabled:opacity-60"
           >
             {isProcessing
               ? "Procesando..."
@@ -429,6 +394,16 @@ export default function PublicBooking() {
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+/* COMPONENTE FIELD */
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="text-[12px] text-slate-300">{label}</label>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
