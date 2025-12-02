@@ -342,7 +342,7 @@ export default function Dashboard() {
               )}
 
               {!isLifetime && !isTrial && (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify_between">
                   <span className="text-xs">Plan activo</span>
                   <span className="text-emerald-400 font-medium">
                     {business.plan || "Personalizado"}
@@ -519,7 +519,7 @@ export default function Dashboard() {
 
             {/* TOP SERVICIOS */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify_between mb-3">
                 <h2 className="text-sm font-semibold">Servicios top</h2>
                 <span className="text-[11px] text-slate-500">Últimos 30 días</span>
               </div>
