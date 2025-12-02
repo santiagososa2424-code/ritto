@@ -269,8 +269,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
 
-      {/* Overlay si el trial venció */}
-      {trialExpired && (
+      {/* Overlay solo si el trial terminó y NO es lifetime */}
+      {trialExpired && !isLifetime && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-xl">
           <div className="max-w-sm w-full bg-slate-900/90 border border-emerald-400/40 rounded-3xl p-6 text-center shadow-[0_18px_60px_rgba(16,185,129,0.4)]">
             <p className="text-sm font-semibold mb-2">
@@ -334,7 +334,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {trialExpired && (
+              {trialExpired && !isLifetime && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs">Prueba finalizada</span>
                   <span className="text-rose-400 font-medium">Bloqueado</span>
@@ -342,7 +342,7 @@ export default function Dashboard() {
               )}
 
               {!isLifetime && !isTrial && (
-                <div className="flex items-center justify_between">
+                <div className="flex items-center justify-between">
                   <span className="text-xs">Plan activo</span>
                   <span className="text-emerald-400 font-medium">
                     {business.plan || "Personalizado"}
@@ -373,7 +373,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10">
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              {trialExpired ? "Agenda bloqueada" : "Agenda activa"}
+              {trialExpired && !isLifetime ? "Agenda bloqueada" : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -508,9 +508,12 @@ export default function Dashboard() {
                 </>
               )}
 
-              <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition">
-                Configurar método de pago
-              </button>
+              {/* 👇 Si es lifetime, NO mostrar botón de pago */}
+              {!isLifetime && (
+                <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition">
+                  Configurar método de pago
+                </button>
+              )}
 
               <p className="text-[10px] text-emerald-100/80 mt-2">
                 • Sin permanencia · Cancelás cuando quieras
@@ -519,7 +522,7 @@ export default function Dashboard() {
 
             {/* TOP SERVICIOS */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify_between mb-3">
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold">Servicios top</h2>
                 <span className="text-[11px] text-slate-500">Últimos 30 días</span>
               </div>
