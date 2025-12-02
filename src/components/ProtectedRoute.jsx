@@ -1,35 +1,43 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const [user, setUser] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [allowed, setAllowed] = useState(null);
 
   useEffect(() => {
-    const checkSubscription = async () => {
-      if (!user) {
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error || !data?.user) {
+        setUser(null);
         setAllowed(false);
+        setLoadingUser(false);
         return;
       }
 
-      // Buscar suscripción del usuario
+      setUser(data.user);
+      setLoadingUser(false);
+    };
+
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    const checkSubscription = async () => {
+      if (!user) return;
+
+      // Buscar suscripción
       const { data: sub, error } = await supabase
         .from("subscriptions")
         .select("*")
         .eq("user_id", user.id)
         .single();
 
-      // Si hay error (pero no es "no rows"), dejamos pasar
-      if (error && error.code !== "PGRST116") {
-        console.error(error);
-        setAllowed(true);
-        return;
-      }
-
-      if (!sub) {
-        // Recién registrado → tiene trial
+      // Si no hay suscripción → usuario recién creado → trial activo
+      if (error?.code === "PGRST116" || !sub) {
         setAllowed(true);
         return;
       }
@@ -37,26 +45,24 @@ export default function ProtectedRoute({ children }) {
       const now = new Date();
       const expires = new Date(sub.expires_at);
 
-      if (expires > now || sub.active === true) {
-        // Trial vigente o suscripción activa
+      if (sub.active || expires > now) {
         setAllowed(true);
       } else {
-        // Trial vencido / suscripción inactiva
         setAllowed(false);
       }
     };
 
-    if (!loading) {
+    if (!loadingUser) {
       checkSubscription();
     }
-  }, [user, loading]);
+  }, [user, loadingUser]);
 
-  // ⏳ LOADER DISEÑO APPLE
-  if (loading || allowed === null) {
+  // ⏳ LOADER APPLE-RITTO
+  if (loadingUser || allowed === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.6)] backdrop-blur-xl text-xs text-slate-200 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
+        <div className="px-4 py-2 rounded-3xl bg-white/10 border border-white/20 shadow-xl backdrop-blur-xl text-xs text-slate-200 flex items-center gap-2 animate-fadeIn">
+          <span className="h-2 w-2 rounded-full bg-cyan-300 animate-pulse" />
           Verificando acceso...
         </div>
       </div>
