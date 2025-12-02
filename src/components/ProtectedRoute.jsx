@@ -3,77 +3,96 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 export default function ProtectedRoute({ children }) {
-  const [user, setUser] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [allowed, setAllowed] = useState(null);
+  const [allowed, setAllowed] = useState(null); // null = cargando
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+    const verifyAccess = async () => {
+      setLoading(true);
 
-      if (error || !data?.user) {
-        setUser(null);
+      // 1️⃣ Obtener sesión actual
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+
+      if (!session) {
         setAllowed(false);
-        setLoadingUser(false);
+        setLoading(false);
         return;
       }
 
-      setUser(data.user);
-      setLoadingUser(false);
-    };
+      const user = session.user;
 
-    loadUser();
-  }, []);
+      // 2️⃣ Chequear si tiene lifetime_free
+      const lifetime = user.user_metadata?.lifetime_free;
 
-  useEffect(() => {
-    const checkSubscription = async () => {
-      if (!user) return;
+      if (lifetime) {
+        setAllowed(true);
+        setLoading(false);
+        return;
+      }
 
-      // Buscar suscripción
-      const { data: sub, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
+      // 3️⃣ Buscar negocio del usuario
+      const { data: business, error: bizError } = await supabase
+        .from("businesses")
+        .select("plan, trial_starts_at, trial_ends_at")
+        .eq("owner_id", user.id)
         .single();
 
-      // Si no hay suscripción → usuario recién creado → trial activo
-      if (error?.code === "PGRST116" || !sub) {
-        setAllowed(true);
+      if (bizError || !business) {
+        setAllowed(false);
+        setLoading(false);
         return;
       }
 
-      const now = new Date();
-      const expires = new Date(sub.expires_at);
+      // 4️⃣ Si está en trial
+      if (business.plan === "trial") {
+        const now = new Date();
+        const ends = new Date(business.trial_ends_at);
 
-      if (sub.active || expires > now) {
-        setAllowed(true);
-      } else {
-        setAllowed(false);
+        if (now < ends) {
+          // trial vigente
+          setAllowed(true);
+        } else {
+          // trial vencido
+          setAllowed(false);
+        }
+
+        setLoading(false);
+        return;
       }
+
+      // 5️⃣ Si tiene plan activo pago
+      if (business.plan === "active") {
+        setAllowed(true);
+        setLoading(false);
+        return;
+      }
+
+      // 6️⃣ Cualquier otro caso → no autorizado
+      setAllowed(false);
+      setLoading(false);
     };
 
-    if (!loadingUser) {
-      checkSubscription();
-    }
-  }, [user, loadingUser]);
+    verifyAccess();
+  }, []);
 
-  // ⏳ LOADER APPLE-RITTO
-  if (loadingUser || allowed === null) {
+  // ⏳ LOADER ESTILO APPLE
+  if (loading || allowed === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
-        <div className="px-4 py-2 rounded-3xl bg-white/10 border border-white/20 shadow-xl backdrop-blur-xl text-xs text-slate-200 flex items-center gap-2 animate-fadeIn">
-          <span className="h-2 w-2 rounded-full bg-cyan-300 animate-pulse" />
-          Verificando acceso...
+        <div className="px-4 py-3 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl flex items-center gap-3 animate-fadeIn">
+          <span className="h-2 w-2 rounded-full bg-cyan-300 animate-pulse"></span>
+          <p className="text-white/80 text-sm">Verificando acceso...</p>
         </div>
       </div>
     );
   }
 
-  // ❌ NO AUTORIZADO
-  if (!user || !allowed) {
+  // ❌ Usuario sin acceso → login
+  if (!allowed) {
     return <Navigate to="/login" replace />;
   }
 
-  // ✔️ AUTORIZADO
+  // ✔ Usuario autorizado
   return children;
 }
