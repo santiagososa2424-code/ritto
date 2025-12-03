@@ -27,16 +27,20 @@ export default function PublicBooking() {
   }, []);
 
   // ────────────────────────────────────────────────
-  // CARGAR DATOS
+  // CARGAR NEGOCIO (FIX DEFINITIVO)
   // ────────────────────────────────────────────────
   const loadData = async () => {
     try {
       setError("");
 
+      // 🔥 FIX: buscar el negocio por NOMBRE en vez de slug
+      // Convertimos barberia-juan → "barberia juan"
+      const normalizedName = slug.replace(/-/g, " ").trim();
+
       const { data: biz } = await supabase
         .from("businesses")
         .select("*")
-        .eq("slug", slug)
+        .ilike("name", normalizedName) // permite mayúsc/minúsc
         .single();
 
       if (!biz) {
@@ -88,14 +92,12 @@ export default function PublicBooking() {
 
     const todayStr = new Date(selectedDate).toISOString().slice(0, 10);
 
-    // Día bloqueado
     const isBlocked = blocks.some((b) => b.date === todayStr);
     if (isBlocked) {
       setAvailableHours([]);
       return;
     }
 
-    // Día de semana
     const dayOfWeekName = new Date(selectedDate)
       .toLocaleDateString("es-UY", { weekday: "long" })
       .toLowerCase();
@@ -109,7 +111,6 @@ export default function PublicBooking() {
       return;
     }
 
-    // Reservas existentes
     const { data: bookings } = await supabase
       .from("bookings")
       .select("*")
@@ -231,7 +232,7 @@ export default function PublicBooking() {
           hour: `${selectedHour}:00`,
           customer_name: name,
           customer_email: email,
-          slug: business.slug,
+          slug: slug,
         },
       }
     );
@@ -259,7 +260,7 @@ export default function PublicBooking() {
   const depositAmount = calculateDepositAmount();
 
   // ────────────────────────────────────────────────
-  // UI PREMIUM
+  // UI
   // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
