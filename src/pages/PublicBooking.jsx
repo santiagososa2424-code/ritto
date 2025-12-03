@@ -27,29 +27,34 @@ export default function PublicBooking() {
   }, []);
 
   // ────────────────────────────────────────────────
-  // CARGAR NEGOCIO (FIX DEFINITIVO)
+  // CARGAR DATOS DEL NEGOCIO POR SLUG
   // ────────────────────────────────────────────────
   const loadData = async () => {
     try {
       setError("");
 
-      // 🔥 FIX: buscar el negocio por NOMBRE en vez de slug
-      // Convertimos barberia-juan → "barberia juan"
-      const normalizedName = slug.replace(/-/g, " ").trim();
+      console.log("Buscando negocio con slug:", slug);
 
-      const { data: biz } = await supabase
+      const { data: biz, error: bizErr } = await supabase
         .from("businesses")
         .select("*")
-        .ilike("name", normalizedName) // permite mayúsc/minúsc
-        .single();
+        .eq("slug", slug)
+        .maybeSingle();
+
+      if (bizErr) {
+        console.error(bizErr);
+        setError("No se pudo cargar el negocio.");
+        return;
+      }
 
       if (!biz) {
-        setError("No se encontró el negocio.");
+        setError("No existe un negocio con ese enlace.");
         return;
       }
 
       setBusiness(biz);
 
+      // Servicios activos
       const { data: servs } = await supabase
         .from("services")
         .select("*")
@@ -58,6 +63,7 @@ export default function PublicBooking() {
 
       setServices(servs || []);
 
+      // Horarios
       const { data: scheds } = await supabase
         .from("schedules")
         .select("*")
@@ -65,6 +71,7 @@ export default function PublicBooking() {
 
       setSchedules(scheds || []);
 
+      // Bloqueos
       const { data: blks } = await supabase
         .from("schedule_blocks")
         .select("*")
@@ -72,6 +79,7 @@ export default function PublicBooking() {
 
       setBlocks(blks || []);
     } catch (err) {
+      console.error(err);
       setError("Error cargando datos.");
     }
   };
@@ -92,6 +100,7 @@ export default function PublicBooking() {
 
     const todayStr = new Date(selectedDate).toISOString().slice(0, 10);
 
+    // Día bloqueado
     const isBlocked = blocks.some((b) => b.date === todayStr);
     if (isBlocked) {
       setAvailableHours([]);
@@ -232,7 +241,7 @@ export default function PublicBooking() {
           hour: `${selectedHour}:00`,
           customer_name: name,
           customer_email: email,
-          slug: slug,
+          slug: business.slug,
         },
       }
     );
@@ -247,8 +256,9 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // LOADING
+  // UI
   // ────────────────────────────────────────────────
+
   if (!business) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
@@ -259,14 +269,10 @@ export default function PublicBooking() {
 
   const depositAmount = calculateDepositAmount();
 
-  // ────────────────────────────────────────────────
-  // UI
-  // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
 
-        {/* HEADER */}
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">
             {business.name}
@@ -277,12 +283,10 @@ export default function PublicBooking() {
           )}
         </div>
 
-        {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
-          {/* SERVICIO */}
           <Field label="Servicio">
             <select
               className="input-ritto"
@@ -301,7 +305,6 @@ export default function PublicBooking() {
             </select>
           </Field>
 
-          {/* FECHA */}
           <Field label="Fecha">
             <input
               type="date"
@@ -311,7 +314,6 @@ export default function PublicBooking() {
             />
           </Field>
 
-          {/* HORARIO */}
           <Field label="Horario">
             <select
               className="input-ritto"
@@ -335,7 +337,6 @@ export default function PublicBooking() {
               )}
           </Field>
 
-          {/* SEÑA */}
           {usesDeposit && selectedService && (
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200">
               <p className="font-semibold">Seña requerida</p>
@@ -348,7 +349,6 @@ export default function PublicBooking() {
             </div>
           )}
 
-          {/* DATOS PERSONALES */}
           <Field label="Tus datos">
             <input
               type="text"
@@ -367,21 +367,18 @@ export default function PublicBooking() {
             />
           </Field>
 
-          {/* ERROR */}
           {error && (
             <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-[12px] text-rose-200">
               {error}
             </div>
           )}
 
-          {/* SUCCESS */}
           {success && (
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-[12px] text-emerald-200">
               {success}
             </div>
           )}
 
-          {/* BOTÓN */}
           <button
             type="submit"
             disabled={isProcessing}
