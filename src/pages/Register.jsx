@@ -25,15 +25,24 @@ export default function Register() {
       return;
     }
 
+    // ⚡ SLUG limpio para evitar errores en Supabase
+    const slug = businessName
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9\-]/g, "");
+
     setChecking(true);
 
-    // Verificar si ya existe el negocio
-    const { data: existingBiz, error: bizCheckError } = await supabase
+    // ╔══════════════════════════════════════╗
+    //   VALIDAR SI YA EXISTE EL NEGOCIO (FIX)
+    // ╚══════════════════════════════════════╝
+    const { data: existingBiz, error: checkError } = await supabase
       .from("businesses")
       .select("id")
-      .eq("name", businessName.trim());
+      .eq("slug", slug); // <--- EL FIX REAL
 
-    if (bizCheckError) {
+    if (checkError) {
       toast.error("Hubo un problema verificando el negocio.");
       setChecking(false);
       return;
@@ -48,10 +57,12 @@ export default function Register() {
     setChecking(false);
     setLoading(true);
 
-    // Detectar si el código es válido
+    // Validar código de creador
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
-    // Crear usuario
+    // ╔════════════════════════════════╗
+    //           CREAR USUARIO
+    // ╚════════════════════════════════╝
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -80,28 +91,28 @@ export default function Register() {
       return;
     }
 
-    // Fecha de trial si NO es lifetime
+    // Trial si NO es lifetime
     const now = new Date();
     const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    // Plan correcto
     const plan = validCreator ? "lifetime_free" : "trial";
 
-    // Crear negocio
-    const { error: businessError } = await supabase
-      .from("businesses")
-      .insert([
-        {
-          id: crypto.randomUUID(),
-          owner_id: user.id,
-          name: businessName,
-          phone,
-          is_active: true,
-          plan,
-          trial_starts_at: validCreator ? null : now.toISOString(),
-          trial_ends_at: validCreator ? null : trialEnds.toISOString(),
-        },
-      ]);
+    // ╔════════════════════════════════╗
+    //           CREAR NEGOCIO
+    // ╚════════════════════════════════╝
+    const { error: businessError } = await supabase.from("businesses").insert([
+      {
+        id: crypto.randomUUID(),
+        owner_id: user.id,
+        name: businessName,
+        slug, // <--- AHORA QUEDA REGISTRADO BIEN
+        phone,
+        is_active: true,
+        plan,
+        trial_starts_at: validCreator ? null : now.toISOString(),
+        trial_ends_at: validCreator ? null : trialEnds.toISOString(),
+      },
+    ]);
 
     if (businessError) {
       toast.error("No se pudo crear el negocio.");
@@ -119,7 +130,9 @@ export default function Register() {
     navigate("/dashboard");
   };
 
-  // Loader cuando crea la cuenta
+  // ────────────────────────────────────────────────
+  // Loader
+  // ────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -133,10 +146,12 @@ export default function Register() {
     );
   }
 
+  // ────────────────────────────────────────────────
+  // UI
+  // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl animate-fadeIn">
-
         <div className="flex flex-col items-center mb-8">
           <div className="h-16 w-16 rounded-3xl bg-gradient-to-br from-blue-400 to-cyan-300 flex items-center justify-center text-black text-3xl font-bold shadow-inner animate-popIn">
             R
@@ -150,46 +165,71 @@ export default function Register() {
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
-
-          {/* Nombre y apellido */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm text-slate-200">Nombre</label>
-              <input type="text" className="input-ritto" value={name} onChange={(e)=>setName(e.target.value)} />
+              <input
+                type="text"
+                className="input-ritto"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div>
               <label className="text-sm text-slate-200">Apellido</label>
-              <input type="text" className="input-ritto" value={lastname} onChange={(e)=>setLastname(e.target.value)} />
+              <input
+                type="text"
+                className="input-ritto"
+                value={lastname}
+                onChange={(e) => setLastname(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* Negocio */}
           <div>
             <label className="text-sm text-slate-200">Nombre del negocio</label>
-            <input type="text" className="input-ritto" value={businessName} onChange={(e)=>setBusinessName(e.target.value)} />
+            <input
+              type="text"
+              className="input-ritto"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+            />
           </div>
 
-          {/* Teléfono */}
           <div>
             <label className="text-sm text-slate-200">Teléfono</label>
-            <input type="tel" className="input-ritto" value={phone} onChange={(e)=>setPhone(e.target.value)} />
+            <input
+              type="tel"
+              className="input-ritto"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
 
-          {/* Email */}
           <div>
             <label className="text-sm text-slate-200">Email</label>
-            <input type="email" className="input-ritto" value={email} onChange={(e)=>setEmail(e.target.value)} />
+            <input
+              type="email"
+              className="input-ritto"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
 
-          {/* Password */}
           <div>
             <label className="text-sm text-slate-200">Contraseña</label>
-            <input type="password" className="input-ritto" value={password} onChange={(e)=>setPassword(e.target.value)} />
+            <input
+              type="password"
+              className="input-ritto"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
 
-          {/* Creator Code */}
           <div>
-            <label className="text-sm text-slate-200">Código de creador (opcional)</label>
+            <label className="text-sm text-slate-200">
+              Código de creador (opcional)
+            </label>
             <input
               type="text"
               className="input-ritto"
@@ -203,7 +243,6 @@ export default function Register() {
             Crear cuenta GRATIS
           </button>
         </form>
-
       </div>
     </div>
   );
