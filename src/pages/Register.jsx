@@ -25,22 +25,21 @@ export default function Register() {
       return;
     }
 
-    // ⚡ SLUG limpio para evitar errores en Supabase
-    const slug = businessName
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9\-]/g, "");
+    // ---- SLUG corregido con fallback seguro ----
+    let slug =
+      businessName
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9\-]/g, "") || crypto.randomUUID().slice(0, 8);
 
     setChecking(true);
 
-    // ╔══════════════════════════════════════╗
-    //   VALIDAR SI YA EXISTE EL NEGOCIO (FIX)
-    // ╚══════════════════════════════════════╝
+    // ---- Verificar si ya existe el negocio ----
     const { data: existingBiz, error: checkError } = await supabase
       .from("businesses")
       .select("id")
-      .eq("slug", slug); // <--- EL FIX REAL
+      .eq("slug", slug);
 
     if (checkError) {
       toast.error("Hubo un problema verificando el negocio.");
@@ -57,12 +56,10 @@ export default function Register() {
     setChecking(false);
     setLoading(true);
 
-    // Validar código de creador
+    // ---- Validar código de creador ----
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
-    // ╔════════════════════════════════╗
-    //           CREAR USUARIO
-    // ╚════════════════════════════════╝
+    // ---- Crear usuario en Auth (corregido) ----
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -71,7 +68,7 @@ export default function Register() {
           name,
           lastname,
           phone,
-          businessName,
+          business_name: businessName, // FIX del camelCase
           creator_code: validCreator ? SPECIAL_CODE : null,
           lifetime_free: validCreator,
         },
@@ -85,27 +82,25 @@ export default function Register() {
     }
 
     const user = data?.user;
+
     if (!user) {
       toast.error("Error creando tu cuenta.");
       setLoading(false);
       return;
     }
 
-    // Trial si NO es lifetime
+    // ---- Trial de 30 días (si no es lifetime) ----
     const now = new Date();
     const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const plan = validCreator ? "lifetime_free" : "trial";
 
-    // ╔════════════════════════════════╗
-    //           CREAR NEGOCIO
-    // ╚════════════════════════════════╝
+    // ---- Crear negocio (ID removido porque Supabase lo genera) ----
     const { error: businessError } = await supabase.from("businesses").insert([
       {
-        id: crypto.randomUUID(),
         owner_id: user.id,
         name: businessName,
-        slug, // <--- AHORA QUEDA REGISTRADO BIEN
+        slug,
         phone,
         is_active: true,
         plan,
@@ -115,10 +110,16 @@ export default function Register() {
     ]);
 
     if (businessError) {
+      // ---- SI FALLA, BORRAR USUARIO PARA QUE NO QUEDE HUECO ----
+      await supabase.auth.admin.deleteUser(user.id);
+
       toast.error("No se pudo crear el negocio.");
       setLoading(false);
       return;
     }
+
+    // ---- Login automático tras el registro ----
+    await supabase.auth.signInWithPassword({ email, password });
 
     toast.success(
       validCreator
@@ -130,9 +131,7 @@ export default function Register() {
     navigate("/dashboard");
   };
 
-  // ────────────────────────────────────────────────
-  // Loader
-  // ────────────────────────────────────────────────
+  // ---------- Loader ----------
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -146,9 +145,7 @@ export default function Register() {
     );
   }
 
-  // ────────────────────────────────────────────────
-  // UI
-  // ────────────────────────────────────────────────
+  // ---------- UI ----------
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl animate-fadeIn">
