@@ -24,27 +24,36 @@ export default function Dashboard() {
     try {
       setIsLoading(true);
 
-      // Usuario actual
+      // ─────────────────────────────
+      // 1) USUARIO ACTUAL
+      // ─────────────────────────────
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
+        console.error("auth.getUser error:", userError);
         toast.error("Tenés que iniciar sesión.");
         setIsLoading(false);
         navigate("/login");
         return;
       }
 
-      // Negocio del dueño
-      const { data: biz, error: bizError } = await supabase
+      // ─────────────────────────────
+      // 2) NEGOCIO DEL DUEÑO
+      // ─────────────────────────────
+      const { data: biz, error: bizError, status: bizStatus } = await supabase
         .from("businesses")
         .select("*")
         .eq("owner_id", user.id)
-        .single();
+        .maybeSingle(); // evita tirar error si no hay fila
 
-      if (bizError || !biz) {
+      if (bizError) {
+        console.error("Error cargando business:", bizError, "status:", bizStatus);
+      }
+
+      if (!biz) {
         toast.error("No se encontró tu negocio. Revisá la configuración.");
         setIsLoading(false);
         return;
@@ -55,20 +64,24 @@ export default function Dashboard() {
       const todayStr = new Date().toISOString().slice(0, 10);
       const monthStart = todayStr.slice(0, 7) + "-01";
 
-      // Servicios del negocio
+      // ─────────────────────────────
+      // 3) SERVICIOS DEL NEGOCIO
+      // ─────────────────────────────
       const { data: servicesData, error: servicesError } = await supabase
         .from("services")
         .select("id, name, price, duration")
         .eq("business_id", biz.id);
 
       if (servicesError) {
-        console.error(servicesError);
+        console.error("Error cargando services:", servicesError);
       }
 
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
 
-      // Turnos de hoy
+      // ─────────────────────────────
+      // 4) TURNOS DE HOY
+      // ─────────────────────────────
       const { data: bookingsToday, error: bookingsTodayError } = await supabase
         .from("bookings")
         .select("*")
@@ -77,12 +90,14 @@ export default function Dashboard() {
         .order("hour", { ascending: true });
 
       if (bookingsTodayError) {
-        console.error(bookingsTodayError);
+        console.error("Error cargando bookingsToday:", bookingsTodayError);
       }
 
       setAppointmentsToday(bookingsToday || []);
 
-      // No-shows del mes
+      // ─────────────────────────────
+      // 5) NO-SHOWS DEL MES
+      // ─────────────────────────────
       const { data: noShows, error: noShowsError } = await supabase
         .from("bookings")
         .select("id")
@@ -91,12 +106,14 @@ export default function Dashboard() {
         .gte("date", monthStart);
 
       if (noShowsError) {
-        console.error(noShowsError);
+        console.error("Error cargando noShows:", noShowsError);
       }
 
       setNoShowsThisMonth(noShows?.length || 0);
 
-      // Últimos 30 días
+      // ─────────────────────────────
+      // 6) ÚLTIMOS 30 DÍAS
+      // ─────────────────────────────
       const date30 = new Date(Date.now() - 30 * 86400000)
         .toISOString()
         .slice(0, 10);
@@ -110,10 +127,12 @@ export default function Dashboard() {
           .lte("date", todayStr);
 
       if (recentBookingsError) {
-        console.error(recentBookingsError);
+        console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      // Top servicios
+      // ─────────────────────────────
+      // 7) TOP SERVICIOS
+      // ─────────────────────────────
       const counts = {};
       (recentBookings || []).forEach((b) => {
         const key = b.service_id || b.service_name;
@@ -139,7 +158,9 @@ export default function Dashboard() {
 
       setTopServices(top);
 
-      // Ingresos últimos 30 días (solo confirmados)
+      // ─────────────────────────────
+      // 8) INGRESOS ÚLTIMOS 30 DÍAS
+      // ─────────────────────────────
       let totalRev = 0;
 
       (recentBookings || [])
@@ -151,7 +172,9 @@ export default function Dashboard() {
 
       setEstimatedRevenue(totalRev);
 
-      // Ocupación de hoy
+      // ─────────────────────────────
+      // 9) OCUPACIÓN DE HOY
+      // ─────────────────────────────
       const occupationValue = await calculateOccupation(biz.id, todayStr, biz);
       setOccupation(occupationValue);
     } catch (err) {
@@ -174,7 +197,7 @@ export default function Dashboard() {
         .eq("business_id", businessId);
 
       if (schedulesError) {
-        console.error(schedulesError);
+        console.error("Error cargando schedules:", schedulesError);
         return 0;
       }
 
@@ -207,12 +230,13 @@ export default function Dashboard() {
         .eq("status", "confirmed");
 
       if (usedError) {
-        console.error(usedError);
+        console.error("Error cargando used slots:", usedError);
         return 0;
       }
 
       return Math.round(((used?.length || 0) / totalSlots) * 100);
-    } catch {
+    } catch (e) {
+      console.error("calculateOccupation error", e);
       return 0;
     }
   };
@@ -233,7 +257,9 @@ export default function Dashboard() {
 
   const occupationLabel = `${occupation || 0}%`;
 
-  // 🔐 Lógica de plan / trial
+  // ─────────────────────────────
+  // LÓGICA DE PLAN / TRIAL SEGÚN TU TABLA REAL
+  // ─────────────────────────────
   const today = new Date();
   const trialEndsDate = business?.trial_ends_at
     ? new Date(business.trial_ends_at)
@@ -247,12 +273,13 @@ export default function Dashboard() {
   const daysLeft =
     msDiff !== null ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : null;
 
-  const isLifetime = business?.plan === "lifetime_free";
-  const isTrial = business?.plan === "trial";
+  const subscription = business?.subscription_status || null;
+  const isLifetime = subscription === "lifetime_free";
+  const isTrial = subscription === "trial";
   const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
   const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
 
-  // Loader inicial Apple-style si todavía está cargando y no hay negocio
+  // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -268,7 +295,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
-
       {/* Overlay solo si el trial terminó y NO es lifetime */}
       {trialExpired && !isLifetime && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-xl">
@@ -293,7 +319,6 @@ export default function Dashboard() {
 
       {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
-
         <div className="flex items-center gap-3 mb-10">
           <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
             R
@@ -345,7 +370,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs">Plan activo</span>
                   <span className="text-emerald-400 font-medium">
-                    {business.plan || "Personalizado"}
+                    {subscription || "Personalizado"}
                   </span>
                 </div>
               )}
@@ -356,12 +381,12 @@ export default function Dashboard() {
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
-
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
-
           <div>
-            <p className="text-xs text-slate-400 uppercase tracking-[0.18em]">Panel de control</p>
+            <p className="text-xs text-slate-400 uppercase tracking-[0.18em]">
+              Panel de control
+            </p>
             <h1 className="text-xl font-semibold">
               Bienvenido,{" "}
               <span className="text-emerald-400">
@@ -373,7 +398,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10">
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              {trialExpired && !isLifetime ? "Agenda bloqueada" : "Agenda activa"}
+              {trialExpired && !isLifetime
+                ? "Agenda bloqueada"
+                : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -384,18 +411,36 @@ export default function Dashboard() {
 
         {/* MÉTRICAS */}
         <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard label="Turnos de hoy" value={appointmentsToday.length} pill="Agenda" sublabel="Reservas del día" />
-          <MetricCard label="Ausencias" value={noShowsThisMonth} pill="No-shows" sublabel="Mes actual" />
-          <MetricCard label="Ingresos" value={`$ ${revenueLabel}`} pill="Ingresos" sublabel="Últimos 30 días" />
-          <MetricCard label="Ocupación" value={occupationLabel} pill="Capacidad" sublabel="Hoy" />
+          <MetricCard
+            label="Turnos de hoy"
+            value={appointmentsToday.length}
+            pill="Agenda"
+            sublabel="Reservas del día"
+          />
+          <MetricCard
+            label="Ausencias"
+            value={noShowsThisMonth}
+            pill="No-shows"
+            sublabel="Mes actual"
+          />
+          <MetricCard
+            label="Ingresos"
+            value={`$ ${revenueLabel}`}
+            pill="Ingresos"
+            sublabel="Últimos 30 días"
+          />
+          <MetricCard
+            label="Ocupación"
+            value={occupationLabel}
+            pill="Capacidad"
+            sublabel="Hoy"
+          />
         </section>
 
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-
           {/* AGENDA HOY */}
           <div className="lg:col-span-2 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold">Turnos de hoy</h2>
@@ -407,10 +452,13 @@ export default function Dashboard() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-
               <div className="grid grid-cols-[auto,1fr] text-[11px] border-b border-white/10 bg-slate-900/70">
-                <div className="px-3 py-2 text-slate-400 border-r border-white/10">Hora</div>
-                <div className="px-3 py-2 text-slate-400">Cliente · Servicio · Estado</div>
+                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                  Hora
+                </div>
+                <div className="px-3 py-2 text-slate-400">
+                  Cliente · Servicio · Estado
+                </div>
               </div>
 
               <div className="max-h-[260px] overflow-auto text-[12px]">
@@ -431,8 +479,12 @@ export default function Dashboard() {
 
                     <div className="px-3 py-2.5 flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-50">{item.customer_name}</p>
-                        <p className="text-[11px] text-slate-400">{item.service_name}</p>
+                        <p className="font-medium text-slate-50">
+                          {item.customer_name}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {item.service_name}
+                        </p>
                       </div>
 
                       <span
@@ -467,7 +519,6 @@ export default function Dashboard() {
 
           {/* LATERAL */}
           <div className="flex flex-col gap-6">
-
             {/* PLAN */}
             <div className="rounded-3xl bg-slate-900/70 border border-emerald-500/40 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.25)] p-5">
               {isLifetime && (
@@ -485,7 +536,9 @@ export default function Dashboard() {
 
               {isTrial && !trialExpired && (
                 <>
-                  <p className="text-[11px] text-emerald-300">Prueba gratuita activa</p>
+                  <p className="text-[11px] text-emerald-300">
+                    Prueba gratuita activa
+                  </p>
                   <h2 className="text-sm font-semibold mt-1">
                     {daysLeft} días para enamorarte de Ritto
                   </h2>
@@ -508,7 +561,6 @@ export default function Dashboard() {
                 </>
               )}
 
-              {/* 👇 Si es lifetime, NO mostrar botón de pago */}
               {!isLifetime && (
                 <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition">
                   Configurar método de pago
@@ -524,7 +576,9 @@ export default function Dashboard() {
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold">Servicios top</h2>
-                <span className="text-[11px] text-slate-500">Últimos 30 días</span>
+                <span className="text-[11px] text-slate-500">
+                  Últimos 30 días
+                </span>
               </div>
 
               {topServices.length === 0 ? (
@@ -534,7 +588,10 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3 text-[12px]">
                   {topServices.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between">
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between"
+                    >
                       <div>
                         <p className="font-medium text-slate-50">{s.name}</p>
                         <p className="text-[11px] text-slate-400">
@@ -585,7 +642,9 @@ function SidebarItem({ label, active }) {
   return (
     <button
       className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-xs transition ${
-        active ? "bg-white/10 text-slate-50 shadow-inner" : "text-slate-300 hover:bg-white/5"
+        active
+          ? "bg-white/10 text-slate-50 shadow-inner"
+          : "text-slate-300 hover:bg-white/5"
       }`}
     >
       {label}
