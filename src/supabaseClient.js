@@ -1,19 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
-// ⚠️ VALIDACIÓN DE VARIABLES DE ENTORNO (para evitar errores silenciosos)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// 🔥 KEYS DIRECTAS (NO USA .env PARA EVITAR 404/401)
+const supabaseUrl = "https://rvdfxayovbvtefhntkxr.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2ZGZ4YXlvdmJ2dGVmaG50a3hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMzUwNjIsImV4cCI6MjA3OTYxMTA2Mn0.j91RIKtfxriusDguUc-g7Wc-j-Hhv7wpUmgqzA6vpow";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("❌ ERROR: Supabase URL o ANON KEY faltan en .env");
-}
-
-// 🔥 CLIENTE SUPABASE PRODUCTION-READY
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,          // Mantener login entre recargas
-    autoRefreshToken: true,        // Renovar token automáticamente
-    detectSessionInUrl: true,      // Necesario después de reset-password
-    storage: localStorage,         // Fuerza persistencia (Vercel lo necesita)
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: localStorage,
   },
 });
