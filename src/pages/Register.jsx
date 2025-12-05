@@ -25,7 +25,7 @@ export default function Register() {
       return;
     }
 
-    // ---- SLUG corregido con fallback seguro ----
+    // ---- SLUG limpio ----
     let slug =
       businessName
         .trim()
@@ -35,7 +35,7 @@ export default function Register() {
 
     setChecking(true);
 
-    // ---- Verificar si ya existe el negocio ----
+    // ---- Check slug ----
     const { data: existingBiz, error: checkError } = await supabase
       .from("businesses")
       .select("id")
@@ -56,10 +56,10 @@ export default function Register() {
     setChecking(false);
     setLoading(true);
 
-    // ---- Validar código de creador ----
+    // ---- Código creador ----
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
-    // ---- Crear usuario en Auth (corregido) ----
+    // ---- Crear usuario ----
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -68,7 +68,7 @@ export default function Register() {
           name,
           lastname,
           phone,
-          business_name: businessName, // FIX del camelCase
+          business_name: businessName,
           creator_code: validCreator ? SPECIAL_CODE : null,
           lifetime_free: validCreator,
         },
@@ -82,20 +82,19 @@ export default function Register() {
     }
 
     const user = data?.user;
-
     if (!user) {
       toast.error("Error creando tu cuenta.");
       setLoading(false);
       return;
     }
 
-    // ---- Trial de 30 días (si no es lifetime) ----
+    // ---- Trial solo si NO es lifetime ----
     const now = new Date();
-    const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const trialEnds = validCreator
+      ? null
+      : new Date(now.getTime() + 30 * 86400000).toISOString();
 
-    const plan = validCreator ? "lifetime_free" : "trial";
-
-    // ---- Crear negocio (ID removido porque Supabase lo genera) ----
+    // ---- Crear negocio CON TU TABLA REAL ----
     const { error: businessError } = await supabase.from("businesses").insert([
       {
         owner_id: user.id,
@@ -103,22 +102,28 @@ export default function Register() {
         slug,
         phone,
         is_active: true,
-        plan,
-        trial_starts_at: validCreator ? null : now.toISOString(),
-        trial_ends_at: validCreator ? null : trialEnds.toISOString(),
+
+        // Tu tabla usa subscription_status en vez de plan
+        subscription_status: validCreator ? "lifetime_free" : "trial",
+
+        // Tu tabla solo tiene trial_ends_at (NO trial_starts_at)
+        trial_ends_at: trialEnds,
+
+        // Campos que tu tabla sí tiene
+        whatsapp: phone,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        slot_interval_minutes: 30,
       },
     ]);
 
     if (businessError) {
-      // ---- SI FALLA, BORRAR USUARIO PARA QUE NO QUEDE HUECO ----
-      await supabase.auth.admin.deleteUser(user.id);
-
       toast.error("No se pudo crear el negocio.");
       setLoading(false);
       return;
     }
 
-    // ---- Login automático tras el registro ----
+    // ---- Login automático ----
     await supabase.auth.signInWithPassword({ email, password });
 
     toast.success(
