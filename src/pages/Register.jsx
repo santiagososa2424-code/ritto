@@ -25,7 +25,7 @@ export default function Register() {
       return;
     }
 
-    // ---- SLUG limpio ----
+    // ---- SLUG LIMPIO ----
     let slug =
       businessName
         .trim()
@@ -35,31 +35,30 @@ export default function Register() {
 
     setChecking(true);
 
-    // ---- Check slug ----
+    // ---- CHECK SLUG Y EVITAR 409 ----
     const { data: existingBiz, error: checkError } = await supabase
       .from("businesses")
       .select("id")
       .eq("slug", slug);
 
     if (checkError) {
-      toast.error("Hubo un problema verificando el negocio.");
+      toast.error("Error verificando el negocio.");
       setChecking(false);
       return;
     }
 
+    // ✅ SI EXISTE, GENERA UNO NUEVO AUTOMÁTICO
     if (existingBiz.length > 0) {
-      toast.error("Ya existe un negocio con ese nombre.");
-      setChecking(false);
-      return;
+      slug = slug + "-" + Math.random().toString(36).slice(2, 6);
     }
 
     setChecking(false);
     setLoading(true);
 
-    // ---- Código creador ----
+    // ---- CÓDIGO CREADOR ----
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
-    // ---- Crear usuario ----
+    // ---- CREAR USUARIO ----
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -88,13 +87,13 @@ export default function Register() {
       return;
     }
 
-    // ---- Trial solo si NO es lifetime ----
+    // ---- FECHAS TRIAL ----
     const now = new Date();
     const trialEnds = validCreator
       ? null
       : new Date(now.getTime() + 30 * 86400000).toISOString();
 
-    // ---- Crear negocio CON TU TABLA REAL ----
+    // ---- CREAR NEGOCIO (COLUMNAS REALES) ----
     const { error: businessError } = await supabase.from("businesses").insert([
       {
         owner_id: user.id,
@@ -102,18 +101,12 @@ export default function Register() {
         slug,
         phone,
         is_active: true,
-
-        // Tu tabla usa subscription_status en vez de plan
         subscription_status: validCreator ? "lifetime_free" : "trial",
-
-        // Tu tabla solo tiene trial_ends_at (NO trial_starts_at)
         trial_ends_at: trialEnds,
-
-        // Campos que tu tabla sí tiene
         whatsapp: phone,
+        slot_interval_minutes: 30,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        slot_interval_minutes: 30,
       },
     ]);
 
@@ -123,7 +116,7 @@ export default function Register() {
       return;
     }
 
-    // ---- Login automático ----
+    // ---- LOGIN AUTOMÁTICO ----
     await supabase.auth.signInWithPassword({ email, password });
 
     toast.success(
@@ -170,75 +163,37 @@ export default function Register() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm text-slate-200">Nombre</label>
-              <input
-                type="text"
-                className="input-ritto"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+              <input type="text" className="input-ritto" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
               <label className="text-sm text-slate-200">Apellido</label>
-              <input
-                type="text"
-                className="input-ritto"
-                value={lastname}
-                onChange={(e) => setLastname(e.target.value)}
-              />
+              <input type="text" className="input-ritto" value={lastname} onChange={(e) => setLastname(e.target.value)} />
             </div>
           </div>
 
           <div>
             <label className="text-sm text-slate-200">Nombre del negocio</label>
-            <input
-              type="text"
-              className="input-ritto"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-            />
+            <input type="text" className="input-ritto" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
           </div>
 
           <div>
             <label className="text-sm text-slate-200">Teléfono</label>
-            <input
-              type="tel"
-              className="input-ritto"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <input type="tel" className="input-ritto" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
 
           <div>
             <label className="text-sm text-slate-200">Email</label>
-            <input
-              type="email"
-              className="input-ritto"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <input type="email" className="input-ritto" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
 
           <div>
             <label className="text-sm text-slate-200">Contraseña</label>
-            <input
-              type="password"
-              className="input-ritto"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <input type="password" className="input-ritto" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
           <div>
-            <label className="text-sm text-slate-200">
-              Código de creador (opcional)
-            </label>
-            <input
-              type="text"
-              className="input-ritto"
-              value={creatorCode}
-              onChange={(e) => setCreatorCode(e.target.value)}
-              placeholder="Ingresá un código si tenés uno"
-            />
+            <label className="text-sm text-slate-200">Código de creador (opcional)</label>
+            <input type="text" className="input-ritto" value={creatorCode} onChange={(e) => setCreatorCode(e.target.value)} />
           </div>
 
           <button type="submit" className="button-ritto">
