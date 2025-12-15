@@ -35,65 +35,49 @@ export default function Register() {
 
     setChecking(true);
 
-    // ---- CHECK SLUG Y EVITAR 409 ----
-    const { data: existingBiz, error: checkError } = await supabase
+    // ---- CHECK SLUG ----
+    const { data: existingBiz } = await supabase
       .from("businesses")
       .select("id")
       .eq("slug", slug);
 
-    if (checkError) {
-      toast.error("Error verificando el negocio.");
-      setChecking(false);
-      return;
-    }
-
-    // ✅ SI EXISTE, GENERA UNO NUEVO AUTOMÁTICO
-    if (existingBiz.length > 0) {
+    if (existingBiz && existingBiz.length > 0) {
       slug = slug + "-" + Math.random().toString(36).slice(2, 6);
     }
 
     setChecking(false);
     setLoading(true);
 
-    // ---- CÓDIGO CREADOR ----
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
-    // ---- CREAR USUARIO ----
+    // ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+    //   SIGNUP SIN METADATA  -> ESTE ERA EL ERROR
+    // ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          name,
-          lastname,
-          phone,
-          business_name: businessName,
-          creator_code: validCreator ? SPECIAL_CODE : null,
-          lifetime_free: validCreator,
-        },
-      },
     });
 
     if (signUpError) {
-      toast.error(signUpError.message || "No se pudo crear la cuenta.");
+      toast.error(signUpError.message);
       setLoading(false);
       return;
     }
 
     const user = data?.user;
     if (!user) {
-      toast.error("Error creando tu cuenta.");
+      toast.error("Error creando tu usuario.");
       setLoading(false);
       return;
     }
 
-    // ---- FECHAS TRIAL ----
+    // ---- FECHAS ----
     const now = new Date();
     const trialEnds = validCreator
       ? null
       : new Date(now.getTime() + 30 * 86400000).toISOString();
 
-    // ---- CREAR NEGOCIO (COLUMNAS REALES) ----
+    // ---- CREAR NEGOCIO ----
     const { error: businessError } = await supabase.from("businesses").insert([
       {
         owner_id: user.id,
@@ -111,17 +95,29 @@ export default function Register() {
     ]);
 
     if (businessError) {
-      toast.error("No se pudo crear el negocio.");
+      toast.error("Error creando el negocio.");
       setLoading(false);
       return;
     }
+
+    // ---- GUARDAR METADATA DEL USUARIO DESPUÉS (ASÍ SI FUNCIONA) ----
+    await supabase.auth.updateUser({
+      data: {
+        name,
+        lastname,
+        phone,
+        business_name: businessName,
+        creator_code: validCreator ? SPECIAL_CODE : null,
+        lifetime_free: validCreator,
+      },
+    });
 
     // ---- LOGIN AUTOMÁTICO ----
     await supabase.auth.signInWithPassword({ email, password });
 
     toast.success(
       validCreator
-        ? "Acceso GRATIS para siempre activado 🎉"
+        ? "Acceso GRATIS para siempre 🎉"
         : "Cuenta creada con éxito 🎉"
     );
 
@@ -143,7 +139,7 @@ export default function Register() {
     );
   }
 
-  // ---------- UI ----------
+  // ---------- UI ORIGINAL ----------
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl animate-fadeIn">
