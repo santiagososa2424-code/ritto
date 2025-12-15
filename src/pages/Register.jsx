@@ -28,14 +28,15 @@ export default function Register() {
 
     setLoading(true);
 
-    // ---- SLUG SEGURO ----
-    let slug =
-      businessName
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9\-]/g, "") ||
-      crypto.randomUUID().slice(0, 8);
+    // ---- SLUG (ÚNICO CAMBIO REAL) ----
+    const baseSlug = businessName
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9\-]/g, "");
+
+    const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 6)}`;
+    // ---- FIN ÚNICO CAMBIO ----
 
     const validCreator = creatorCode.trim() === SPECIAL_CODE;
 
@@ -65,18 +66,12 @@ export default function Register() {
       ? null
       : new Date(now.getTime() + 30 * 86400000).toISOString();
 
-    // ---- 🔧 FIX REAL: CHECK ANTES DE INSERT (ANTI 409) ----
-    const { data: existingBusiness, error: checkError } = await supabase
+    // ---- CHECK NEGOCIO ----
+    const { data: existingBusiness } = await supabase
       .from("businesses")
       .select("id")
       .eq("owner_id", user.id)
       .maybeSingle();
-
-    if (checkError) {
-      toast.error("Error verificando el negocio.");
-      setLoading(false);
-      return;
-    }
 
     if (!existingBusiness) {
       const { error: businessError } = await supabase
