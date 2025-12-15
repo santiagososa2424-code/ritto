@@ -65,11 +65,23 @@ export default function Register() {
       ? null
       : new Date(now.getTime() + 30 * 86400000).toISOString();
 
-    // ---- CREAR / ACTUALIZAR NEGOCIO (ANTI 409) ----
-    const { error: businessError } = await supabase
+    // ---- 🔧 FIX REAL: CHECK ANTES DE INSERT (ANTI 409) ----
+    const { data: existingBusiness, error: checkError } = await supabase
       .from("businesses")
-      .upsert(
-        {
+      .select("id")
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      toast.error("Error verificando el negocio.");
+      setLoading(false);
+      return;
+    }
+
+    if (!existingBusiness) {
+      const { error: businessError } = await supabase
+        .from("businesses")
+        .insert({
           owner_id: user.id,
           name: businessName,
           slug,
@@ -79,14 +91,13 @@ export default function Register() {
           trial_ends_at: trialEnds,
           whatsapp: phone,
           slot_interval_minutes: 30,
-        },
-        { onConflict: "owner_id" }
-      );
+        });
 
-    if (businessError) {
-      toast.error("Error creando el negocio.");
-      setLoading(false);
-      return;
+      if (businessError) {
+        toast.error("Error creando el negocio.");
+        setLoading(false);
+        return;
+      }
     }
 
     // ---- METADATA DEL USUARIO ----
@@ -135,15 +146,52 @@ export default function Register() {
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <input className="input-ritto" placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="input-ritto" placeholder="Apellido" value={lastname} onChange={(e) => setLastname(e.target.value)} />
+            <input
+              className="input-ritto"
+              placeholder="Nombre"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              className="input-ritto"
+              placeholder="Apellido"
+              value={lastname}
+              onChange={(e) => setLastname(e.target.value)}
+            />
           </div>
 
-          <input className="input-ritto" placeholder="Nombre del negocio" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
-          <input className="input-ritto" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <input className="input-ritto" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="input-ritto" placeholder="Contraseña" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <input className="input-ritto" placeholder="Código de creador (opcional)" value={creatorCode} onChange={(e) => setCreatorCode(e.target.value)} />
+          <input
+            className="input-ritto"
+            placeholder="Nombre del negocio"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+          />
+          <input
+            className="input-ritto"
+            placeholder="Teléfono"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <input
+            className="input-ritto"
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="input-ritto"
+            placeholder="Contraseña"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <input
+            className="input-ritto"
+            placeholder="Código de creador (opcional)"
+            value={creatorCode}
+            onChange={(e) => setCreatorCode(e.target.value)}
+          />
 
           <button type="submit" className="button-ritto">
             Crear cuenta GRATIS
