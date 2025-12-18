@@ -107,16 +107,28 @@ export default function Register() {
       },
     });
 
-    // ---- LOGIN ----
-    await supabase.auth.signInWithPassword({ email, password });
+    // ---- LOGIN (FORZADO Y VERIFICADO) ----
+const { data: loginData, error: loginError } =
+  await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-    toast.success(
-      validCreator
-        ? "Acceso GRATIS para siempre 🎉"
-        : "Cuenta creada con éxito 🎉"
-    );
+if (loginError || !loginData?.session) {
+  toast.error("No se pudo iniciar sesión automáticamente");
+  setLoading(false);
+  return;
+}
 
-    navigate("/dashboard");
+toast.success(
+  validCreator
+    ? "Acceso GRATIS para siempre 🎉"
+    : "Cuenta creada con éxito 🎉"
+);
+
+// 🔴 CLAVE: replace evita volver a /register
+navigate("/dashboard", { replace: true });
+
   };
 
   if (loading) {
