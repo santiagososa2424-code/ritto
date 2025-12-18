@@ -27,18 +27,17 @@ export default function Dashboard() {
       // ─────────────────────────────
       // 1) USUARIO ACTUAL
       // ─────────────────────────────
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+  const {
+  data: { session },
+} = await supabase.auth.getSession();
 
-      if (userError || !user) {
-        console.error("auth.getUser error:", userError);
-        toast.error("Tenés que iniciar sesión.");
-        setIsLoading(false);
-        navigate("/login");
-        return;
-      }
+if (!session) {
+  setIsLoading(false);
+  navigate("/login");
+  return;
+}
+
+const user = session.user;
 
       // ─────────────────────────────
       // 2) NEGOCIO DEL DUEÑO
