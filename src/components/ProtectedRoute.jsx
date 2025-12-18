@@ -4,72 +4,81 @@ import { supabase } from "../supabaseClient";
 
 export default function ProtectedRoute({ children }) {
   const [allowed, setAllowed] = useState(null);
-  const [redirect, setRedirect] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const verifyAccess = async () => {
-      // 1️⃣ Sesión
-      const { data } = await supabase.auth.getSession();
-      const session = data?.session;
+    let mounted = true;
 
+    const checkAccess = async (session) => {
       if (!session) {
-        setRedirect("/login");
         setAllowed(false);
+        setLoading(false);
         return;
       }
 
       const user = session.user;
 
-      // 2️⃣ Lifetime free
+      // lifetime_free
       if (user.user_metadata?.lifetime_free) {
         setAllowed(true);
+        setLoading(false);
         return;
       }
 
-      // 3️⃣ Buscar negocio (⚠️ maybeSingle, NO single)
-      const { data: business, error } = await supabase
+      const { data: business } = await supabase
         .from("businesses")
-        .select("plan, trial_ends_at")
+        .select("subscription_status, trial_ends_at")
         .eq("owner_id", user.id)
         .maybeSingle();
 
-      // 👉 NO TIENE NEGOCIO → SETUP
       if (!business) {
-        setRedirect("/setup");
         setAllowed(false);
+        setLoading(false);
         return;
       }
 
-      // 4️⃣ Trial
-      if (business.plan === "trial") {
-        const now = new Date();
-        const ends = new Date(business.trial_ends_at);
-
-        if (now < ends) {
+      if (business.subscription_status === "trial") {
+        if (new Date() < new Date(business.trial_ends_at)) {
           setAllowed(true);
         } else {
-          setRedirect("/login");
           setAllowed(false);
         }
+        setLoading(false);
         return;
       }
 
-      // 5️⃣ Plan activo
-      if (business.plan === "active") {
+      if (
+        business.subscription_status === "active" ||
+        business.subscription_status === "lifetime_free"
+      ) {
         setAllowed(true);
+        setLoading(false);
         return;
       }
 
-      // 6️⃣ Fallback
-      setRedirect("/login");
       setAllowed(false);
+      setLoading(false);
     };
 
-    verifyAccess();
+    // 1️⃣ sesión inicial
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) checkAccess(data.session);
+    });
+
+    // 2️⃣ escuchar cambios (CLAVE)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) checkAccess(session);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Loader
-  if (allowed === null && !redirect) {
+  if (loading || allowed === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
         <div className="px-4 py-3 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl flex items-center gap-3">
@@ -80,9 +89,8 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Redirect explícito
-  if (!allowed && redirect) {
-    return <Navigate to={redirect} replace />;
+  if (!allowed) {
+    return <Navigate to="/login" replace />;
   }
 
   return children;
