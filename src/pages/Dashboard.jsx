@@ -16,6 +16,34 @@ export default function Dashboard() {
 
   const navigate = useNavigate();
 
+  // ─────────────────────────────
+  // ACCIONES (BOTONES) - NUEVO
+  // ─────────────────────────────
+  const goAgenda = () => navigate("/schedule");
+  const goServices = () => navigate("/services");
+  const goBookings = () => navigate("/bookings");
+  const goSetup = () => navigate("/setup");
+  const goScheduleBlocks = () => navigate("/schedule-blocks");
+
+  const goPublicLink = () => {
+    if (!business?.slug) {
+      toast.error("Tu negocio todavía no tiene link público.");
+      return;
+    }
+    window.open(`/book/${business.slug}`, "_blank");
+  };
+
+  const comingSoon = (label = "Esta sección") => {
+    toast(label + " todavía no está disponible. Próximamente.");
+  };
+
+  const configurePayment = () => {
+    // No existe todavía pantalla de pago en tu router, así que no rompo nada.
+    // Cuando tengas /billing o similar, lo conecto.
+    toast("Pagos: próximamente. Por ahora se configura desde Ajustes.");
+    navigate("/setup");
+  };
+
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -27,17 +55,17 @@ export default function Dashboard() {
       // ─────────────────────────────
       // 1) USUARIO ACTUAL
       // ─────────────────────────────
-  const {
-  data: { session },
-} = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-if (!session) {
-  setIsLoading(false);
-  navigate("/login");
-  return;
-}
+      if (!session) {
+        setIsLoading(false);
+        navigate("/login");
+        return;
+      }
 
-const user = session.user;
+      const user = session.user;
 
       // ─────────────────────────────
       // 2) NEGOCIO DEL DUEÑO
@@ -291,7 +319,6 @@ const user = session.user;
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
       {/* Overlay solo si el trial terminó y NO es lifetime */}
@@ -306,7 +333,10 @@ const user = session.user;
               activá tu plan por{" "}
               <span className="font-semibold">$690/mes</span>.
             </p>
-            <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition">
+            <button
+              onClick={configurePayment}
+              className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
+            >
               Activar plan ahora
             </button>
             <p className="text-[10px] text-slate-400 mt-3">
@@ -330,11 +360,13 @@ const user = session.user;
 
         <nav className="space-y-1 text-sm flex-1">
           <SidebarItem label="Resumen" active />
-          <SidebarItem label="Agenda" />
-          <SidebarItem label="Servicios" />
-          <SidebarItem label="Empleados" />
-          <SidebarItem label="Clientes" />
-          <SidebarItem label="Ajustes" />
+          <SidebarItem label="Agenda" onClick={goAgenda} />
+          <SidebarItem label="Servicios" onClick={goServices} />
+          <SidebarItem label="Turnos" onClick={goBookings} />
+          <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
+          <SidebarItem label="Empleados" onClick={() => comingSoon("Empleados")} />
+          <SidebarItem label="Clientes" onClick={() => comingSoon("Clientes")} />
+          <SidebarItem label="Ajustes" onClick={goSetup} />
         </nav>
 
         <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
@@ -395,11 +427,12 @@ const user = session.user;
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10">
+            <button
+              onClick={trialExpired && !isLifetime ? configurePayment : goAgenda}
+              className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10"
+            >
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              {trialExpired && !isLifetime
-                ? "Agenda bloqueada"
-                : "Agenda activa"}
+              {trialExpired && !isLifetime ? "Agenda bloqueada" : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -445,7 +478,10 @@ const user = session.user;
                 <h2 className="text-sm font-semibold">Turnos de hoy</h2>
                 <p className="text-[11px] text-slate-400">Vista rápida</p>
               </div>
-              <button className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10">
+              <button
+                onClick={goAgenda}
+                className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
+              >
                 Ver agenda completa
               </button>
             </div>
@@ -561,7 +597,10 @@ const user = session.user;
               )}
 
               {!isLifetime && (
-                <button className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition">
+                <button
+                  onClick={configurePayment}
+                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 mt-3 transition"
+                >
                   Configurar método de pago
                 </button>
               )}
@@ -570,7 +609,6 @@ const user = session.user;
                 • Sin permanencia · Cancelás cuando quieras
               </p>
             </div>
-
             {/* TOP SERVICIOS */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-3">
@@ -613,10 +651,10 @@ const user = session.user;
               <p className="text-[11px] text-slate-400 mb-2">Atajos rápidos</p>
 
               <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <QuickAction label="Crear servicio" />
-                <QuickAction label="Bloquear horario" />
-                <QuickAction label="Ver link público" />
-                <QuickAction label="Configurar horarios" />
+                <QuickAction label="Crear servicio" onClick={goServices} />
+                <QuickAction label="Bloquear horario" onClick={goScheduleBlocks} />
+                <QuickAction label="Ver link público" onClick={goPublicLink} />
+                <QuickAction label="Configurar horarios" onClick={goSetup} />
               </div>
             </div>
           </div>
@@ -637,9 +675,10 @@ const user = session.user;
 
 /* COMPONENTES */
 
-function SidebarItem({ label, active }) {
+function SidebarItem({ label, active, onClick }) {
   return (
     <button
+      onClick={onClick}
       className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-xs transition ${
         active
           ? "bg-white/10 text-slate-50 shadow-inner"
@@ -668,9 +707,12 @@ function MetricCard({ label, value, sublabel, pill }) {
   );
 }
 
-function QuickAction({ label }) {
+function QuickAction({ label, onClick }) {
   return (
-    <button className="w-full px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-left transition">
+    <button
+      onClick={onClick}
+      className="w-full px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-left transition"
+    >
       {label}
     </button>
   );
