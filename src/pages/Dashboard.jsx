@@ -346,69 +346,59 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
-            R
+     {/* SIDEBAR */}
+<aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
+  <div className="flex items-center gap-3 mb-10">
+    <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
+      R
+    </div>
+    <div>
+      <p className="text-sm font-semibold">Ritto</p>
+      <p className="text-[11px] text-slate-400">Agenda inteligente</p>
+    </div>
+  </div>
+
+  <nav className="space-y-1 text-sm flex-1">
+    <SidebarItem label="Resumen" active onClick={() => navigate("/dashboard")} />
+    <SidebarItem label="Agenda" onClick={() => navigate("/bookings")} />
+    <SidebarItem label="Servicios" onClick={() => navigate("/services")} />
+    <SidebarItem label="Horarios" onClick={() => navigate("/schedule")} />
+    <SidebarItem label="Bloqueos" onClick={() => navigate("/schedule-blocks")} />
+    <SidebarItem label="Ajustes" onClick={() => navigate("/setup")} />
+  </nav>
+
+  <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
+    <p className="text-slate-500 mb-1">Plan actual</p>
+
+    {business && (
+      <>
+        {isLifetime && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs">Acceso de por vida</span>
+            <span className="text-cyan-300 font-medium">Lifetime</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold">Ritto</p>
-            <p className="text-[11px] text-slate-400">Agenda inteligente</p>
+        )}
+
+        {trialActive && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs">Prueba gratuita</span>
+            <span className="text-emerald-400 font-medium">
+              {daysLeft} días restantes
+            </span>
           </div>
-        </div>
+        )}
 
-        <nav className="space-y-1 text-sm flex-1">
-          <SidebarItem label="Resumen" active />
-          <SidebarItem label="Agenda" onClick={goAgenda} />
-          <SidebarItem label="Servicios" onClick={goServices} />
-          <SidebarItem label="Turnos" onClick={goBookings} />
-          <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
-          <SidebarItem label="Empleados" onClick={() => comingSoon("Empleados")} />
-          <SidebarItem label="Clientes" onClick={() => comingSoon("Clientes")} />
-          <SidebarItem label="Ajustes" onClick={goSetup} />
-        </nav>
+        {trialExpired && !isLifetime && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs">Prueba finalizada</span>
+            <span className="text-rose-400 font-medium">Bloqueado</span>
+          </div>
+        )}
+      </>
+    )}
+  </div>
+</aside>
 
-        <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
-          <p className="text-slate-500 mb-1">Plan actual</p>
-
-          {business && (
-            <>
-              {isLifetime && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Acceso de por vida</span>
-                  <span className="text-cyan-300 font-medium">Lifetime</span>
-                </div>
-              )}
-
-              {trialActive && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Prueba gratuita</span>
-                  <span className="text-emerald-400 font-medium">
-                    {daysLeft} días restantes
-                  </span>
-                </div>
-              )}
-
-              {trialExpired && !isLifetime && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Prueba finalizada</span>
-                  <span className="text-rose-400 font-medium">Bloqueado</span>
-                </div>
-              )}
-
-              {!isLifetime && !isTrial && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Plan activo</span>
-                  <span className="text-emerald-400 font-medium">
-                    {subscription || "Personalizado"}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </aside>
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
