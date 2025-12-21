@@ -19,10 +19,20 @@ export default function Schedule() {
   const [business, setBusiness] = useState(null);
   const [schedules, setSchedules] = useState([]);
 
-  const [day, setDay] = useState("lunes");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState(1);
+
+  // 🔥 NUEVO: días seleccionados para copiar
+  const [selectedDays, setSelectedDays] = useState({
+    lunes: true,
+    martes: false,
+    miercoles: false,
+    jueves: false,
+    viernes: false,
+    sabado: false,
+    domingo: false,
+  });
 
   const [slotInterval, setSlotInterval] = useState(30);
   const [workingDays, setWorkingDays] = useState({
@@ -78,7 +88,8 @@ export default function Schedule() {
       .from("schedules")
       .select("*")
       .eq("business_id", biz.id)
-      .order("day_of_week");
+      .order("day_of_week", { ascending: true })
+      .order("start_time", { ascending: true });
 
     setSchedules(data || []);
   };
@@ -105,7 +116,7 @@ export default function Schedule() {
   };
 
   /* ─────────────────────────────
-     AGREGAR HORARIO
+     AGREGAR HORARIO (MULTI-DÍA)
   ───────────────────────────── */
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -117,39 +128,47 @@ export default function Schedule() {
       return;
     }
 
-    if (!workingDays[day]) {
-      setError("Este día está deshabilitado.");
+    const daysToInsert = Object.keys(selectedDays).filter(
+      (d) => selectedDays[d] && workingDays[d]
+    );
+
+    if (daysToInsert.length === 0) {
+      setError("Seleccioná al menos un día.");
       return;
     }
 
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    const sameDay = schedules.filter(
-      (s) => s.day_of_week === day
-    );
+    // validar solapamientos
+    for (let day of daysToInsert) {
+      const sameDay = schedules.filter((s) => s.day_of_week === day);
 
-    for (let s of sameDay) {
-      if (newStart < s.end_time && s.start_time < newEnd) {
-        setError("El horario se superpone con otro existente.");
-        return;
+      for (let s of sameDay) {
+        if (newStart < s.end_time && s.start_time < newEnd) {
+          setError(`El horario se superpone el ${DAYS[day]}.`);
+          return;
+        }
       }
     }
 
-    const { error } = await supabase.from("schedules").insert({
+    // insertar todos juntos
+    const rows = daysToInsert.map((day) => ({
       business_id: business.id,
       day_of_week: day,
       start_time: newStart,
       end_time: newEnd,
       capacity_per_slot: capacity,
-    });
+    }));
+
+    const { error } = await supabase.from("schedules").insert(rows);
 
     if (error) {
       setError(error.message);
       return;
     }
 
-    setSuccess("Horario agregado.");
+    setSuccess("Horarios agregados correctamente.");
     setStartTime("");
     setEndTime("");
     setCapacity(1);
@@ -220,20 +239,6 @@ export default function Schedule() {
             onSubmit={handleAdd}
             className="grid grid-cols-1 sm:grid-cols-5 gap-4"
           >
-            <select
-              className="input-ritto"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            >
-              {Object.keys(workingDays)
-                .filter((d) => workingDays[d])
-                .map((d) => (
-                  <option key={d} value={d}>
-                    {DAYS[d]}
-                  </option>
-                ))}
-            </select>
-
             <input
               type="time"
               className="input-ritto"
@@ -256,7 +261,33 @@ export default function Schedule() {
               onChange={(e) => setCapacity(+e.target.value)}
             />
 
-            <button className="button-ritto">Agregar</button>
+            <button className="button-ritto col-span-2">
+              Agregar
+            </button>
+
+            <div className="col-span-full">
+              <p className="text-sm text-slate-400 mb-2">
+                Aplicar a los días:
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {Object.keys(DAYS).map((d) => (
+                  <label key={d} className="flex gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      disabled={!workingDays[d]}
+                      checked={selectedDays[d]}
+                      onChange={(e) =>
+                        setSelectedDays({
+                          ...selectedDays,
+                          [d]: e.target.checked,
+                        })
+                      }
+                    />
+                    {DAYS[d]}
+                  </label>
+                ))}
+              </div>
+            </div>
           </form>
         </Card>
 
@@ -267,7 +298,8 @@ export default function Schedule() {
               className="flex justify-between items-center border p-4 rounded-xl"
             >
               <span>
-                {DAYS[s.day_of_week]} · {s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}
+                {DAYS[s.day_of_week]} ·{" "}
+                {s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}
               </span>
               <button
                 onClick={() => deleteSchedule(s.id)}
@@ -305,11 +337,13 @@ function Field({ label, children }) {
 
 function Alert({ type, text }) {
   return (
-    <div className={`p-3 rounded-xl ${
-      type === "error"
-        ? "bg-red-500/10 text-red-300"
-        : "bg-emerald-500/10 text-emerald-300"
-    }`}>
+    <div
+      className={`p-3 rounded-xl ${
+        type === "error"
+          ? "bg-red-500/10 text-red-300"
+          : "bg-emerald-500/10 text-emerald-300"
+      }`}
+    >
       {text}
     </div>
   );
