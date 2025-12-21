@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
 export default function PublicBooking() {
   const { slug } = useParams();
+  const navigate = useNavigate();
 
   const [business, setBusiness] = useState(null);
   const [services, setServices] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [blocks, setBlocks] = useState([]);
+  const [bookings, setBookings] = useState([]);
 
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
-  const [availableHours, setAvailableHours] = useState([]);
+  const [slots, setSlots] = useState([]);
   const [selectedHour, setSelectedHour] = useState("");
 
   const [name, setName] = useState("");
@@ -26,137 +28,110 @@ export default function PublicBooking() {
     loadData();
   }, []);
 
-  // ────────────────────────────────────────────────
-  // CARGAR DATOS DEL NEGOCIO
-  // ────────────────────────────────────────────────
   const loadData = async () => {
-    try {
-      setError("");
+    setError("");
 
-      const { data: biz, error: bizErr } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
+    const { data: biz } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle();
 
-      if (bizErr || !biz) {
-        setError("No existe un negocio con ese enlace.");
-        return;
-      }
-
-      setBusiness(biz);
-
-      const { data: servs } = await supabase
-        .from("services")
-        .select("*")
-        .eq("business_id", biz.id)
-        .eq("is_active", true);
-
-      setServices(servs || []);
-
-      const { data: scheds } = await supabase
-        .from("schedules")
-        .select("*")
-        .eq("business_id", biz.id);
-
-      setSchedules(scheds || []);
-
-      const { data: blks } = await supabase
-        .from("schedule_blocks")
-        .select("*")
-        .eq("business_id", biz.id);
-
-      setBlocks(blks || []);
-    } catch (err) {
-      console.error(err);
-      setError("Error cargando datos.");
-    }
-  };
-
-  // ────────────────────────────────────────────────
-  // HORARIOS DISPONIBLES (FIX REAL)
-  // ────────────────────────────────────────────────
-  useEffect(() => {
-    if (selectedDate && selectedService) {
-      calculateAvailableHours();
-    } else {
-      setAvailableHours([]);
-    }
-  }, [selectedDate, selectedService]);
-
-  const calculateAvailableHours = async () => {
-    if (!business || !selectedService || !selectedDate) return;
-
-    const dateStr = selectedDate;
-
-    // Día bloqueado completo
-    if (blocks.some((b) => b.date === dateStr)) {
-      setAvailableHours([]);
+    if (!biz) {
+      setError("No existe un negocio con ese enlace.");
       return;
     }
 
-    // 🔥 FIX CLAVE: mismo formato que guardás en schedules
+    setBusiness(biz);
+
+    const [{ data: servs }, { data: scheds }, { data: blks }] =
+      await Promise.all([
+        supabase
+          .from("services")
+          .select("*")
+          .eq("business_id", biz.id)
+          .eq("is_active", true),
+        supabase.from("schedules").select("*").eq("business_id", biz.id),
+        supabase.from("schedule_blocks").select("*").eq("business_id", biz.id),
+      ]);
+
+    setServices(servs || []);
+    setSchedules(scheds || []);
+    setBlocks(blks || []);
+  };
+
+  useEffect(() => {
+    if (selectedDate && selectedService) {
+      calculateSlots();
+    } else {
+      setSlots([]);
+    }
+  }, [selectedDate, selectedService]);
+
+  const calculateSlots = async () => {
+    const dateStr = selectedDate;
+
+    if (blocks.some((b) => b.date === dateStr)) {
+      setSlots([]);
+      return;
+    }
+
     const dayName = new Date(selectedDate).toLocaleDateString("es-UY", {
       weekday: "long",
     });
 
-    const todays = schedules.filter(
-      (s) => s.day_of_week === dayName
-    );
-
+    const todays = schedules.filter((s) => s.day_of_week === dayName);
     if (!todays.length) {
-      setAvailableHours([]);
+      setSlots([]);
       return;
     }
 
-    const { data: bookings } = await supabase
+    const { data: bks } = await supabase
       .from("bookings")
       .select("hour")
       .eq("business_id", business.id)
       .eq("date", dateStr);
 
-    const step = Math.max(
-      selectedService.duration,
-      business.slot_interval_minutes || selectedService.duration
+    setBookings(bks || []);
+
+    const interval = Math.max(
+      business.slot_interval_minutes || 30,
+      selectedService.duration
     );
 
-    const hoursSet = new Set();
+    const result = [];
 
-    todays.forEach((slot) => {
-      let current = slot.start_time.slice(0, 5);
-      const end = slot.end_time.slice(0, 5);
+    todays.forEach((s) => {
+      let current = s.start_time.slice(0, 5);
+      const end = s.end_time.slice(0, 5);
 
       while (current < end) {
         const normalized = `${current}:00`;
         const used =
-          bookings?.filter((b) => b.hour === normalized).length || 0;
+          bks?.filter((b) => b.hour === normalized).length || 0;
 
-        if (used < (slot.capacity_per_slot || 1)) {
-          hoursSet.add(current);
-        }
+        result.push({
+          hour: current,
+          available: used < (s.capacity_per_slot || 1),
+        });
 
-        current = addMinutes(current, step);
+        current = addMinutes(current, interval);
       }
     });
 
-    setAvailableHours(
-      Array.from(hoursSet).sort()
-    );
+    setSlots(result);
   };
 
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
     d.setHours(h);
-    d.setMinutes(m + Number(mins));
+    d.setMinutes(m + mins);
     return `${String(d.getHours()).padStart(2, "0")}:${String(
       d.getMinutes()
     ).padStart(2, "0")}`;
   };
 
-  // ────────────────────────────────────────────────
-  // SEÑA
-  // ────────────────────────────────────────────────
   const usesDeposit =
     business?.deposit_enabled && Number(business.deposit_value) > 0;
 
@@ -165,16 +140,12 @@ export default function PublicBooking() {
 
     if (business.deposit_type === "percentage") {
       return Math.round(
-        (Number(selectedService.price) * Number(business.deposit_value)) / 100
+        (selectedService.price * business.deposit_value) / 100
       );
     }
-
     return Number(business.deposit_value);
   };
 
-  // ────────────────────────────────────────────────
-  // RESERVAR
-  // ────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -184,8 +155,8 @@ export default function PublicBooking() {
       !selectedService ||
       !selectedDate ||
       !selectedHour ||
-      !name.trim() ||
-      !email.trim()
+      !name ||
+      !email
     ) {
       setError("Completá todos los campos.");
       return;
@@ -193,7 +164,6 @@ export default function PublicBooking() {
 
     setIsProcessing(true);
 
-    // SIN SEÑA
     if (!usesDeposit) {
       const { error } = await supabase.from("bookings").insert({
         business_id: business.id,
@@ -218,10 +188,9 @@ export default function PublicBooking() {
       return;
     }
 
-    // CON SEÑA
     const amount = calculateDepositAmount();
 
-    const { data, error: fnError } = await supabase.functions.invoke(
+    const { data } = await supabase.functions.invoke(
       "create-mercadopago-checkout",
       {
         body: {
@@ -240,37 +209,33 @@ export default function PublicBooking() {
       }
     );
 
-    if (fnError || !data?.init_point) {
-      setError("No se pudo iniciar el pago.");
-      setIsProcessing(false);
-      return;
-    }
-
     window.location.href = data.init_point;
   };
 
-  // ────────────────────────────────────────────────
-  // UI
-  // ────────────────────────────────────────────────
   if (!business) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
-        Cargando negocio...
+      <div className="min-h-screen flex items-center justify-center text-slate-400">
+        Cargando...
       </div>
     );
   }
 
-  const depositAmount = calculateDepositAmount();
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
-      <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
+    <div className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
+      {/* FLECHA */}
+      <button
+        onClick={() => navigate("/dashboard")}
+        className="mb-4 text-sm text-slate-400 hover:text-white"
+      >
+        ← Volver al panel
+      </button>
 
+      <div className="max-w-lg mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-semibold">{business.name}</h1>
-          {business.address && (
-            <p className="text-xs text-slate-400">{business.address}</p>
-          )}
+          <p className="text-xs text-slate-400">
+            Elegí servicio, fecha y horario
+          </p>
         </div>
 
         <form
@@ -289,7 +254,7 @@ export default function PublicBooking() {
               <option value="">Elegí un servicio</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} — ${s.price}
+                  {s.name} · {s.duration} min · ${s.price}
                 </option>
               ))}
             </select>
@@ -305,25 +270,26 @@ export default function PublicBooking() {
           </Field>
 
           <Field label="Horario">
-            <select
-              className="input-ritto"
-              value={selectedHour}
-              onChange={(e) => setSelectedHour(e.target.value)}
-            >
-              <option value="">Elegí un horario</option>
-              {availableHours.map((h) => (
-                <option key={h} value={h}>
-                  {h}
-                </option>
+            <div className="grid grid-cols-3 gap-2">
+              {slots.map((s) => (
+                <button
+                  key={s.hour}
+                  type="button"
+                  disabled={!s.available}
+                  onClick={() => setSelectedHour(s.hour)}
+                  className={`py-2 rounded-xl text-sm ${
+                    s.available
+                      ? selectedHour === s.hour
+                        ? "bg-emerald-400 text-black"
+                        : "bg-blue-500/20 text-blue-300 hover:bg-blue-500/40"
+                      : "bg-white/5 text-slate-500 cursor-not-allowed"
+                  }`}
+                >
+                  {s.hour}
+                </button>
               ))}
-            </select>
-          </Field>
-
-          {usesDeposit && selectedService && (
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm">
-              Seña requerida: <strong>${depositAmount}</strong>
             </div>
-          )}
+          </Field>
 
           <Field label="Tus datos">
             <input
@@ -340,19 +306,20 @@ export default function PublicBooking() {
             />
           </Field>
 
+          {usesDeposit && selectedService && (
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/40 p-3 text-sm">
+              Seña requerida: <strong>${calculateDepositAmount()}</strong>
+            </div>
+          )}
+
           {error && <Alert error text={error} />}
           {success && <Alert success text={success} />}
 
           <button
-            type="submit"
             disabled={isProcessing}
             className="button-ritto w-full"
           >
-            {isProcessing
-              ? "Procesando..."
-              : usesDeposit
-              ? "Ir a pagar seña"
-              : "Confirmar reserva"}
+            {usesDeposit ? "Ir a pagar seña" : "Confirmar reserva"}
           </button>
         </form>
       </div>
@@ -360,7 +327,6 @@ export default function PublicBooking() {
   );
 }
 
-/* COMPONENTES */
 function Field({ label, children }) {
   return (
     <div>
@@ -373,10 +339,10 @@ function Field({ label, children }) {
 function Alert({ error, success, text }) {
   return (
     <div
-      className={`rounded-2xl px-4 py-2 text-xs ${
+      className={`rounded-xl px-4 py-2 text-xs ${
         error
-          ? "border border-rose-500/40 bg-rose-500/10 text-rose-200"
-          : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+          ? "bg-rose-500/10 border border-rose-500/40 text-rose-200"
+          : "bg-emerald-500/10 border border-emerald-500/40 text-emerald-200"
       }`}
     >
       {text}
