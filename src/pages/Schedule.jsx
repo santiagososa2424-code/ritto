@@ -3,7 +3,7 @@ import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
 /* ─────────────────────────────
-   DÍAS NORMALIZADOS
+   DÍAS NORMALIZADOS (CLAVE)
 ───────────────────────────── */
 const DAYS = {
   lunes: "Lunes",
@@ -23,7 +23,7 @@ export default function Schedule() {
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState(1);
 
-  // 🔥 NUEVO: días seleccionados para copiar
+  // Días donde aplicar el horario
   const [selectedDays, setSelectedDays] = useState({
     lunes: true,
     martes: false,
@@ -34,7 +34,6 @@ export default function Schedule() {
     domingo: false,
   });
 
-  const [slotInterval, setSlotInterval] = useState(30);
   const [workingDays, setWorkingDays] = useState({
     lunes: true,
     martes: true,
@@ -45,18 +44,20 @@ export default function Schedule() {
     domingo: false,
   });
 
+  const [slotInterval, setSlotInterval] = useState(30);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   const navigate = useNavigate();
 
+  /* ─────────────────────────────
+     CARGA INICIAL
+  ───────────────────────────── */
   useEffect(() => {
     loadData();
   }, []);
 
-  /* ─────────────────────────────
-     CARGA INICIAL
-  ───────────────────────────── */
   const loadData = async () => {
     setError("");
     setSuccess("");
@@ -64,6 +65,11 @@ export default function Schedule() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    if (!user) {
+      navigate("/login");
+      return;
+    }
 
     const { data: biz } = await supabase
       .from("businesses")
@@ -78,11 +84,9 @@ export default function Schedule() {
 
     setBusiness(biz);
 
+    if (biz.working_days) setWorkingDays(biz.working_days);
     if (biz.slot_interval_minutes)
       setSlotInterval(biz.slot_interval_minutes);
-
-    if (biz.working_days)
-      setWorkingDays(biz.working_days);
 
     const { data } = await supabase
       .from("schedules")
@@ -101,8 +105,8 @@ export default function Schedule() {
     const { error } = await supabase
       .from("businesses")
       .update({
-        slot_interval_minutes: slotInterval,
         working_days: workingDays,
+        slot_interval_minutes: slotInterval,
       })
       .eq("id", business.id);
 
@@ -112,11 +116,10 @@ export default function Schedule() {
     }
 
     setSuccess("Configuración guardada.");
-    loadData();
   };
 
   /* ─────────────────────────────
-     AGREGAR HORARIO (MULTI-DÍA)
+     AGREGAR HORARIOS (MULTI DÍA)
   ───────────────────────────── */
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -140,7 +143,7 @@ export default function Schedule() {
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    // validar solapamientos
+    // Validar solapamientos
     for (let day of daysToInsert) {
       const sameDay = schedules.filter((s) => s.day_of_week === day);
 
@@ -152,7 +155,6 @@ export default function Schedule() {
       }
     }
 
-    // insertar todos juntos
     const rows = daysToInsert.map((day) => ({
       business_id: business.id,
       day_of_week: day,
@@ -168,7 +170,7 @@ export default function Schedule() {
       return;
     }
 
-    setSuccess("Horarios agregados correctamente.");
+    setSuccess("Horarios creados correctamente.");
     setStartTime("");
     setEndTime("");
     setCapacity(1);
@@ -186,7 +188,6 @@ export default function Schedule() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-4xl mx-auto space-y-10">
-
         <h1 className="text-3xl font-semibold text-center">
           Horarios del negocio
         </h1>
@@ -203,10 +204,7 @@ export default function Schedule() {
                     type="checkbox"
                     checked={workingDays[d]}
                     onChange={(e) =>
-                      setWorkingDays({
-                        ...workingDays,
-                        [d]: e.target.checked,
-                      })
+                      setWorkingDays({ ...workingDays, [d]: e.target.checked })
                     }
                   />
                   {DAYS[d]}
@@ -219,9 +217,7 @@ export default function Schedule() {
             <select
               className="input-ritto"
               value={slotInterval}
-              onChange={(e) =>
-                setSlotInterval(Number(e.target.value))
-              }
+              onChange={(e) => setSlotInterval(Number(e.target.value))}
             >
               <option value={15}>15 min</option>
               <option value={30}>30 min</option>
@@ -258,12 +254,10 @@ export default function Schedule() {
               min={1}
               className="input-ritto"
               value={capacity}
-              onChange={(e) => setCapacity(+e.target.value)}
+              onChange={(e) => setCapacity(Number(e.target.value))}
             />
 
-            <button className="button-ritto col-span-2">
-              Agregar
-            </button>
+            <button className="button-ritto col-span-2">Agregar</button>
 
             <div className="col-span-full">
               <p className="text-sm text-slate-400 mb-2">
@@ -299,7 +293,7 @@ export default function Schedule() {
             >
               <span>
                 {DAYS[s.day_of_week]} ·{" "}
-                {s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}
+                {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
               </span>
               <button
                 onClick={() => deleteSchedule(s.id)}
