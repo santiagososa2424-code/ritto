@@ -38,18 +38,36 @@ export default function Billing() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-slate-900 p-6 rounded-2xl">
-        <h1 className="text-lg font-semibold mb-2">
-          Activar plan mensual
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 flex items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6 text-slate-50">
+        
+        <p className="text-[11px] text-emerald-400 uppercase tracking-widest mb-1">
+          Plan mensual
+        </p>
+
+        <h1 className="text-xl font-semibold mb-2">
+          Activar plan de Ritto
         </h1>
-        <p className="text-sm mb-4">$690 / mes</p>
+
+        <p className="text-sm text-slate-300 mb-5">
+          Accedé a la agenda completa, reservas online y gestión sin límites.
+        </p>
+
+        <div className="flex items-end gap-1 mb-6">
+          <span className="text-4xl font-bold text-white">$690</span>
+          <span className="text-sm text-slate-400 mb-1">/ mes</span>
+        </div>
+
         <button
           onClick={startPayment}
-          className="px-4 py-2 bg-emerald-400 text-black rounded-xl"
+          className="w-full px-4 py-3 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition shadow-[0_8px_30px_rgba(16,185,129,0.4)]"
         >
           Pagar con Mercado Pago
         </button>
+
+        <p className="text-[11px] text-slate-400 mt-4 text-center">
+          Sin permanencia · Cancelás cuando quieras
+        </p>
       </div>
     </div>
   );
