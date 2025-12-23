@@ -25,12 +25,36 @@ export default function Dashboard() {
   const goSetup = () => navigate("/setup");
   const goScheduleBlocks = () => navigate("/schedule-blocks");
 
-  const goPublicLink = () => {
-    if (!business?.slug) {
+  // ─────────────────────────────
+  // LINK PÚBLICO (CORREGIDO)
+  // - antes abría /book/:slug directo
+  // - ahora genera /:slug y permite copiar/abrir
+  // ─────────────────────────────
+  const publicUrl = business?.slug
+    ? `${window.location.origin}/${business.slug}`
+    : null;
+
+  const copyPublicLink = async () => {
+    if (!publicUrl) {
       toast.error("Tu negocio todavía no tiene link público.");
       return;
     }
-    window.open(`/book/${business.slug}`, "_blank");
+
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success("Link copiado");
+    } catch (e) {
+      console.error("Clipboard error:", e);
+      toast.error("No se pudo copiar el link");
+    }
+  };
+
+  const openPublicLink = () => {
+    if (!publicUrl) {
+      toast.error("Tu negocio todavía no tiene link público.");
+      return;
+    }
+    window.open(publicUrl, "_blank");
   };
 
   const comingSoon = (label = "Esta sección") => {
@@ -346,59 +370,58 @@ export default function Dashboard() {
         </div>
       )}
 
-     {/* SIDEBAR */}
-<aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
-  <div className="flex items-center gap-3 mb-10">
-    <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
-      R
-    </div>
-    <div>
-      <p className="text-sm font-semibold">Ritto</p>
-      <p className="text-[11px] text-slate-400">Agenda inteligente</p>
-    </div>
-  </div>
-
-  <nav className="space-y-1 text-sm flex-1">
-    <SidebarItem label="Resumen" active onClick={() => navigate("/dashboard")} />
-    <SidebarItem label="Agenda" onClick={() => navigate("/bookings")} />
-    <SidebarItem label="Servicios" onClick={() => navigate("/services")} />
-    <SidebarItem label="Horarios" onClick={() => navigate("/schedule")} />
-    <SidebarItem label="Bloqueos" onClick={() => navigate("/schedule-blocks")} />
-    <SidebarItem label="Ajustes" onClick={() => navigate("/setup")} />
-  </nav>
-
-  <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
-    <p className="text-slate-500 mb-1">Plan actual</p>
-
-    {business && (
-      <>
-        {isLifetime && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs">Acceso de por vida</span>
-            <span className="text-cyan-300 font-medium">Lifetime</span>
+      {/* SIDEBAR */}
+      <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
+        <div className="flex items-center gap-3 mb-10">
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
+            R
           </div>
-        )}
-
-        {trialActive && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs">Prueba gratuita</span>
-            <span className="text-emerald-400 font-medium">
-              {daysLeft} días restantes
-            </span>
+          <div>
+            <p className="text-sm font-semibold">Ritto</p>
+            <p className="text-[11px] text-slate-400">Agenda inteligente</p>
           </div>
-        )}
+        </div>
 
-        {trialExpired && !isLifetime && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs">Prueba finalizada</span>
-            <span className="text-rose-400 font-medium">Bloqueado</span>
-          </div>
-        )}
-      </>
-    )}
-  </div>
-</aside>
+        <nav className="space-y-1 text-sm flex-1">
+          <SidebarItem label="Resumen" active onClick={() => navigate("/dashboard")} />
+          <SidebarItem label="Agenda" onClick={() => navigate("/bookings")} />
+          <SidebarItem label="Servicios" onClick={() => navigate("/services")} />
+          <SidebarItem label="Horarios" onClick={() => navigate("/schedule")} />
+          <SidebarItem label="Bloqueos" onClick={() => navigate("/schedule-blocks")} />
+          <SidebarItem label="Ajustes" onClick={() => navigate("/setup")} />
+        </nav>
 
+        <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
+          <p className="text-slate-500 mb-1">Plan actual</p>
+
+          {business && (
+            <>
+              {isLifetime && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Acceso de por vida</span>
+                  <span className="text-cyan-300 font-medium">Lifetime</span>
+                </div>
+              )}
+
+              {trialActive && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Prueba gratuita</span>
+                  <span className="text-emerald-400 font-medium">
+                    {daysLeft} días restantes
+                  </span>
+                </div>
+              )}
+
+              {trialExpired && !isLifetime && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Prueba finalizada</span>
+                  <span className="text-rose-400 font-medium">Bloqueado</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </aside>
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
@@ -599,6 +622,7 @@ export default function Dashboard() {
                 • Sin permanencia · Cancelás cuando quieras
               </p>
             </div>
+
             {/* TOP SERVICIOS */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-3">
@@ -635,6 +659,36 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            {/* LINK PÚBLICO (NUEVO) */}
+            <div className="rounded-3xl bg-slate-900/70 border border-cyan-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(56,189,248,0.25)] p-5">
+              <p className="text-[11px] text-cyan-300 mb-1">Link público</p>
+
+              <p className="text-[12px] text-slate-300 mb-3">
+                Copiá este link y compartilo con tus clientes.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={publicUrl || "Generando link..."}
+                  className="flex-1 text-[11px] px-3 py-2 rounded-2xl bg-slate-950 border border-white/10 text-slate-200 select-all"
+                />
+
+                <button
+                  onClick={copyPublicLink}
+                  className="text-[11px] px-3 py-2 rounded-2xl bg-cyan-400 text-slate-950 font-semibold hover:bg-cyan-300 transition"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <button
+                onClick={openPublicLink}
+                className="mt-3 text-[11px] w-full px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+              >
+                Abrir link público
+              </button>
+            </div>
 
             {/* QUICK ACTIONS */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-4">
@@ -643,7 +697,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <QuickAction label="Crear servicio" onClick={goServices} />
                 <QuickAction label="Bloquear horario" onClick={goScheduleBlocks} />
-                <QuickAction label="Ver link público" onClick={goPublicLink} />
+                {/* ELIMINADO: Ver link público (antes abría /book/:slug) */}
                 <QuickAction label="Configurar horarios" onClick={goSetup} />
               </div>
             </div>
