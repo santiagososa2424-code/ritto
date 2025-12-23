@@ -62,8 +62,6 @@ export default function Dashboard() {
   };
 
  const configurePayment = () => {
-- toast("Pagos: próximamente. Por ahora se configura desde Ajustes.");
-- navigate("/setup");
 + navigate("/billing");
 };
 
