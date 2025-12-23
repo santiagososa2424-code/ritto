@@ -14,6 +14,7 @@ import Services from "./pages/Services.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 import Bookings from "./pages/Bookings.jsx";
+import Billing from "./pages/Billing.jsx"; // ✅ NUEVO
 
 // 📦 Booking público
 import PublicBooking from "./pages/PublicBooking.jsx";
@@ -48,6 +49,16 @@ export default function AppRouter() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ NUEVA RUTA BILLING */}
+        <Route
+          path="/billing"
+          element={
+            <ProtectedRoute>
+              <Billing />
             </ProtectedRoute>
           }
         />
