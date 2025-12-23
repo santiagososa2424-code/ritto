@@ -61,12 +61,12 @@ export default function Dashboard() {
     toast(label + " todavía no está disponible. Próximamente.");
   };
 
-  const configurePayment = () => {
-    // No existe todavía pantalla de pago en tu router, así que no rompo nada.
-    // Cuando tengas /billing o similar, lo conecto.
-    toast("Pagos: próximamente. Por ahora se configura desde Ajustes.");
-    navigate("/setup");
-  };
+ const configurePayment = () => {
+- toast("Pagos: próximamente. Por ahora se configura desde Ajustes.");
+- navigate("/setup");
++ navigate("/billing");
+};
+
 
   useEffect(() => {
     loadDashboard();
