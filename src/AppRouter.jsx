@@ -28,19 +28,12 @@ export default function AppRouter() {
   return (
     <Router>
       <Routes>
-
         {/* 🌟 Página principal */}
         <Route path="/" element={<Landing />} />
 
-        {/* 🌐 Páginas públicas */}
+        {/* 🌐 Públicas */}
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/payment-success" element={<PaymentSuccess />} />
-
-        {/* ✅ BOOKING PÚBLICO CON SLUG LIMPIO */}
-        <Route path="/:slug" element={<PublicBooking />} />
-
-        {/* 🔁 LEGACY (opcional, no rompe nada) */}
-        <Route path="/book/:slug" element={<PublicBooking />} />
 
         {/* 🔐 Auth */}
         <Route path="/login" element={<Login />} />
@@ -112,9 +105,14 @@ export default function AppRouter() {
           }
         />
 
-        {/* 🚧 Cualquier ruta desconocida → Landing */}
-        <Route path="*" element={<Navigate to="/" />} />
+        {/* 🔁 Legacy */}
+        <Route path="/book/:slug" element={<PublicBooking />} />
 
+        {/* 🌍 Booking público limpio */}
+        <Route path="/:slug" element={<PublicBooking />} />
+
+        {/* 🚧 Fallback */}
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
   );
