@@ -34,20 +34,19 @@ export default function Dashboard() {
     ? `${window.location.origin}/${business.slug}`
     : null;
 
-  const copyPublicLink = async () => {
-    if (!publicUrl) {
-      toast.error("Tu negocio todavía no tiene link público.");
-      return;
-    }
+const copyPublicLink = async () => {
+  if (!publicUrl) {
+    toast.error("Tu negocio todavía no tiene link público.");
+    return;
+  }
 
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      toast.success("Link copiado");
-    } catch (e) {
-      console.error("Clipboard error:", e);
-      toast.error("No se pudo copiar el link");
-    }
-  };
+  try {
+    await navigator.clipboard.writeText(publicUrl);
+    toast.success("Link copiado al portapapeles");
+  } catch (e) {
+    toast.error("No se pudo copiar el link");
+  }
+};
 
   const openPublicLink = () => {
     if (!publicUrl) {
