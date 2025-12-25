@@ -1,10 +1,13 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 export default function ProtectedRoute({ children }) {
   const [allowed, setAllowed] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
@@ -18,7 +21,7 @@ export default function ProtectedRoute({ children }) {
 
       const user = session.user;
 
-      // lifetime_free
+      // lifetime_free (metadata)
       if (user.user_metadata?.lifetime_free) {
         setAllowed(true);
         setLoading(false);
@@ -65,7 +68,7 @@ export default function ProtectedRoute({ children }) {
       if (mounted) checkAccess(data.session);
     });
 
-    // 2️⃣ escuchar cambios (CLAVE)
+    // 2️⃣ escuchar cambios
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -93,5 +96,25 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  const isDashboard = location.pathname === "/dashboard";
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50">
+      
+      {/* FLECHA GLOBAL (solo si NO estamos en dashboard) */}
+      {!isDashboard && (
+        <div className="px-6 pt-4">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition"
+          >
+            <span className="text-lg">←</span>
+            Volver al Dashboard
+          </button>
+        </div>
+      )}
+
+      {children}
+    </div>
+  );
 }
