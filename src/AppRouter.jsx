@@ -14,7 +14,7 @@ import Services from "./pages/Services.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 import Bookings from "./pages/Bookings.jsx";
-import Billing from "./pages/Billing.jsx"; // ✅ NUEVO
+import Billing from "./pages/Billing.jsx";
 
 // 📦 Booking público
 import PublicBooking from "./pages/PublicBooking.jsx";
@@ -35,6 +35,11 @@ export default function AppRouter() {
         {/* 🌐 Páginas públicas */}
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/payment-success" element={<PaymentSuccess />} />
+
+        {/* ✅ BOOKING PÚBLICO CON SLUG LIMPIO */}
+        <Route path="/:slug" element={<PublicBooking />} />
+
+        {/* 🔁 LEGACY (opcional, no rompe nada) */}
         <Route path="/book/:slug" element={<PublicBooking />} />
 
         {/* 🔐 Auth */}
@@ -53,7 +58,6 @@ export default function AppRouter() {
           }
         />
 
-        {/* ✅ NUEVA RUTA BILLING */}
         <Route
           path="/billing"
           element={
@@ -108,7 +112,7 @@ export default function AppRouter() {
           }
         />
 
-        {/* 🚧 Cualquier ruta → Landing */}
+        {/* 🚧 Cualquier ruta desconocida → Landing */}
         <Route path="*" element={<Navigate to="/" />} />
 
       </Routes>
