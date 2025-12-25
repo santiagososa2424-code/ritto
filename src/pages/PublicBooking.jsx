@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
 export default function PublicBooking() {
   const { slug } = useParams();
-  const navigate = useNavigate();
 
   const [business, setBusiness] = useState(null);
   const [services, setServices] = useState([]);
@@ -13,8 +12,8 @@ export default function PublicBooking() {
 
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
-  const [availableHours, setAvailableHours] = useState([]); // compatibilidad con tu UI anterior
-  const [slotsUI, setSlotsUI] = useState([]); // NUEVO: [{ hour:"10:00", available:true/false, remaining: n }]
+  const [availableHours, setAvailableHours] = useState([]); // compatibilidad con UI anterior
+  const [slotsUI, setSlotsUI] = useState([]); // [{hour, available, remaining, capacity}]
   const [selectedHour, setSelectedHour] = useState("");
 
   const [name, setName] = useState("");
@@ -26,31 +25,64 @@ export default function PublicBooking() {
   const [loading, setLoading] = useState(false);
 
   // ────────────────────────────────────────────────
-  // NORMALIZACIÓN DE DÍAS (FIX REAL)
+  // NORMALIZACIÓN (DÍAS + TIEMPOS)
   // ────────────────────────────────────────────────
-  const normalizeDay = (str) => {
-    return (str || "")
+  const normalizeDay = (str) =>
+    (str || "")
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const normalizeHHMM = (t) => {
+    if (!t) return "";
+    // acepta "09:00:00" o "09:00"
+    const s = String(t).slice(0, 5);
+    return /^\d{2}:\d{2}$/.test(s) ? s : "";
   };
 
-  // Para comparar contra schedules guardados como "Lunes", "Miércoles", etc.
+  // Evita bugs por timezone: crea fecha a medio día local
   const getDayNameFromDate = (yyyyMmDd) => {
-    // Evita bugs por timezone: crea la fecha como "medio día" local
     const [y, m, d] = yyyyMmDd.split("-").map(Number);
     const dt = new Date(y, m - 1, d, 12, 0, 0);
     return dt.toLocaleDateString("es-UY", { weekday: "long" });
   };
 
   // ────────────────────────────────────────────────
-  // CARGAR DATOS DEL NEGOCIO
+  // MAPA (EMBED) + TELÉFONO
+  // ────────────────────────────────────────────────
+  const mapEmbedUrl = useMemo(() => {
+    const raw = business?.map_url;
+    if (!raw) return null;
+
+    // si ya es embed, lo devolvemos
+    if (raw.includes("google.com/maps/embed")) return raw;
+
+    // si es un link normal de google maps, intentamos convertirlo a embed simple
+    // (funciona para la mayoría de URLs compartidas)
+    if (raw.includes("google.com/maps")) {
+      // Google suele permitir embed con:
+      // https://www.google.com/maps?q=...&output=embed
+      // o si trae "place" o "search", igual suele andar con output=embed.
+      const hasQuery = raw.includes("?");
+      return raw + (hasQuery ? "&output=embed" : "?output=embed");
+    }
+
+    // si es cualquier otro link, intentamos mostrarlo igual dentro de iframe
+    // (algunos sitios bloquean iframes; en ese caso el botón "Abrir mapa" sirve)
+    return raw;
+  }, [business?.map_url]);
+
+  const openMap = () => {
+    if (!business?.map_url) return;
+    window.open(business.map_url, "_blank");
+  };
+
+  // ────────────────────────────────────────────────
+  // CARGAR DATOS
   // ────────────────────────────────────────────────
   useEffect(() => {
-    // FIX refresh fatal: slug puede venir undefined al inicio
     if (!slug) return;
-
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
@@ -82,12 +114,13 @@ export default function PublicBooking() {
 
       setBusiness(biz);
 
-      // Servicios activos
+      // Servicios (no rompo lógica; solo aseguro orden y fallback)
       const { data: servs, error: servErr } = await supabase
         .from("services")
         .select("*")
         .eq("business_id", biz.id)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .order("created_at", { ascending: true });
 
       if (servErr) console.error(servErr);
       setServices(servs || []);
@@ -117,9 +150,8 @@ export default function PublicBooking() {
       setLoading(false);
     }
   };
-
   // ────────────────────────────────────────────────
-  // HORARIOS DISPONIBLES (FIX REAL)
+  // HORARIOS DISPONIBLES (LOGICA PRESERVADA)
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (selectedDate && selectedService && business) {
@@ -146,8 +178,7 @@ export default function PublicBooking() {
       return;
     }
 
-    // FIX clave: normalizar día del week y comparar con schedules (con tildes/mayúsculas)
-    const dayName = getDayNameFromDate(dateStr); // ejemplo: "lunes" o "Lunes" según locale
+    const dayName = getDayNameFromDate(dateStr);
     const dayKey = normalizeDay(dayName);
 
     const todays = schedules.filter(
@@ -161,31 +192,27 @@ export default function PublicBooking() {
       return;
     }
 
-    // bookings del día
-    const { data: bookings, error: bookingsErr } = await supabase
+    const { data: bookings } = await supabase
       .from("bookings")
       .select("hour, status")
       .eq("business_id", business.id)
       .eq("date", dateStr);
 
-    if (bookingsErr) console.error(bookingsErr);
-
-    // STEP: usa slot_interval_minutes del negocio como “grilla base”
-    // Si no existe, cae al duration del servicio (y si falta, 30).
-    const step = Number(business.slot_interval_minutes) || Number(selectedService.duration) || 30;
+    const step =
+      Number(business.slot_interval_minutes) ||
+      Number(selectedService.duration) ||
+      30;
 
     const hoursSet = new Set();
     const slots = [];
 
-    // Generar todas las horas de trabajo de ese día (y marcar disponibilidad por capacity)
     todays.forEach((slot) => {
-      let current = slot.start_time.slice(0, 5);
-      const end = slot.end_time.slice(0, 5);
+      let current = normalizeHHMM(slot.start_time);
+      const end = normalizeHHMM(slot.end_time);
 
-      while (current < end) {
+      while (current && current < end) {
         const normalized = `${current}:00`;
 
-        // consideramos ocupados los que estén confirmed o pending (si tu app usa pending)
         const used =
           (bookings || []).filter(
             (b) =>
@@ -205,15 +232,14 @@ export default function PublicBooking() {
       }
     });
 
-    // Deduplicar por si hay múltiples franjas ese día y ordenar
-    const uniqueSlotsMap = new Map();
+    // Deduplicar y priorizar mayor remaining
+    const map = new Map();
     slots.forEach((s) => {
-      // si hay duplicado, dejamos el que tenga más remaining
-      const prev = uniqueSlotsMap.get(s.hour);
-      if (!prev || s.remaining > prev.remaining) uniqueSlotsMap.set(s.hour, s);
+      const prev = map.get(s.hour);
+      if (!prev || s.remaining > prev.remaining) map.set(s.hour, s);
     });
 
-    const uniqueSlots = Array.from(uniqueSlotsMap.values()).sort((a, b) =>
+    const uniqueSlots = Array.from(map.values()).sort((a, b) =>
       a.hour.localeCompare(b.hour)
     );
 
@@ -232,7 +258,7 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // SEÑA
+  // SEÑA (SIN CAMBIOS)
   // ────────────────────────────────────────────────
   const usesDeposit =
     business?.deposit_enabled && Number(business.deposit_value) > 0;
@@ -251,7 +277,7 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // RESERVAR
+  // SUBMIT (SIN ROMPER FLUJO)
   // ────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -296,13 +322,12 @@ export default function PublicBooking() {
         return;
       }
 
-      // Nota: Emails los vamos a disparar con Resend desde backend luego (confirmación + reminder 24h).
       setSuccess("Reserva confirmada. Te enviamos un email ✉️");
       setIsProcessing(false);
       return;
     }
 
-    // CON SEÑA
+    // CON SEÑA (Mercado Pago)
     const amount = calculateDepositAmount();
 
     const { data, error: fnError } = await supabase.functions.invoke(
@@ -333,27 +358,11 @@ export default function PublicBooking() {
 
     window.location.href = data.init_point;
   };
-
   // ────────────────────────────────────────────────
   // UI
   // ────────────────────────────────────────────────
   const depositAmount = calculateDepositAmount();
 
-  // Flecha: si el usuario está logueado, volver al dashboard; si no, volver atrás
-  const handleBack = async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session) navigate("/dashboard");
-      else navigate(-1);
-    } catch {
-      navigate(-1);
-    }
-  };
-
-  // Para evitar elegir fechas pasadas (opcional, no rompe nada)
   const minDate = useMemo(() => {
     const t = new Date();
     const yyyy = t.getFullYear();
@@ -365,7 +374,7 @@ export default function PublicBooking() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
-        Cargando negocio...
+        Cargando agenda…
       </div>
     );
   }
@@ -373,7 +382,7 @@ export default function PublicBooking() {
   if (!business) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
-        {error ? error : "Cargando negocio..."}
+        {error || "Cargando agenda…"}
       </div>
     );
   }
@@ -381,52 +390,74 @@ export default function PublicBooking() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
-        {/* HEADER + FLECHA */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            className="text-xs px-3 py-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-          >
-            ← Volver
-          </button>
 
-          <div className="text-right">
-            <p className="text-[10px] text-slate-400">Reservas</p>
-            <p className="text-xs text-slate-300">{business.slug}</p>
-          </div>
-        </div>
-
+        {/* HEADER NEGOCIO */}
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">
             {business.name}
           </h1>
+
           {business.address && (
             <p className="text-xs text-slate-400">{business.address}</p>
           )}
+
+          {business.phone && (
+            <p className="text-xs text-slate-300 mt-1">
+              📞 {business.phone}
+            </p>
+          )}
         </div>
 
+        {/* MAPA */}
+        {mapEmbedUrl && (
+          <div className="rounded-3xl overflow-hidden border border-white/10 shadow-xl">
+            <iframe
+              src={mapEmbedUrl}
+              className="w-full h-56"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <button
+              type="button"
+              onClick={openMap}
+              className="w-full text-xs py-2 bg-white/5 hover:bg-white/10 transition"
+            >
+              Abrir mapa
+            </button>
+          </div>
+        )}
+
+        {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
           {/* SERVICIO */}
           <Field label="Servicio">
-            <select
-              className="input-ritto"
-              value={selectedService?.id || ""}
-              onChange={(e) => {
-                const svc = services.find((s) => String(s.id) === e.target.value);
-                setSelectedService(svc || null);
-                setSelectedHour("");
-              }}
-            >
-              <option value="">Elegí un servicio</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — ${s.price} — {s.duration} min
-                </option>
-              ))}
-            </select>
+            {services.length === 0 ? (
+              <p className="text-[12px] text-slate-400">
+                Este negocio todavía no tiene servicios configurados.
+              </p>
+            ) : (
+              <select
+                className="input-ritto"
+                value={selectedService?.id || ""}
+                onChange={(e) => {
+                  const svc = services.find(
+                    (s) => String(s.id) === e.target.value
+                  );
+                  setSelectedService(svc || null);
+                  setSelectedHour("");
+                }}
+              >
+                <option value="">Elegí un servicio</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name || "Servicio"} — ${s.price} — {s.duration} min
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
           {/* FECHA */}
@@ -443,14 +474,14 @@ export default function PublicBooking() {
             />
           </Field>
 
-          {/* HORARIOS: GRID (AZUL DISPONIBLE / GRIS OCUPADO) */}
+          {/* HORARIOS */}
           <Field label="Horarios disponibles">
             {!selectedService || !selectedDate ? (
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[12px] text-slate-400">
                 Elegí un servicio y una fecha para ver los horarios.
               </p>
             ) : slotsUI.length === 0 ? (
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[12px] text-slate-400">
                 No hay horarios disponibles para ese día.
               </p>
             ) : (
@@ -467,15 +498,10 @@ export default function PublicBooking() {
                       className={`px-2 py-2 rounded-2xl text-[11px] border transition ${
                         s.available
                           ? isSelected
-                            ? "border-emerald-400/60 bg-emerald-400 text-slate-950 font-semibold"
+                            ? "border-emerald-400 bg-emerald-400 text-slate-950 font-semibold"
                             : "border-blue-400/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20"
                           : "border-white/10 bg-white/5 text-slate-500 cursor-not-allowed"
                       }`}
-                      title={
-                        s.available
-                          ? `Disponible (${s.remaining}/${s.capacity})`
-                          : "Ocupado"
-                      }
                     >
                       {s.hour}
                     </button>
@@ -483,27 +509,6 @@ export default function PublicBooking() {
                 })}
               </div>
             )}
-          </Field>
-
-          {/* Mantengo el SELECT (tu UI anterior) pero opcional: se sincroniza con el grid */}
-          <Field label="Horario elegido">
-            <select
-              className="input-ritto"
-              value={selectedHour}
-              onChange={(e) => setSelectedHour(e.target.value)}
-              disabled={!selectedService || !selectedDate || slotsUI.length === 0}
-            >
-              <option value="">
-                {slotsUI.length === 0 ? "Sin horarios" : "Elegí un horario"}
-              </option>
-              {slotsUI
-                .filter((s) => s.available)
-                .map((s) => (
-                  <option key={s.hour} value={s.hour}>
-                    {s.hour}
-                  </option>
-                ))}
-            </select>
           </Field>
 
           {/* SEÑA */}
@@ -538,25 +543,23 @@ export default function PublicBooking() {
             />
           </Field>
 
-          {/* ALERTAS */}
           {error && <Alert error text={error} />}
           {success && <Alert success text={success} />}
 
           <button
             type="submit"
             disabled={isProcessing}
-            className="button-ritto mt-2 disabled:opacity-60 w-full"
+            className="button-ritto w-full mt-2 disabled:opacity-60"
           >
             {isProcessing
-              ? "Procesando..."
+              ? "Procesando…"
               : usesDeposit
               ? "Ir a pagar la seña"
               : "Confirmar reserva"}
           </button>
 
-          {/* NOTA UX */}
           <p className="text-[10px] text-slate-500">
-            Al confirmar, vas a recibir un email de confirmación. (Luego agregamos el recordatorio 24h con Resend)
+            Vas a recibir un email de confirmación con los detalles de tu turno.
           </p>
         </form>
       </div>
@@ -564,7 +567,8 @@ export default function PublicBooking() {
   );
 }
 
-/* COMPONENTE FIELD */
+/* COMPONENTES AUX */
+
 function Field({ label, children }) {
   return (
     <div>
@@ -574,7 +578,7 @@ function Field({ label, children }) {
   );
 }
 
-function Alert({ error, success, text }) {
+function Alert({ error, text }) {
   return (
     <div
       className={`rounded-2xl px-4 py-2 text-[12px] ${
