@@ -9,7 +9,7 @@ export default function BusinessSetup() {
   const [address, setAddress] = useState("");
   const [mapUrl, setMapUrl] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // ✅ NUEVO
+  const [phone, setPhone] = useState("");
 
   const [depositEnabled, setDepositEnabled] = useState(false);
   const [depositType, setDepositType] = useState("fixed");
@@ -24,12 +24,26 @@ export default function BusinessSetup() {
     loadBusiness();
   }, []);
 
+  // ─────────────────────────────
+  // GENERADOR DE SLUG LIMPIO
+  // ─────────────────────────────
+  const generateSlug = (value) => {
+    return (
+      "ritto" +
+      value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "")
+    );
+  };
+
   const loadBusiness = async () => {
     setError("");
     setSuccess("");
 
     const {
-      data: { user }
+      data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
@@ -74,14 +88,41 @@ export default function BusinessSetup() {
       return;
     }
 
+    let slugToSave = business.slug;
+
+    // ─────────────────────────────
+    // SI NO HAY SLUG → LO GENERAMOS
+    // ─────────────────────────────
+    if (!business.slug) {
+      const baseSlug = generateSlug(name);
+      let finalSlug = baseSlug;
+      let counter = 1;
+
+      while (true) {
+        const { data: existing } = await supabase
+          .from("businesses")
+          .select("id")
+          .eq("slug", finalSlug)
+          .maybeSingle();
+
+        if (!existing) break;
+
+        counter++;
+        finalSlug = `${baseSlug}-${counter}`;
+      }
+
+      slugToSave = finalSlug;
+    }
+
     const { error: updateError } = await supabase
       .from("businesses")
       .update({
         name,
+        slug: slugToSave,
         address,
         map_url: mapUrl,
         email,
-        phone, // ✅ NUEVO
+        phone,
         deposit_enabled: depositEnabled,
         deposit_type: depositType,
         deposit_value: depositValue,
@@ -89,10 +130,12 @@ export default function BusinessSetup() {
       .eq("id", business.id);
 
     if (updateError) {
+      console.error(updateError);
       setError("Error guardando los cambios.");
       return;
     }
 
+    setBusiness((prev) => ({ ...prev, slug: slugToSave }));
     setSuccess("Cambios guardados correctamente.");
   };
 
@@ -107,7 +150,6 @@ export default function BusinessSetup() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-6">
-
         <div className="text-center mb-8">
           <h1 className="text-3xl font-semibold">Configuración del negocio</h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -119,13 +161,20 @@ export default function BusinessSetup() {
         {success && <Alert success text={success} />}
 
         <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-6 space-y-6">
-
           <Field label="Nombre del negocio">
-            <input className="input-ritto" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              className="input-ritto"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </Field>
 
           <Field label="Dirección">
-            <input className="input-ritto" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input
+              className="input-ritto"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
           </Field>
 
           <Field label="Teléfono de contacto">
@@ -138,11 +187,19 @@ export default function BusinessSetup() {
           </Field>
 
           <Field label="Email de contacto">
-            <input className="input-ritto" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              className="input-ritto"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </Field>
 
           <Field label="Google Maps URL">
-            <input className="input-ritto" value={mapUrl} onChange={(e) => setMapUrl(e.target.value)} />
+            <input
+              className="input-ritto"
+              value={mapUrl}
+              onChange={(e) => setMapUrl(e.target.value)}
+            />
           </Field>
 
           <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 space-y-3">
@@ -158,7 +215,11 @@ export default function BusinessSetup() {
             {depositEnabled && (
               <>
                 <Field label="Tipo de seña">
-                  <select className="input-ritto" value={depositType} onChange={(e) => setDepositType(e.target.value)}>
+                  <select
+                    className="input-ritto"
+                    value={depositType}
+                    onChange={(e) => setDepositType(e.target.value)}
+                  >
                     <option value="fixed">Monto fijo</option>
                     <option value="percentage">Porcentaje</option>
                   </select>
@@ -169,7 +230,9 @@ export default function BusinessSetup() {
                     type="number"
                     className="input-ritto"
                     value={depositValue}
-                    onChange={(e) => setDepositValue(Number(e.target.value))}
+                    onChange={(e) =>
+                      setDepositValue(Number(e.target.value))
+                    }
                   />
                 </Field>
               </>
@@ -196,10 +259,13 @@ function Field({ label, children }) {
 
 function Alert({ error, text }) {
   return (
-    <div className={`rounded-2xl px-4 py-2 text-xs ${
-      error ? "bg-rose-500/10 text-rose-200 border border-rose-500/40"
-            : "bg-emerald-500/10 text-emerald-200 border border-emerald-500/40"
-    }`}>
+    <div
+      className={`rounded-2xl px-4 py-2 text-xs ${
+        error
+          ? "bg-rose-500/10 text-rose-200 border border-rose-500/40"
+          : "bg-emerald-500/10 text-emerald-200 border border-emerald-500/40"
+      }`}
+    >
       {text}
     </div>
   );
