@@ -757,3 +757,4 @@ function QuickAction({ label, onClick }) {
       {label}
     </button>
   );
+}
