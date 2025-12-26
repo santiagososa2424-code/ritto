@@ -390,23 +390,51 @@ export default function PublicBooking() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
+{/* HEADER NEGOCIO */}
+<div className="text-center space-y-1">
+  <h1 className="text-3xl font-semibold tracking-tight">
+    {business.name}
+  </h1>
 
-        {/* HEADER NEGOCIO */}
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {business.name}
-          </h1>
+  {business.address && (
+    <p className="text-xs text-slate-400">{business.address}</p>
+  )}
 
-          {business.address && (
-            <p className="text-xs text-slate-400">{business.address}</p>
-          )}
+  {business.phone && (
+    <button
+      onClick={() =>
+        window.open(
+          `https://wa.me/${business.phone.replace(/\D/g, "")}`,
+          "_blank"
+        )
+      }
+      className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
+    >
+      📞 {business.phone}
+    </button>
+  )}
+</div>
 
-          {business.phone && (
-            <p className="text-xs text-slate-300 mt-1">
-              📞 {business.phone}
-            </p>
-          )}
-        </div>
+{/* MAPA */}
+{mapEmbedUrl && (
+  <div className="rounded-3xl overflow-hidden border border-white/10 shadow-xl">
+    <iframe
+      src={mapEmbedUrl}
+      className="w-full h-56"
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      title="Mapa"
+    />
+
+    <button
+      type="button"
+      onClick={openMap}
+      className="w-full px-4 py-3 bg-blue-500/10 border-t border-blue-400/30 text-blue-200 hover:bg-blue-500/20 transition text-sm"
+    >
+      Ver dirección
+    </button>
+  </div>
+)}
 
         {/* MAPA */}
         {mapEmbedUrl && (
