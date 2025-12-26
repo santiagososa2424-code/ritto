@@ -436,22 +436,6 @@ export default function PublicBooking() {
   </div>
 )}
 
-        {/* MAPA */}
-        {mapEmbedUrl && (
-          <div className="rounded-3xl overflow-hidden border border-white/10 shadow-xl">
-            <iframe
-              src={mapEmbedUrl}
-              className="w-full h-56"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          <button
-  onClick={() => window.open(business.map_url, "_blank")}
-  className="w-full mt-4 px-4 py-3 rounded-2xl bg-blue-500/10 border border-blue-400/30 text-blue-200 hover:bg-blue-500/20 transition text-sm"
->
-  Ver dirección
-</button>
-
 
         {/* FORM */}
         <form
