@@ -1,3 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { supabase } from "../supabaseClient";
+
 export default function PublicBooking() {
   const { slug } = useParams();
 
@@ -8,8 +12,8 @@ export default function PublicBooking() {
 
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
-  const [availableHours, setAvailableHours] = useState([]);
-  const [slotsUI, setSlotsUI] = useState([]);
+  const [availableHours, setAvailableHours] = useState([]); // compatibilidad con UI anterior
+  const [slotsUI, setSlotsUI] = useState([]); // [{hour, available, remaining, capacity}]
   const [selectedHour, setSelectedHour] = useState("");
 
   const [name, setName] = useState("");
@@ -20,7 +24,9 @@ export default function PublicBooking() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // ───────────────── NORMALIZACIÓN ─────────────────
+  // ────────────────────────────────────────────────
+  // NORMALIZACIÓN (DÍAS + TIEMPOS)
+  // ────────────────────────────────────────────────
   const normalizeDay = (str) =>
     (str || "")
       .toLowerCase()
@@ -30,38 +36,75 @@ export default function PublicBooking() {
 
   const normalizeHHMM = (t) => {
     if (!t) return "";
+    // acepta "09:00:00" o "09:00"
     const s = String(t).slice(0, 5);
     return /^\d{2}:\d{2}$/.test(s) ? s : "";
   };
 
+  // Evita bugs por timezone: crea fecha a medio día local
   const getDayNameFromDate = (yyyyMmDd) => {
     const [y, m, d] = yyyyMmDd.split("-").map(Number);
     const dt = new Date(y, m - 1, d, 12, 0, 0);
     return dt.toLocaleDateString("es-UY", { weekday: "long" });
   };
 
-  // ───────────────── MAPA + TEL ─────────────────
+  // ────────────────────────────────────────────────
+  // MAPA (EMBED) + TELÉFONO
+  // ────────────────────────────────────────────────
+  const mapEmbedUrl = useMemo(() => {
+    const raw = business?.map_url;
+    if (!raw) return null;
+
+    // si ya es embed, lo devolvemos
+    if (raw.includes("google.com/maps/embed")) return raw;
+
+    // si es un link normal de google maps, intentamos convertirlo a embed simple
+    // (funciona para la mayoría de URLs compartidas)
+    if (raw.includes("google.com/maps")) {
+      // Google suele permitir embed con:
+      // https://www.google.com/maps?q=...&output=embed
+      // o si trae "place" o "search", igual suele andar con output=embed.
+      const hasQuery = raw.includes("?");
+      return raw + (hasQuery ? "&output=embed" : "?output=embed");
+    }
+
+    // si es cualquier otro link, intentamos mostrarlo igual dentro de iframe
+    // (algunos sitios bloquean iframes; en ese caso el botón "Abrir mapa" sirve)
+    return raw;
+  }, [business?.map_url]);
+
   const openMap = () => {
     if (!business?.map_url) return;
     window.open(business.map_url, "_blank");
   };
 
-  // ───────────────── CARGA DATA ─────────────────
+  // ────────────────────────────────────────────────
+  // CARGAR DATOS
+  // ────────────────────────────────────────────────
   useEffect(() => {
     if (!slug) return;
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   const loadData = async () => {
     try {
-      setLoading(true);
       setError("");
+      setSuccess("");
+      setLoading(true);
 
-      const { data: biz } = await supabase
+      const { data: biz, error: bizErr } = await supabase
         .from("businesses")
         .select("*")
         .eq("slug", slug)
         .maybeSingle();
+
+      if (bizErr) {
+        console.error(bizErr);
+        setError("No se pudo cargar el negocio.");
+        setLoading(false);
+        return;
+      }
 
       if (!biz) {
         setError("No existe un negocio con ese enlace.");
@@ -71,31 +114,38 @@ export default function PublicBooking() {
 
       setBusiness(biz);
 
-      const { data: servs } = await supabase
+      // Servicios (no rompo lógica; solo aseguro orden y fallback)
+      const { data: servs, error: servErr } = await supabase
         .from("services")
         .select("*")
         .eq("business_id", biz.id)
         .eq("is_active", true)
         .order("created_at", { ascending: true });
 
+      if (servErr) console.error(servErr);
       setServices(servs || []);
 
-      const { data: scheds } = await supabase
+      // Horarios
+      const { data: scheds, error: schedErr } = await supabase
         .from("schedules")
         .select("*")
         .eq("business_id", biz.id);
 
+      if (schedErr) console.error(schedErr);
       setSchedules(scheds || []);
 
-      const { data: blks } = await supabase
+      // Bloqueos
+      const { data: blks, error: blkErr } = await supabase
         .from("schedule_blocks")
         .select("*")
         .eq("business_id", biz.id);
 
+      if (blkErr) console.error(blkErr);
       setBlocks(blks || []);
+
       setLoading(false);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error(err);
       setError("Error cargando datos.");
       setLoading(false);
     }
@@ -340,84 +390,76 @@ export default function PublicBooking() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
-        {/* HEADER NEGOCIO */}
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {business.name}
-          </h1>
+{/* HEADER NEGOCIO */}
+<div className="text-center space-y-1">
+  <h1 className="text-3xl font-semibold tracking-tight">
+    {business.name}
+  </h1>
 
-          {business.address && (
-            <p className="text-xs text-slate-400">{business.address}</p>
-          )}
+  {business.address && (
+    <p className="text-xs text-slate-400">{business.address}</p>
+  )}
 
-          {business.phone && (
-            <button
-              onClick={() =>
-                window.open(
-                  `https://wa.me/${business.phone.replace(/\D/g, "")}`,
-                  "_blank"
-                )
-              }
-              className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
-            >
-              📞 {business.phone}
-            </button>
-          )}
-        </div>
+  {business.phone && (
+    <button
+      onClick={() =>
+        window.open(
+          `https://wa.me/${business.phone.replace(/\D/g, "")}`,
+          "_blank"
+        )
+      }
+      className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
+    >
+      📞 {business.phone}
+    </button>
+  )}
+</div>
 
-        {/* MAPA */}
-        {business?.map_url && (
-          <div className="rounded-3xl border border-white/10 shadow-xl">
-            <button
-              type="button"
-              onClick={openMap}
-              className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
-            >
-              📍 Ver dirección
-            </button>
-          </div>
-        )}
+{/* MAPA */}
+{business?.map_url && (
+  <div className="rounded-3xl border border-white/10 shadow-xl">
+    <button
+      type="button"
+      onClick={openMap}
+      className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
+    >
+      📍 Ver dirección
+    </button>
+  </div>
+)}
+
+
 
         {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
-          {/* SERVICIO (CAMBIO ÚNICO: pills) */}
+          {/* SERVICIO */}
           <Field label="Servicio">
             {services.length === 0 ? (
               <p className="text-[12px] text-slate-400">
                 Este negocio todavía no tiene servicios configurados.
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {services.map((s) => {
-                  const isSelected = selectedService?.id === s.id;
-
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedService(s);
-                        setSelectedHour("");
-                      }}
-                      className={`px-3 py-2 rounded-2xl text-[12px] border transition ${
-                        isSelected
-                          ? "border-emerald-400 bg-emerald-400 text-slate-950 font-semibold"
-                          : "border-blue-400/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20"
-                      }`}
-                    >
-                      <div className="font-medium leading-tight">
-                        {s.name || "Servicio"}
-                      </div>
-                      <div className="text-[10px] opacity-80">
-                        ${s.price} · {s.duration} min
-                      </div>
-                    </button>
+              <select
+                className="input-ritto"
+                value={selectedService?.id || ""}
+                onChange={(e) => {
+                  const svc = services.find(
+                    (s) => String(s.id) === e.target.value
                   );
-                })}
-              </div>
+                  setSelectedService(svc || null);
+                  setSelectedHour("");
+                }}
+              >
+                <option value="">Elegí un servicio</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name || "Servicio"} — ${s.price} — {s.duration} min
+                  </option>
+                ))}
+              </select>
             )}
           </Field>
 
