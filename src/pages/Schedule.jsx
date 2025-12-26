@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import SelectPills from "../components/SelectPills";
 
 /* ─────────────────────────────
    DÍAS NORMALIZADOS (CLAVE)
@@ -15,6 +16,17 @@ const DAYS = {
   domingo: "Domingo",
 };
 
+const DAY_OPTIONS = Object.keys(DAYS).map((d) => ({
+  value: d,
+  label: DAYS[d],
+}));
+
+const INTERVAL_OPTIONS = [
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "60 min" },
+];
 export default function Schedule() {
   const [business, setBusiness] = useState(null);
   const [schedules, setSchedules] = useState([]);
@@ -23,7 +35,6 @@ export default function Schedule() {
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState(1);
 
-  // Días donde aplicar el horario
   const [selectedDays, setSelectedDays] = useState({
     lunes: true,
     martes: false,
@@ -51,9 +62,6 @@ export default function Schedule() {
 
   const navigate = useNavigate();
 
-  /* ─────────────────────────────
-     CARGA INICIAL
-  ───────────────────────────── */
   useEffect(() => {
     loadData();
   }, []);
@@ -98,9 +106,6 @@ export default function Schedule() {
     setSchedules(data || []);
   };
 
-  /* ─────────────────────────────
-     GUARDAR CONFIG GENERAL
-  ───────────────────────────── */
   const saveBusinessSettings = async () => {
     const { error } = await supabase
       .from("businesses")
@@ -118,9 +123,6 @@ export default function Schedule() {
     setSuccess("Configuración guardada.");
   };
 
-  /* ─────────────────────────────
-     AGREGAR HORARIOS (MULTI DÍA)
-  ───────────────────────────── */
   const handleAdd = async (e) => {
     e.preventDefault();
     setError("");
@@ -143,7 +145,6 @@ export default function Schedule() {
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    // Validar solapamientos
     for (let day of daysToInsert) {
       const sameDay = schedules.filter((s) => s.day_of_week === day);
 
@@ -182,9 +183,6 @@ export default function Schedule() {
     loadData();
   };
 
-  /* ─────────────────────────────
-     UI
-  ───────────────────────────── */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-4xl mx-auto space-y-10">
@@ -195,34 +193,31 @@ export default function Schedule() {
         {error && <Alert type="error" text={error} />}
         {success && <Alert type="success" text={success} />}
 
+        {/* CONFIG GENERAL */}
         <Card title="Configuración general">
           <Field label="Días de trabajo">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.keys(DAYS).map((d) => (
-                <label key={d} className="flex gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={workingDays[d]}
-                    onChange={(e) =>
-                      setWorkingDays({ ...workingDays, [d]: e.target.checked })
-                    }
-                  />
-                  {DAYS[d]}
-                </label>
-              ))}
-            </div>
+            <SelectPills
+              options={DAY_OPTIONS}
+              value={Object.keys(workingDays).filter((d) => workingDays[d])}
+              onChange={(day) =>
+                setWorkingDays({
+                  ...workingDays,
+                  [day]: !workingDays[day],
+                })
+              }
+              getValue={(d) => d.value}
+              getLabel={(d) => d.label}
+            />
           </Field>
 
           <Field label="Intervalo base">
-            <select
-              className="input-ritto"
+            <SelectPills
+              options={INTERVAL_OPTIONS}
               value={slotInterval}
-              onChange={(e) => setSlotInterval(Number(e.target.value))}
-            >
-              <option value={15}>15 min</option>
-              <option value={30}>30 min</option>
-              <option value={60}>60 min</option>
-            </select>
+              onChange={setSlotInterval}
+              getValue={(o) => o.value}
+              getLabel={(o) => o.label}
+            />
           </Field>
 
           <button onClick={saveBusinessSettings} className="button-ritto">
@@ -230,6 +225,7 @@ export default function Schedule() {
           </button>
         </Card>
 
+        {/* AGREGAR HORARIO */}
         <Card title="Agregar horario">
           <form
             onSubmit={handleAdd}
@@ -263,28 +259,26 @@ export default function Schedule() {
               <p className="text-sm text-slate-400 mb-2">
                 Aplicar a los días:
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {Object.keys(DAYS).map((d) => (
-                  <label key={d} className="flex gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={!workingDays[d]}
-                      checked={selectedDays[d]}
-                      onChange={(e) =>
-                        setSelectedDays({
-                          ...selectedDays,
-                          [d]: e.target.checked,
-                        })
-                      }
-                    />
-                    {DAYS[d]}
-                  </label>
-                ))}
-              </div>
+
+              <SelectPills
+                options={DAY_OPTIONS.filter((d) => workingDays[d.value])}
+                value={Object.keys(selectedDays).filter(
+                  (d) => selectedDays[d]
+                )}
+                onChange={(day) =>
+                  setSelectedDays({
+                    ...selectedDays,
+                    [day]: !selectedDays[day],
+                  })
+                }
+                getValue={(d) => d.value}
+                getLabel={(d) => d.label}
+              />
             </div>
           </form>
         </Card>
 
+        {/* HORARIOS CREADOS */}
         <Card title="Horarios creados">
           {schedules.map((s) => (
             <div
@@ -308,9 +302,6 @@ export default function Schedule() {
     </div>
   );
 }
-
-/* ───────── COMPONENTES ───────── */
-
 function Card({ title, children }) {
   return (
     <div className="bg-slate-900 p-6 rounded-3xl space-y-4">
