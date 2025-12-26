@@ -55,21 +55,13 @@ export default function PublicBooking() {
     const raw = business?.map_url;
     if (!raw) return null;
 
-    // si ya es embed, lo devolvemos
     if (raw.includes("google.com/maps/embed")) return raw;
 
-    // si es un link normal de google maps, intentamos convertirlo a embed simple
-    // (funciona para la mayoría de URLs compartidas)
     if (raw.includes("google.com/maps")) {
-      // Google suele permitir embed con:
-      // https://www.google.com/maps?q=...&output=embed
-      // o si trae "place" o "search", igual suele andar con output=embed.
       const hasQuery = raw.includes("?");
       return raw + (hasQuery ? "&output=embed" : "?output=embed");
     }
 
-    // si es cualquier otro link, intentamos mostrarlo igual dentro de iframe
-    // (algunos sitios bloquean iframes; en ese caso el botón "Abrir mapa" sirve)
     return raw;
   }, [business?.map_url]);
 
@@ -150,6 +142,7 @@ export default function PublicBooking() {
       setLoading(false);
     }
   };
+
   // ────────────────────────────────────────────────
   // HORARIOS DISPONIBLES (LOGICA PRESERVADA)
   // ────────────────────────────────────────────────
@@ -358,6 +351,7 @@ export default function PublicBooking() {
 
     window.location.href = data.init_point;
   };
+
   // ────────────────────────────────────────────────
   // UI
   // ────────────────────────────────────────────────
@@ -390,76 +384,84 @@ export default function PublicBooking() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
-{/* HEADER NEGOCIO */}
-<div className="text-center space-y-1">
-  <h1 className="text-3xl font-semibold tracking-tight">
-    {business.name}
-  </h1>
+        {/* HEADER NEGOCIO */}
+        <div className="text-center space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {business.name}
+          </h1>
 
-  {business.address && (
-    <p className="text-xs text-slate-400">{business.address}</p>
-  )}
+          {business.address && (
+            <p className="text-xs text-slate-400">{business.address}</p>
+          )}
 
-  {business.phone && (
-    <button
-      onClick={() =>
-        window.open(
-          `https://wa.me/${business.phone.replace(/\D/g, "")}`,
-          "_blank"
-        )
-      }
-      className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
-    >
-      📞 {business.phone}
-    </button>
-  )}
-</div>
+          {business.phone && (
+            <button
+              onClick={() =>
+                window.open(
+                  `https://wa.me/${business.phone.replace(/\D/g, "")}`,
+                  "_blank"
+                )
+              }
+              className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
+            >
+              📞 {business.phone}
+            </button>
+          )}
+        </div>
 
-{/* MAPA */}
-{business?.map_url && (
-  <div className="rounded-3xl border border-white/10 shadow-xl">
-    <button
-      type="button"
-      onClick={openMap}
-      className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
-    >
-      📍 Ver dirección
-    </button>
-  </div>
-)}
-
-
+        {/* MAPA */}
+        {business?.map_url && (
+          <div className="rounded-3xl border border-white/10 shadow-xl">
+            <button
+              type="button"
+              onClick={openMap}
+              className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
+            >
+              📍 Ver dirección
+            </button>
+          </div>
+        )}
 
         {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
-          {/* SERVICIO */}
+          {/* SERVICIO (CAMBIO ÚNICO: pills) */}
           <Field label="Servicio">
             {services.length === 0 ? (
               <p className="text-[12px] text-slate-400">
                 Este negocio todavía no tiene servicios configurados.
               </p>
             ) : (
-              <select
-                className="input-ritto"
-                value={selectedService?.id || ""}
-                onChange={(e) => {
-                  const svc = services.find(
-                    (s) => String(s.id) === e.target.value
+              <div className="flex flex-wrap gap-2 mt-2">
+                {services.map((s) => {
+                  const isSelected = selectedService?.id === s.id;
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedService(s);
+                        setSelectedHour("");
+                      }}
+                      className={`px-3 py-2 rounded-2xl text-[12px] border transition ${
+                        isSelected
+                          ? "border-emerald-400 bg-emerald-400 text-slate-950 font-semibold"
+                          : "border-blue-400/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20"
+                      }`}
+                    >
+                      <div className="font-medium leading-tight">
+                        {s.name || "Servicio"}
+                      </div>
+                      <div className="text-[10px] opacity-80">
+                        ${s.price} · {s.duration} min
+                      </div>
+                    </button>
                   );
-                  setSelectedService(svc || null);
-                  setSelectedHour("");
-                }}
-              >
-                <option value="">Elegí un servicio</option>
-                {services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name || "Servicio"} — ${s.price} — {s.duration} min
-                  </option>
-                ))}
-              </select>
+                })}
+              </div>
             )}
           </Field>
 
