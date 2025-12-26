@@ -2,6 +2,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import SelectPills from "../components/SelectPills";
+
+const DAYS = [
+  { value: "monday", label: "Lun" },
+  { value: "tuesday", label: "Mar" },
+  { value: "wednesday", label: "Mié" },
+  { value: "thursday", label: "Jue" },
+  { value: "friday", label: "Vie" },
+  { value: "saturday", label: "Sáb" },
+  { value: "sunday", label: "Dom" },
+];
 
 export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
@@ -14,10 +25,21 @@ export default function Dashboard() {
 
   const [business, setBusiness] = useState(null);
 
+  // ─────────────────────────────
+  // NUEVO: servicios completos (solo para UI pills)
+  // ─────────────────────────────
+  const [allServices, setAllServices] = useState([]);
+
+  // ─────────────────────────────
+  // NUEVO: filtros UI (solo visuales por ahora)
+  // ─────────────────────────────
+  const [selectedServiceId, setSelectedServiceId] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
+
   const navigate = useNavigate();
 
   // ─────────────────────────────
-  // ACCIONES (BOTONES) - NUEVO
+  // ACCIONES (BOTONES)
   // ─────────────────────────────
   const goAgenda = () => navigate("/schedule");
   const goServices = () => navigate("/services");
@@ -26,27 +48,25 @@ export default function Dashboard() {
   const goScheduleBlocks = () => navigate("/schedule-blocks");
 
   // ─────────────────────────────
-  // LINK PÚBLICO (CORREGIDO)
-  // - antes abría /book/:slug directo
-  // - ahora genera /:slug y permite copiar/abrir
+  // LINK PÚBLICO
   // ─────────────────────────────
   const publicUrl = business?.slug
     ? `${window.location.origin}/${business.slug}`
     : null;
 
-const copyPublicLink = async () => {
-  if (!publicUrl) {
-    toast.error("Tu negocio todavía no tiene link público.");
-    return;
-  }
+  const copyPublicLink = async () => {
+    if (!publicUrl) {
+      toast.error("Tu negocio todavía no tiene link público.");
+      return;
+    }
 
-  try {
-    await navigator.clipboard.writeText(publicUrl);
-    toast.success("Link copiado al portapapeles");
-  } catch (e) {
-    toast.error("No se pudo copiar el link");
-  }
-};
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success("Link copiado al portapapeles");
+    } catch (e) {
+      toast.error("No se pudo copiar el link");
+    }
+  };
 
   const openPublicLink = () => {
     if (!publicUrl) {
@@ -60,10 +80,9 @@ const copyPublicLink = async () => {
     toast(label + " todavía no está disponible. Próximamente.");
   };
 
- const configurePayment = () => {
-+ navigate("/billing");
-};
-
+  const configurePayment = () => {
+    navigate("/billing");
+  };
 
   useEffect(() => {
     loadDashboard();
@@ -95,7 +114,7 @@ const copyPublicLink = async () => {
         .from("businesses")
         .select("*")
         .eq("owner_id", user.id)
-        .maybeSingle(); // evita tirar error si no hay fila
+        .maybeSingle();
 
       if (bizError) {
         console.error("Error cargando business:", bizError, "status:", bizStatus);
@@ -123,6 +142,9 @@ const copyPublicLink = async () => {
       if (servicesError) {
         console.error("Error cargando services:", servicesError);
       }
+
+      // NUEVO: guardo para pills (UI-only)
+      setAllServices(servicesData || []);
 
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
@@ -306,7 +328,7 @@ const copyPublicLink = async () => {
   const occupationLabel = `${occupation || 0}%`;
 
   // ─────────────────────────────
-  // LÓGICA DE PLAN / TRIAL SEGÚN TU TABLA REAL
+  // LÓGICA DE PLAN / TRIAL
   // ─────────────────────────────
   const today = new Date();
   const trialEndsDate = business?.trial_ends_at
@@ -327,7 +349,6 @@ const copyPublicLink = async () => {
   const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
   const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
 
-  // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -342,7 +363,6 @@ const copyPublicLink = async () => {
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
-      {/* Overlay solo si el trial terminó y NO es lifetime */}
       {trialExpired && !isLifetime && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-xl">
           <div className="max-w-sm w-full bg-slate-900/90 border border-emerald-400/40 rounded-3xl p-6 text-center shadow-[0_18px_60px_rgba(16,185,129,0.4)]">
@@ -380,11 +400,18 @@ const copyPublicLink = async () => {
         </div>
 
         <nav className="space-y-1 text-sm flex-1">
-          <SidebarItem label="Resumen" active onClick={() => navigate("/dashboard")} />
+          <SidebarItem
+            label="Resumen"
+            active
+            onClick={() => navigate("/dashboard")}
+          />
           <SidebarItem label="Agenda" onClick={() => navigate("/bookings")} />
           <SidebarItem label="Servicios" onClick={() => navigate("/services")} />
           <SidebarItem label="Horarios" onClick={() => navigate("/schedule")} />
-          <SidebarItem label="Bloqueos" onClick={() => navigate("/schedule-blocks")} />
+          <SidebarItem
+            label="Bloqueos"
+            onClick={() => navigate("/schedule-blocks")}
+          />
           <SidebarItem label="Ajustes" onClick={() => navigate("/setup")} />
         </nav>
 
@@ -477,6 +504,74 @@ const copyPublicLink = async () => {
             pill="Capacidad"
             sublabel="Hoy"
           />
+        </section>
+
+        {/* NUEVO: FILTROS RÁPIDOS (PILLS) */}
+        <section className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold">Filtros rápidos</h2>
+              <p className="text-[11px] text-slate-400">
+                Selección visual (no altera métricas todavía)
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectedServiceId(null);
+                setSelectedDay(null);
+              }}
+              className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              type="button"
+            >
+              Limpiar
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Servicios */}
+            <div>
+              <p className="text-[11px] text-slate-400 mb-2">Servicios</p>
+
+              {allServices.length === 0 ? (
+                <div className="text-[12px] text-slate-500">
+                  Todavía no tenés servicios cargados.
+                  <button
+                    className="ml-2 underline text-slate-300 hover:text-slate-100"
+                    onClick={goServices}
+                    type="button"
+                  >
+                    Crear servicio
+                  </button>
+                </div>
+              ) : (
+                <SelectPills
+                  options={allServices}
+                  value={selectedServiceId}
+                  onChange={setSelectedServiceId}
+                  getValue={(s) => s.id}
+                  getLabel={(s) =>
+                    `${s.name}${s.price ? ` — $${s.price}` : ""}${
+                      s.duration ? ` · ${s.duration} min` : ""
+                    }`
+                  }
+                />
+              )}
+            </div>
+
+            {/* Días */}
+            <div>
+              <p className="text-[11px] text-slate-400 mb-2">Días</p>
+
+              <SelectPills
+                options={DAYS}
+                value={selectedDay}
+                onChange={setSelectedDay}
+                getValue={(d) => d.value}
+                getLabel={(d) => d.label}
+              />
+            </div>
+          </div>
         </section>
 
         {/* AGENDA + LATERAL */}
@@ -656,7 +751,8 @@ const copyPublicLink = async () => {
                 </div>
               )}
             </div>
-            {/* LINK PÚBLICO (NUEVO) */}
+
+            {/* LINK PÚBLICO */}
             <div className="rounded-3xl bg-slate-900/70 border border-cyan-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(56,189,248,0.25)] p-5">
               <p className="text-[11px] text-cyan-300 mb-1">Link público</p>
 
@@ -693,8 +789,10 @@ const copyPublicLink = async () => {
 
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <QuickAction label="Crear servicio" onClick={goServices} />
-                <QuickAction label="Bloquear horario" onClick={goScheduleBlocks} />
-                {/* ELIMINADO: Ver link público (antes abría /book/:slug) */}
+                <QuickAction
+                  label="Bloquear horario"
+                  onClick={goScheduleBlocks}
+                />
                 <QuickAction label="Configurar horarios" onClick={goSetup} />
               </div>
             </div>
@@ -713,7 +811,6 @@ const copyPublicLink = async () => {
     </div>
   );
 }
-
 /* COMPONENTES */
 
 function SidebarItem({ label, active, onClick }) {
