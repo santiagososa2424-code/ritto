@@ -417,15 +417,13 @@ export default function PublicBooking() {
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
-            <button
-              type="button"
-              onClick={openMap}
-              className="w-full text-xs py-2 bg-white/5 hover:bg-white/10 transition"
-            >
-              Abrir mapa
-            </button>
-          </div>
-        )}
+          <button
+  onClick={() => window.open(business.map_url, "_blank")}
+  className="w-full mt-4 px-4 py-3 rounded-2xl bg-blue-500/10 border border-blue-400/30 text-blue-200 hover:bg-blue-500/20 transition text-sm"
+>
+  Ver dirección
+</button>
+
 
         {/* FORM */}
         <form
