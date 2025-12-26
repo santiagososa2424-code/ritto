@@ -16,6 +16,17 @@ const DAYS = {
 };
 
 const DAY_KEYS = Object.keys(DAYS);
+
+const DAY_ORDER = {
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+  domingo: 7,
+};
+
 const INTERVAL_OPTIONS = [15, 30, 45, 60];
 
 export default function Schedule() {
@@ -26,7 +37,7 @@ export default function Schedule() {
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState(1);
 
-  // ✅ MULTI-SELECT REAL PARA AGREGAR HORARIO
+  // Multi-select real para agregar horario
   const [selectedDays, setSelectedDays] = useState([]);
 
   const [slotInterval, setSlotInterval] = useState(30);
@@ -76,11 +87,20 @@ export default function Schedule() {
     const { data } = await supabase
       .from("schedules")
       .select("*")
-      .eq("business_id", biz.id)
-      .order("day_of_week", { ascending: true })
-      .order("start_time", { ascending: true });
+      .eq("business_id", biz.id);
 
-    setSchedules(data || []);
+    const ordered = (data || []).sort((a, b) => {
+      const dayDiff =
+        (DAY_ORDER[a.day_of_week] || 99) -
+        (DAY_ORDER[b.day_of_week] || 99);
+
+      if (dayDiff !== 0) return dayDiff;
+
+      // mismo día → ordenar por hora
+      return a.start_time.localeCompare(b.start_time);
+    });
+
+    setSchedules(ordered);
   };
 
   /* ─────────────────────────────
@@ -118,7 +138,6 @@ export default function Schedule() {
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    // validar solapamientos
     for (let day of selectedDays) {
       const sameDay = schedules.filter((s) => s.day_of_week === day);
 
