@@ -416,25 +416,18 @@ export default function PublicBooking() {
 </div>
 
 {/* MAPA */}
-{mapEmbedUrl && (
-  <div className="rounded-3xl overflow-hidden border border-white/10 shadow-xl">
-    <iframe
-      src={mapEmbedUrl}
-      className="w-full h-56"
-      loading="lazy"
-      referrerPolicy="no-referrer-when-downgrade"
-      title="Mapa"
-    />
-
+{business?.map_url && (
+  <div className="rounded-3xl border border-white/10 shadow-xl">
     <button
       type="button"
       onClick={openMap}
-      className="w-full px-4 py-3 bg-blue-500/10 border-t border-blue-400/30 text-blue-200 hover:bg-blue-500/20 transition text-sm"
+      className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
     >
-      Ver dirección
+      📍 Ver dirección
     </button>
   </div>
 )}
+
 
 
         {/* FORM */}
