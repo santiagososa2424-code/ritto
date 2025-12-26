@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import SelectPills from "../components/SelectPills";
 
 /* ─────────────────────────────
-   DÍAS NORMALIZADOS (CLAVE)
+   DÍAS NORMALIZADOS
 ───────────────────────────── */
 const DAYS = {
   lunes: "Lunes",
@@ -16,17 +15,9 @@ const DAYS = {
   domingo: "Domingo",
 };
 
-const DAY_OPTIONS = Object.keys(DAYS).map((d) => ({
-  value: d,
-  label: DAYS[d],
-}));
+const DAY_KEYS = Object.keys(DAYS);
+const INTERVAL_OPTIONS = [15, 30, 45, 60];
 
-const INTERVAL_OPTIONS = [
-  { value: 15, label: "15 min" },
-  { value: 30, label: "30 min" },
-  { value: 45, label: "45 min" },
-  { value: 60, label: "60 min" },
-];
 export default function Schedule() {
   const [business, setBusiness] = useState(null);
   const [schedules, setSchedules] = useState([]);
@@ -35,25 +26,8 @@ export default function Schedule() {
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState(1);
 
-  const [selectedDays, setSelectedDays] = useState({
-    lunes: true,
-    martes: false,
-    miercoles: false,
-    jueves: false,
-    viernes: false,
-    sabado: false,
-    domingo: false,
-  });
-
-  const [workingDays, setWorkingDays] = useState({
-    lunes: true,
-    martes: true,
-    miercoles: true,
-    jueves: true,
-    viernes: true,
-    sabado: true,
-    domingo: false,
-  });
+  // ✅ MULTI-SELECT REAL PARA AGREGAR HORARIO
+  const [selectedDays, setSelectedDays] = useState([]);
 
   const [slotInterval, setSlotInterval] = useState(30);
 
@@ -62,6 +36,9 @@ export default function Schedule() {
 
   const navigate = useNavigate();
 
+  /* ─────────────────────────────
+     CARGA INICIAL
+  ───────────────────────────── */
   useEffect(() => {
     loadData();
   }, []);
@@ -92,9 +69,9 @@ export default function Schedule() {
 
     setBusiness(biz);
 
-    if (biz.working_days) setWorkingDays(biz.working_days);
-    if (biz.slot_interval_minutes)
+    if (biz.slot_interval_minutes) {
       setSlotInterval(biz.slot_interval_minutes);
+    }
 
     const { data } = await supabase
       .from("schedules")
@@ -106,11 +83,13 @@ export default function Schedule() {
     setSchedules(data || []);
   };
 
+  /* ─────────────────────────────
+     GUARDAR CONFIG GENERAL
+  ───────────────────────────── */
   const saveBusinessSettings = async () => {
     const { error } = await supabase
       .from("businesses")
       .update({
-        working_days: workingDays,
         slot_interval_minutes: slotInterval,
       })
       .eq("id", business.id);
@@ -123,29 +102,24 @@ export default function Schedule() {
     setSuccess("Configuración guardada.");
   };
 
+  /* ─────────────────────────────
+     AGREGAR HORARIOS
+  ───────────────────────────── */
   const handleAdd = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!startTime || !endTime) {
-      setError("Completá todos los campos.");
-      return;
-    }
-
-    const daysToInsert = Object.keys(selectedDays).filter(
-      (d) => selectedDays[d] && workingDays[d]
-    );
-
-    if (daysToInsert.length === 0) {
-      setError("Seleccioná al menos un día.");
+    if (!startTime || !endTime || selectedDays.length === 0) {
+      setError("Completá todos los campos y seleccioná al menos un día.");
       return;
     }
 
     const newStart = startTime + ":00";
     const newEnd = endTime + ":00";
 
-    for (let day of daysToInsert) {
+    // validar solapamientos
+    for (let day of selectedDays) {
       const sameDay = schedules.filter((s) => s.day_of_week === day);
 
       for (let s of sameDay) {
@@ -156,7 +130,7 @@ export default function Schedule() {
       }
     }
 
-    const rows = daysToInsert.map((day) => ({
+    const rows = selectedDays.map((day) => ({
       business_id: business.id,
       day_of_week: day,
       start_time: newStart,
@@ -175,7 +149,16 @@ export default function Schedule() {
     setStartTime("");
     setEndTime("");
     setCapacity(1);
+    setSelectedDays([]);
     loadData();
+  };
+
+  const toggleDay = (day) => {
+    setSelectedDays((prev) =>
+      prev.includes(day)
+        ? prev.filter((d) => d !== day)
+        : [...prev, day]
+    );
   };
 
   const deleteSchedule = async (id) => {
@@ -183,6 +166,9 @@ export default function Schedule() {
     loadData();
   };
 
+  /* ─────────────────────────────
+     UI
+  ───────────────────────────── */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-4xl mx-auto space-y-10">
@@ -195,29 +181,23 @@ export default function Schedule() {
 
         {/* CONFIG GENERAL */}
         <Card title="Configuración general">
-          <Field label="Días de trabajo">
-            <SelectPills
-              options={DAY_OPTIONS}
-              value={Object.keys(workingDays).filter((d) => workingDays[d])}
-              onChange={(day) =>
-                setWorkingDays({
-                  ...workingDays,
-                  [day]: !workingDays[day],
-                })
-              }
-              getValue={(d) => d.value}
-              getLabel={(d) => d.label}
-            />
-          </Field>
-
           <Field label="Intervalo base">
-            <SelectPills
-              options={INTERVAL_OPTIONS}
-              value={slotInterval}
-              onChange={setSlotInterval}
-              getValue={(o) => o.value}
-              getLabel={(o) => o.label}
-            />
+            <div className="flex flex-wrap gap-2">
+              {INTERVAL_OPTIONS.map((min) => (
+                <button
+                  key={min}
+                  type="button"
+                  onClick={() => setSlotInterval(min)}
+                  className={`px-4 py-2 rounded-full border text-sm transition ${
+                    slotInterval === min
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-blue-500 text-blue-300 hover:bg-blue-500/10"
+                  }`}
+                >
+                  {min} min
+                </button>
+              ))}
+            </div>
           </Field>
 
           <button onClick={saveBusinessSettings} className="button-ritto">
@@ -260,20 +240,22 @@ export default function Schedule() {
                 Aplicar a los días:
               </p>
 
-              <SelectPills
-                options={DAY_OPTIONS.filter((d) => workingDays[d.value])}
-                value={Object.keys(selectedDays).filter(
-                  (d) => selectedDays[d]
-                )}
-                onChange={(day) =>
-                  setSelectedDays({
-                    ...selectedDays,
-                    [day]: !selectedDays[day],
-                  })
-                }
-                getValue={(d) => d.value}
-                getLabel={(d) => d.label}
-              />
+              <div className="flex flex-wrap gap-2">
+                {DAY_KEYS.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={`px-4 py-2 rounded-full border text-sm transition ${
+                      selectedDays.includes(day)
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "border-blue-500 text-blue-300 hover:bg-blue-500/10"
+                    }`}
+                  >
+                    {DAYS[day]}
+                  </button>
+                ))}
+              </div>
             </div>
           </form>
         </Card>
@@ -302,6 +284,9 @@ export default function Schedule() {
     </div>
   );
 }
+
+/* ───────── COMPONENTES ───────── */
+
 function Card({ title, children }) {
   return (
     <div className="bg-slate-900 p-6 rounded-3xl space-y-4">
