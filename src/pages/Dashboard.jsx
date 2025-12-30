@@ -1,3 +1,238 @@
+import { useEffect, useState } from "react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+
+export default function Dashboard() {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [appointmentsToday, setAppointmentsToday] = useState([]);
+  const [topServices, setTopServices] = useState([]);
+  const [noShowsThisMonth, setNoShowsThisMonth] = useState(0);
+  const [occupation, setOccupation] = useState(0);
+  const [estimatedRevenue, setEstimatedRevenue] = useState(0);
+
+  const [business, setBusiness] = useState(null);
+
+  const navigate = useNavigate();
+
+  /* ─────────────────────────────
+     HELPERS DE FECHA (FIJOS)
+  ───────────────────────────── */
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const endWeekStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const depositEnabled = business?.deposit_enabled === true;
+
+  /* ─────────────────────────────
+     NAVEGACIÓN
+  ───────────────────────────── */
+  const goAgenda = () => navigate("/schedule");
+  const goServices = () => navigate("/services");
+  const goBookings = () => navigate("/bookings");
+  const goSetup = () => navigate("/setup");
+  const goScheduleBlocks = () => navigate("/schedule-blocks");
+  const configurePayment = () => navigate("/billing");
+
+  useEffect(() => {
+    loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ─────────────────────────────
+     LOAD DASHBOARD (ÚNICO ORIGEN)
+  ───────────────────────────── */
+  const loadDashboard = async () => {
+    try {
+      setIsLoading(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        navigate("/login");
+        return;
+      }
+
+      const user = session.user;
+
+      const { data: biz, error: bizError } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("owner_id", user.id)
+        .maybeSingle();
+
+      if (bizError || !biz) {
+        toast.error("No se pudo cargar tu negocio.");
+        return;
+      }
+
+      setBusiness(biz);
+
+      /* ───────── TURNOS DE LA SEMANA ───────── */
+      const { data: bookingsWeek, error: bookingsWeekError } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("business_id", biz.id)
+        .gte("date", todayStr)
+        .lte("date", endWeekStr)
+        .order("date", { ascending: true })
+        .order("hour", { ascending: true });
+
+      if (bookingsWeekError) {
+        console.error("Error bookingsWeek:", bookingsWeekError);
+      }
+
+      setAppointmentsToday(bookingsWeek || []);
+
+      /* ───────── NO-SHOWS DEL MES ───────── */
+      const monthStart = todayStr.slice(0, 7) + "-01";
+
+      const { data: noShows } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("business_id", biz.id)
+        .eq("status", "no_show")
+        .gte("date", monthStart);
+
+      setNoShowsThisMonth(noShows?.length || 0);
+
+      /* ───────── SERVICIOS ───────── */
+      const { data: servicesData } = await supabase
+        .from("services")
+        .select("id, name, price, duration")
+        .eq("business_id", biz.id);
+
+      const servicesMap = new Map();
+      (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
+
+      /* ───────── ÚLTIMOS 30 DÍAS ───────── */
+      const date30 = new Date(Date.now() - 30 * 86400000)
+        .toISOString()
+        .slice(0, 10);
+
+      const { data: recentBookings } = await supabase
+        .from("bookings")
+        .select("service_id, service_name, status")
+        .eq("business_id", biz.id)
+        .gte("date", date30)
+        .lte("date", todayStr);
+
+      /* ───────── TOP SERVICIOS ───────── */
+      const counts = {};
+      (recentBookings || []).forEach((b) => {
+        const key = b.service_id || b.service_name;
+        counts[key] = (counts[key] || 0) + 1;
+      });
+
+      const top = Object.entries(counts)
+        .map(([id, count]) => {
+          const service =
+            servicesMap.get(id) ||
+            (servicesData || []).find((s) => s.name === id);
+
+          return {
+            id,
+            name: service?.name || id,
+            duration: service?.duration,
+            price: service?.price,
+            count,
+          };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+
+      setTopServices(top);
+
+      /* ───────── INGRESOS ───────── */
+      let totalRev = 0;
+      (recentBookings || [])
+        .filter((b) => b.status === "confirmed")
+        .forEach((b) => {
+          const svc = servicesMap.get(b.service_id);
+          totalRev += Number(svc?.price) || 0;
+        });
+
+      setEstimatedRevenue(totalRev);
+
+      /* ───────── OCUPACIÓN HOY ───────── */
+      const occupationValue = await calculateOccupation(
+        biz.id,
+        todayStr,
+        biz
+      );
+      setOccupation(occupationValue);
+    } catch (err) {
+      console.error("Dashboard error", err);
+      toast.error("Hubo un problema cargando el panel.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ─────────────────────────────
+     OCUPACIÓN
+  ───────────────────────────── */
+  const calculateOccupation = async (businessId, dateStr, biz) => {
+    try {
+      const dayName = new Date(dateStr)
+        .toLocaleDateString("es-UY", { weekday: "long" })
+        .toLowerCase();
+
+      const { data: schedules } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("business_id", businessId);
+
+      const todays = (schedules || []).filter(
+        (s) => (s.day_of_week || "").toLowerCase() === dayName
+      );
+
+      if (!todays.length) return 0;
+
+      const interval = biz.slot_interval_minutes || 30;
+      let totalSlots = 0;
+
+      todays.forEach((s) => {
+        let curr = s.start_time.slice(0, 5);
+        const end = s.end_time.slice(0, 5);
+
+        while (curr < end) {
+          totalSlots += s.capacity_per_slot || 1;
+          curr = addMinutes(curr, interval);
+        }
+      });
+
+      if (totalSlots === 0) return 0;
+
+      const { data: used } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("date", dateStr)
+        .eq("status", "confirmed");
+
+      return Math.round(((used?.length || 0) / totalSlots) * 100);
+    } catch {
+      return 0;
+    }
+  };
+
+  const addMinutes = (time, mins) => {
+    const [h, m] = time.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h);
+    d.setMinutes(m + Number(mins));
+    return `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes()
+    ).padStart(2, "0")}`;
+  };
       // ─────────────────────────────
       // 4) TURNOS DE LA SEMANA (ANTES: HOY)
       // ─────────────────────────────
