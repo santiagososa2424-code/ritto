@@ -446,7 +446,7 @@ export default function Dashboard() {
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
-// DASHBOARD.jsx — PARTE 3/4
+
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
           <div>
