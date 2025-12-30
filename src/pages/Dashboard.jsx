@@ -1,5 +1,5 @@
-// PARTE 1/4
-import { useEffect, useState } from "react";
+// DASHBOARD.jsx — PARTE 1/4
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [estimatedRevenue, setEstimatedRevenue] = useState(0);
 
   const [business, setBusiness] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const navigate = useNavigate();
 
@@ -43,6 +44,42 @@ export default function Dashboard() {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ─────────────────────────────
+     LINK PÚBLICO
+  ───────────────────────────── */
+  const publicLink = useMemo(() => {
+    if (!business?.slug) return "";
+    const origin =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : "";
+    return `${origin}/book/${business.slug}`;
+  }, [business?.slug]);
+
+  const copyPublicLink = async () => {
+    if (!publicLink) {
+      toast.error("Todavía no hay link público disponible.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(publicLink);
+      setCopied(true);
+      toast.success("Link copiado.");
+      setTimeout(() => setCopied(false), 1200);
+    } catch (e) {
+      console.error("copyPublicLink error:", e);
+      toast.error("No se pudo copiar.");
+    }
+  };
+
+  const openPublicLink = () => {
+    if (!publicLink) {
+      toast.error("Todavía no hay link público disponible.");
+      return;
+    }
+    window.open(publicLink, "_blank", "noopener,noreferrer");
+  };
 
   /* ─────────────────────────────
      ACCIONES SEÑA (MINIMAL)
@@ -136,10 +173,14 @@ export default function Dashboard() {
       setAppointmentsToday(bookingsWeek || []);
 
       /* ───────── SERVICIOS ───────── */
-      const { data: servicesData } = await supabase
+      const { data: servicesData, error: servicesError } = await supabase
         .from("services")
         .select("id, name, price, duration")
         .eq("business_id", biz.id);
+
+      if (servicesError) {
+        console.error("Error cargando services:", servicesError);
+      }
 
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
@@ -172,7 +213,7 @@ export default function Dashboard() {
         .map(([id, count]) => {
           const service =
             servicesMap.get(id) ||
-            (servicesData || []).find((s) => s.name === id);
+            (servicesData || []).find((s) => String(s.name) === String(id));
 
           return {
             id,
@@ -199,11 +240,7 @@ export default function Dashboard() {
       setEstimatedRevenue(totalRev);
 
       /* ───────── OCUPACIÓN HOY ───────── */
-      const occupationValue = await calculateOccupation(
-        biz.id,
-        todayStr,
-        biz
-      );
+      const occupationValue = await calculateOccupation(biz.id, todayStr, biz);
       setOccupation(occupationValue);
     } catch (err) {
       console.error("Dashboard error", err);
@@ -212,7 +249,7 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
-// PARTE 2/4
+// DASHBOARD.jsx — PARTE 2/4
   /* ─────────────────────────────
      OCUPACIÓN
   ───────────────────────────── */
@@ -363,7 +400,11 @@ export default function Dashboard() {
         </div>
 
         <nav className="space-y-1 text-sm flex-1">
-          <SidebarItem label="Resumen" active onClick={() => navigate("/dashboard")} />
+          <SidebarItem
+            label="Resumen"
+            active
+            onClick={() => navigate("/dashboard")}
+          />
           <SidebarItem label="Agenda" onClick={goBookings} />
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
@@ -405,6 +446,7 @@ export default function Dashboard() {
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
+// DASHBOARD.jsx — PARTE 3/4
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
           <div>
@@ -455,7 +497,7 @@ export default function Dashboard() {
             sublabel="Hoy"
           />
         </section>
-// PARTE 3/4
+
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* AGENDA SEMANAL */}
@@ -589,12 +631,138 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* LATERAL (CARDS) */}
+          <div className="flex flex-col gap-6">
+            {/* TRIAL ACTIVO */}
+            {trialActive && !isLifetime && (
+              <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-emerald-300/90 font-semibold">
+                    Prueba gratuita activa
+                  </p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
+                    {daysLeft} días
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mb-2">
+                  {daysLeft} días para enamorarte de Ritto
+                </p>
+                <p className="text-[11px] text-slate-300 mb-4">
+                  Usá la agenda sin límites. Después solo{" "}
+                  <span className="font-semibold">$690/mes</span>.
+                </p>
+                <button
+                  onClick={configurePayment}
+                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
+                >
+                  Configurar método de pago
+                </button>
+                <p className="text-[10px] text-slate-400 mt-3">
+                  • Sin permanencia · Cancelás cuando quieras
+                </p>
+              </div>
+            )}
+
+            {/* SERVICIOS TOP */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Servicios top</p>
+                <p className="text-[11px] text-slate-400">Últimos 30 días</p>
+              </div>
+
+              {topServices.length === 0 ? (
+                <p className="text-[12px] text-slate-400">
+                  No hay suficientes datos todavía.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {topServices.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-medium truncate">
+                          {s.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {s.duration ? `${s.duration} min` : "—"} ·{" "}
+                          {s.price ? `$${Number(s.price)}` : "—"}
+                        </p>
+                      </div>
+                      <span className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 text-slate-200 whitespace-nowrap">
+                        {s.count} turnos
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* LINK PÚBLICO */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <p className="text-sm font-semibold mb-1">Link público</p>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Copiá este link y compartilo con tus clientes.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-slate-200 truncate">
+                  {publicLink || "—"}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyPublicLink}
+                  className="text-[12px] px-4 py-2 rounded-2xl bg-cyan-300 text-slate-950 font-semibold hover:bg-cyan-200 transition"
+                >
+                  {copied ? "Copiado" : "Copiar"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={openPublicLink}
+                className="w-full mt-3 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              >
+                Abrir link público
+              </button>
+            </div>
+
+            {/* ATAJOS RÁPIDOS */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <p className="text-sm font-semibold mb-3">Atajos rápidos</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={goServices}
+                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Crear servicio
+                </button>
+                <button
+                  type="button"
+                  onClick={goScheduleBlocks}
+                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Bloquear horario
+                </button>
+                <button
+                  type="button"
+                  onClick={goAgenda}
+                  className="col-span-2 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Configurar horarios
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
   );
 }
-// PARTE 4/4
+// DASHBOARD.jsx — PARTE 4/4
 /* COMPONENTES */
 
 function MetricCard({ label, value, sublabel, pill }) {
