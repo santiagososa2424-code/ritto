@@ -551,8 +551,6 @@ export default function Dashboard() {
             active
             onClick={() => navigate("/dashboard")}
           />
-          {/* CAMBIO: Agenda -> Calendario */}
-          <SidebarItem label="Calendario" onClick={goBookings} />
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
