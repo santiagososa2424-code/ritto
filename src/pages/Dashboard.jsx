@@ -1,4 +1,3 @@
-// DASHBOARD.jsx — PARTE 1/4
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +13,16 @@ export default function Dashboard() {
 
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // ─────────────────────────────
+  // CALENDARIO (MES)
+  // ─────────────────────────────
+  const [calendarMonth, setCalendarMonth] = useState(
+    new Date().toISOString().slice(0, 7) // YYYY-MM
+  );
+  const [monthBookings, setMonthBookings] = useState([]);
+  const [isMonthLoading, setIsMonthLoading] = useState(false);
+  const [openDay, setOpenDay] = useState(""); // día abierto para ver detalle
 
   const navigate = useNavigate();
 
@@ -44,6 +53,13 @@ export default function Dashboard() {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cuando ya hay negocio, cargar el mes actual del calendario
+  useEffect(() => {
+    if (!business?.id) return;
+    loadMonthBookings(business.id, calendarMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, calendarMonth]);
 
   /* ─────────────────────────────
      LINK PÚBLICO
@@ -103,6 +119,7 @@ export default function Dashboard() {
       if (error) throw error;
       toast.success("Turno confirmado.");
       loadDashboard();
+      if (business?.id) loadMonthBookings(business.id, calendarMonth);
     } catch (e) {
       console.error("confirmBooking error:", e);
       toast.error("No se pudo confirmar.");
@@ -119,6 +136,7 @@ export default function Dashboard() {
       if (error) throw error;
       toast.success("Turno rechazado.");
       loadDashboard();
+      if (business?.id) loadMonthBookings(business.id, calendarMonth);
     } catch (e) {
       console.error("rejectBooking error:", e);
       toast.error("No se pudo rechazar.");
@@ -249,6 +267,46 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
+
+  /* ─────────────────────────────
+     LOAD BOOKINGS DEL MES (CALENDARIO)
+  ───────────────────────────── */
+  const loadMonthBookings = async (businessId, monthStr) => {
+    try {
+      setIsMonthLoading(true);
+
+      const [y, m] = (monthStr || "").split("-").map(Number);
+      if (!y || !m) return;
+
+      const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const monthEnd = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .select(
+          "id, date, hour, customer_name, service_name, status, transfer_pdf_url"
+        )
+        .eq("business_id", businessId)
+        .gte("date", monthStart)
+        .lte("date", monthEnd)
+        .order("date", { ascending: true })
+        .order("hour", { ascending: true });
+
+      if (error) {
+        console.error("Error loadMonthBookings:", error);
+        return;
+      }
+
+      setMonthBookings(data || []);
+    } catch (e) {
+      console.error("loadMonthBookings error:", e);
+    } finally {
+      setIsMonthLoading(false);
+    }
+  };
+
+  // La PARTE 2/4 arranca acá (helpers + lógica calendario + trial + render)
 // DASHBOARD.jsx — PARTE 2/4
   /* ─────────────────────────────
      OCUPACIÓN
@@ -325,6 +383,36 @@ export default function Dashboard() {
 
   const occupationLabel = `${occupation || 0}%`;
 
+  /* ─────────────────────────────
+     ESTADOS (LÓGICA SEÑA)
+     - Si NO hay seña: todo se muestra como Confirmado
+     - Si hay seña: se respeta status real (pending/confirmed/cancelled)
+  ───────────────────────────── */
+  const uiStatus = (booking) => {
+    if (!depositEnabled) return "confirmed";
+    return booking?.status || "confirmed";
+  };
+
+  const statusBadgeClasses = (status) => {
+    return status === "confirmed"
+      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
+      : status === "pending"
+      ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+      : status === "cancelled"
+      ? "border-rose-500/60 bg-rose-500/10 text-rose-200"
+      : "border-slate-500/60 bg-slate-500/10 text-slate-200";
+  };
+
+  const statusLabel = (status) => {
+    return status === "confirmed"
+      ? "Confirmado"
+      : status === "pending"
+      ? "Pendiente"
+      : status === "cancelled"
+      ? "Rechazado"
+      : "—";
+  };
+
   // ─────────────────────────────
   // LÓGICA DE PLAN / TRIAL SEGÚN TU TABLA REAL
   // ─────────────────────────────
@@ -346,6 +434,131 @@ export default function Dashboard() {
   const isTrial = subscription === "trial";
   const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
   const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
+
+  /* ─────────────────────────────
+     CALENDARIO (MES ACTUAL + NAVEGACIÓN)
+  ───────────────────────────── */
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [monthBookings, setMonthBookings] = useState([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState("");
+
+  const monthLabel = useMemo(() => {
+    try {
+      return calendarMonth.toLocaleDateString("es-UY", {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "";
+    }
+  }, [calendarMonth]);
+
+  const monthStartStr = useMemo(() => {
+    const d = new Date(calendarMonth);
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  }, [calendarMonth]);
+
+  const monthEndStr = useMemo(() => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(0); // último día del mes
+    return d.toISOString().slice(0, 10);
+  }, [calendarMonth]);
+
+  const loadMonthBookings = async (bizId, startStr, endStr) => {
+    try {
+      setCalendarLoading(true);
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("business_id", bizId)
+        .gte("date", startStr)
+        .lte("date", endStr)
+        .order("date", { ascending: true })
+        .order("hour", { ascending: true });
+
+      if (error) {
+        console.error("Error month bookings:", error);
+        setMonthBookings([]);
+        return;
+      }
+
+      setMonthBookings(data || []);
+    } catch (e) {
+      console.error("loadMonthBookings error:", e);
+      setMonthBookings([]);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!business?.id) return;
+    loadMonthBookings(business.id, monthStartStr, monthEndStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, monthStartStr, monthEndStr]);
+
+  const prevMonth = () => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() - 1);
+    d.setDate(1);
+    setSelectedDay("");
+    setCalendarMonth(d);
+  };
+
+  const nextMonth = () => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(1);
+    setSelectedDay("");
+    setCalendarMonth(d);
+  };
+
+  const monthMap = useMemo(() => {
+    const map = {};
+    (monthBookings || []).forEach((b) => {
+      const key = b.date;
+      if (!map[key]) map[key] = [];
+      map[key].push(b);
+    });
+    return map;
+  }, [monthBookings]);
+
+  const calendarDays = useMemo(() => {
+    const first = new Date(calendarMonth);
+    first.setDate(1);
+
+    const start = new Date(first);
+    // semana empieza lunes (es-UY)
+    const jsDay = start.getDay(); // 0 domingo, 1 lunes...
+    const diffToMonday = (jsDay + 6) % 7; // lunes=0
+    start.setDate(start.getDate() - diffToMonday);
+
+    const last = new Date(calendarMonth);
+    last.setMonth(last.getMonth() + 1);
+    last.setDate(0);
+
+    const end = new Date(last);
+    const endJsDay = end.getDay();
+    const diffToSunday = (7 - endJsDay) % 7;
+    end.setDate(end.getDate() + diffToSunday);
+
+    const days = [];
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }, [calendarMonth]);
 
   // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
@@ -405,7 +618,8 @@ export default function Dashboard() {
             active
             onClick={() => navigate("/dashboard")}
           />
-          <SidebarItem label="Agenda" onClick={goBookings} />
+          {/* CAMBIO: Agenda -> Calendario */}
+          <SidebarItem label="Calendario" onClick={goBookings} />
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
@@ -446,7 +660,6 @@ export default function Dashboard() {
 
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
-
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
           <div>
@@ -500,7 +713,338 @@ export default function Dashboard() {
 
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-          {/* AGENDA SEMANAL */}
+          {/* IZQUIERDA */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            {/* AGENDA SEMANAL */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Turnos de la semana</h2>
+                  <p className="text-[11px] text-slate-400">Próximos 7 días</p>
+                </div>
+                <button
+                  onClick={goBookings}
+                  className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
+                >
+                  Ver calendario
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div
+                  className={`grid text-[11px] border-b border-white/10 bg-slate-900/70 ${
+                    depositEnabled
+                      ? "grid-cols-[auto,auto,1fr,auto]"
+                      : "grid-cols-[auto,auto,1fr]"
+                  }`}
+                >
+                  <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                    Fecha
+                  </div>
+                  <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                    Hora
+                  </div>
+                  <div className="px-3 py-2 text-slate-400">
+                    Cliente · Servicio · Estado
+                  </div>
+                  {depositEnabled && (
+                    <div className="px-3 py-2 text-slate-400 border-l border-white/10 text-right">
+                      Seña
+                    </div>
+                  )}
+                </div>
+
+                <div className="max-h-[320px] overflow-auto text-[12px]">
+                  {appointmentsToday.length === 0 && (
+                    <div className="px-4 py-6 text-slate-500 text-sm">
+                      Todavía no tenés turnos esta semana.
+                    </div>
+                  )}
+
+                  {appointmentsToday.map((item) => {
+                    const st = uiStatus(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`grid border-b border-white/10 hover:bg-white/5 ${
+                          depositEnabled
+                            ? "grid-cols-[auto,auto,1fr,auto]"
+                            : "grid-cols-[auto,auto,1fr]"
+                        }`}
+                      >
+                        <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                          {item.date || "—"}
+                        </div>
+
+                        <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                          {item.hour?.slice(0, 5) || "--:--"}
+                        </div>
+
+                        <div className="px-3 py-2.5 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-slate-50">
+                              {item.customer_name}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {item.service_name}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
+                              st
+                            )}`}
+                          >
+                            {statusLabel(st)}
+                          </span>
+                        </div>
+
+                        {depositEnabled && (
+                          <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openProof(item)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                            >
+                              Ver PDF
+                            </button>
+
+                            {st === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rejectBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                >
+                                  Rechazar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">—</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* CALENDARIO MENSUAL */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Calendario</h2>
+                  <p className="text-[11px] text-slate-400 capitalize">
+                    {monthLabel}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={prevMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div className="grid grid-cols-7 text-[11px] border-b border-white/10 bg-slate-900/70">
+                  {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
+                    <div
+                      key={d}
+                      className="px-3 py-2 text-slate-400 border-r border-white/10 last:border-r-0"
+                    >
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7">
+                  {calendarDays.map((d) => {
+                    const dateStr = d.toISOString().slice(0, 10);
+                    const inMonth =
+                      d.getMonth() === calendarMonth.getMonth() &&
+                      d.getFullYear() === calendarMonth.getFullYear();
+
+                    const list = monthMap[dateStr] || [];
+                    const hasAny = list.length > 0;
+
+                    const isSelected = selectedDay === dateStr;
+
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        onClick={() =>
+                          setSelectedDay((prev) => (prev === dateStr ? "" : dateStr))
+                        }
+                        className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
+                          !inMonth ? "opacity-40" : ""
+                        } ${isSelected ? "bg-white/5" : ""}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-slate-200">
+                            {d.getDate()}
+                          </span>
+                          {hasAny && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
+                              {list.length}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2 space-y-1">
+                          {(list || []).slice(0, 2).map((b) => {
+                            const st = uiStatus(b);
+                            return (
+                              <div
+                                key={b.id}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <p className="text-[10px] text-slate-300 truncate">
+                                  {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                                  {b.service_name || "Servicio"}
+                                </p>
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
+                                    st
+                                  )}`}
+                                >
+                                  {statusLabel(st)}
+                                </span>
+                              </div>
+                            );
+                          })}
+
+                          {list.length > 2 && (
+                            <p className="text-[10px] text-slate-500">
+                              +{list.length - 2} más
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* DETALLE DEL DÍA */}
+              {selectedDay && (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold">
+                      {selectedDay}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDay("")}
+                      className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+
+                  {calendarLoading ? (
+                    <p className="text-[12px] text-slate-400">
+                      Cargando turnos...
+                    </p>
+                  ) : (monthMap[selectedDay] || []).length === 0 ? (
+                    <p className="text-[12px] text-slate-400">
+                      No hay turnos este día.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(monthMap[selectedDay] || []).map((b) => {
+                        const st = uiStatus(b);
+                        return (
+                          <div
+                            key={b.id}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/40 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-medium truncate">
+                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                                {b.customer_name || "Cliente"}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {b.service_name || "Servicio"}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
+                                  st
+                                )}`}
+                              >
+                                {statusLabel(st)}
+                              </span>
+
+                              {depositEnabled && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openProof(b)}
+                                    className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                                  >
+                                    Ver PDF
+                                  </button>
+
+                                  {st === "pending" ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmBooking(b.id)}
+                                        className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                      >
+                                        Confirmar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => rejectBooking(b.id)}
+                                        className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                      >
+                                        Rechazar
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DERECHA (CARDS) */}
+          <div className="flex flex-col gap-6">
+        {/* AGENDA + LATERAL */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+          {/* TURNOS SEMANA (SE MANTIENE IGUAL) */}
           <div className="lg:col-span-2 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -511,7 +1055,7 @@ export default function Dashboard() {
                 onClick={goBookings}
                 className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
               >
-                Ver agenda completa
+                Ver calendario
               </button>
             </div>
 
@@ -573,24 +1117,8 @@ export default function Dashboard() {
                         </p>
                       </div>
 
-                      <span
-                        className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${
-                          item.status === "confirmed"
-                            ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
-                            : item.status === "pending"
-                            ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-                            : item.status === "cancelled"
-                            ? "border-slate-500/60 bg-slate-500/10 text-slate-300"
-                            : "border-slate-500/60 bg-slate-500/10 text-slate-200"
-                        }`}
-                      >
-                        {item.status === "confirmed"
-                          ? "Confirmado"
-                          : item.status === "pending"
-                          ? "Pendiente"
-                          : item.status === "cancelled"
-                          ? "Cancelado"
-                          : "—"}
+                      <span className={getStatusPillClass(item)}>
+                        {getDisplayStatusLabel(item)}
                       </span>
                     </div>
 
@@ -634,6 +1162,196 @@ export default function Dashboard() {
 
           {/* LATERAL (CARDS) */}
           <div className="flex flex-col gap-6">
+            {/* CALENDARIO MENSUAL */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-semibold">Calendario</p>
+                  <p className="text-[11px] text-slate-400">{monthLabel}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={goPrevMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNextMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              {/* Encabezado días */}
+              <div className="grid grid-cols-7 gap-2 text-[10px] text-slate-400 mb-2">
+                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
+                  <div key={d} className="text-center">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Grilla calendario */}
+              <div className="grid grid-cols-7 gap-2">
+                {monthLoading ? (
+                  <div className="col-span-7 text-[12px] text-slate-400 py-6 text-center">
+                    Cargando calendario...
+                  </div>
+                ) : (
+                  monthCells.map((cell) => {
+                    const isSelected = cell.dateStr === selectedDayStr;
+                    const hasBookings = (cell.bookings || []).length > 0;
+
+                    return (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        onClick={() =>
+                          cell.inMonth ? setSelectedDayStr(cell.dateStr) : null
+                        }
+                        className={`rounded-2xl border transition p-2 text-left ${
+                          cell.inMonth
+                            ? "border-white/10 bg-white/5 hover:bg-white/10"
+                            : "border-transparent bg-transparent opacity-30 cursor-default"
+                        } ${isSelected ? "ring-2 ring-cyan-300/60" : ""}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-200">
+                            {cell.dayNumber}
+                          </span>
+                          {hasBookings && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
+                              {cell.bookings.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Preview (día + servicio al lado) */}
+                        {hasBookings && (
+                          <div className="mt-1 space-y-1">
+                            {(cell.bookings || []).slice(0, 2).map((b) => (
+                              <div
+                                key={b.id}
+                                className="text-[10px] text-slate-300 truncate"
+                                title={`${b.hour?.slice(0, 5) || "--:--"} · ${
+                                  b.service_name || "—"
+                                }`}
+                              >
+                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                                {b.service_name || "—"}
+                              </div>
+                            ))}
+                            {cell.bookings.length > 2 && (
+                              <div className="text-[10px] text-slate-400">
+                                +{cell.bookings.length - 2} más
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Detalle del día seleccionado */}
+              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-white/10 bg-slate-900/70 flex items-center justify-between">
+                  <div>
+                    <p className="text-[12px] font-semibold">Detalle del día</p>
+                    <p className="text-[11px] text-slate-400">
+                      {selectedDayStr || "—"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={goBookings}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    Ver completo
+                  </button>
+                </div>
+
+                <div className="max-h-[220px] overflow-auto">
+                  {selectedDayBookings.length === 0 ? (
+                    <div className="px-4 py-5 text-[12px] text-slate-400">
+                      No hay reservas para este día.
+                    </div>
+                  ) : (
+                    selectedDayBookings.map((b) => (
+                      <div
+                        key={b.id}
+                        className="px-3 py-3 border-b border-white/10 hover:bg-white/5 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-slate-50 truncate">
+                              {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                              {b.customer_name || "Cliente"}
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {b.service_name || "—"}
+                            </p>
+                          </div>
+
+                          <span className={getStatusPillClass(b)}>
+                            {getDisplayStatusLabel(b)}
+                          </span>
+                        </div>
+
+                        {depositEnabled && (
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openProof(b)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                            >
+                              Ver PDF
+                            </button>
+
+                            {b.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmBooking(b.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rejectBooking(b.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                >
+                                  Rechazar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-400 mt-3">
+                {depositEnabled
+                  ? "Estados: Pendiente / Confirmado / Cancelado. PDF visible solo con seña."
+                  : "Sin seña: todas las reservas se consideran confirmadas."}
+              </p>
+            </div>
+
             {/* TRIAL ACTIVO */}
             {trialActive && !isLifetime && (
               <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
@@ -758,40 +1476,437 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
-      </main>
-    </div>
-  );
-}
-// DASHBOARD.jsx — PARTE 4/4
-/* COMPONENTES */
+        {/* AGENDA + LATERAL */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+          {/* TURNOS SEMANA (SE MANTIENE IGUAL) */}
+          <div className="lg:col-span-2 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold">Turnos de la semana</h2>
+                <p className="text-[11px] text-slate-400">Próximos 7 días</p>
+              </div>
+              <button
+                onClick={goBookings}
+                className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
+              >
+                Ver calendario
+              </button>
+            </div>
 
-function MetricCard({ label, value, sublabel, pill }) {
-  return (
-    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-slate-400">{label}</p>
-        <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5">
-          {pill}
-        </span>
-      </div>
-      <p className="text-2xl font-semibold mt-1">{value}</p>
-      <p className="text-[11px] text-slate-500">{sublabel}</p>
-    </div>
-  );
-}
+            <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+              <div
+                className={`grid text-[11px] border-b border-white/10 bg-slate-900/70 ${
+                  depositEnabled
+                    ? "grid-cols-[auto,auto,1fr,auto]"
+                    : "grid-cols-[auto,auto,1fr]"
+                }`}
+              >
+                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                  Fecha
+                </div>
+                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                  Hora
+                </div>
+                <div className="px-3 py-2 text-slate-400">
+                  Cliente · Servicio · Estado
+                </div>
+                {depositEnabled && (
+                  <div className="px-3 py-2 text-slate-400 border-l border-white/10 text-right">
+                    Seña
+                  </div>
+                )}
+              </div>
 
-function SidebarItem({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2 rounded-2xl transition border ${
-        active
-          ? "bg-white/10 border-white/10 text-slate-50"
-          : "bg-transparent border-transparent text-slate-300 hover:bg-white/5 hover:border-white/10"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
+              <div className="max-h-[320px] overflow-auto text-[12px]">
+                {appointmentsToday.length === 0 && (
+                  <div className="px-4 py-6 text-slate-500 text-sm">
+                    Todavía no tenés turnos esta semana.
+                  </div>
+                )}
+
+                {appointmentsToday.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`grid border-b border-white/10 hover:bg-white/5 ${
+                      depositEnabled
+                        ? "grid-cols-[auto,auto,1fr,auto]"
+                        : "grid-cols-[auto,auto,1fr]"
+                    }`}
+                  >
+                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                      {item.date || "—"}
+                    </div>
+
+                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                      {item.hour?.slice(0, 5) || "--:--"}
+                    </div>
+
+                    <div className="px-3 py-2.5 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-50">
+                          {item.customer_name}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {item.service_name}
+                        </p>
+                      </div>
+
+                      <span className={getStatusPillClass(item)}>
+                        {getDisplayStatusLabel(item)}
+                      </span>
+                    </div>
+
+                    {depositEnabled && (
+                      <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openProof(item)}
+                          className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                        >
+                          Ver PDF
+                        </button>
+
+                        {item.status === "pending" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => confirmBooking(item.id)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => rejectBooking(item.id)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                            >
+                              Rechazar
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-slate-500">—</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* LATERAL (CARDS) */}
+          <div className="flex flex-col gap-6">
+            {/* CALENDARIO MENSUAL */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-semibold">Calendario</p>
+                  <p className="text-[11px] text-slate-400">{monthLabel}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={goPrevMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNextMonth}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              {/* Encabezado días */}
+              <div className="grid grid-cols-7 gap-2 text-[10px] text-slate-400 mb-2">
+                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
+                  <div key={d} className="text-center">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Grilla calendario */}
+              <div className="grid grid-cols-7 gap-2">
+                {monthLoading ? (
+                  <div className="col-span-7 text-[12px] text-slate-400 py-6 text-center">
+                    Cargando calendario...
+                  </div>
+                ) : (
+                  monthCells.map((cell) => {
+                    const isSelected = cell.dateStr === selectedDayStr;
+                    const hasBookings = (cell.bookings || []).length > 0;
+
+                    return (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        onClick={() =>
+                          cell.inMonth ? setSelectedDayStr(cell.dateStr) : null
+                        }
+                        className={`rounded-2xl border transition p-2 text-left ${
+                          cell.inMonth
+                            ? "border-white/10 bg-white/5 hover:bg-white/10"
+                            : "border-transparent bg-transparent opacity-30 cursor-default"
+                        } ${isSelected ? "ring-2 ring-cyan-300/60" : ""}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-200">
+                            {cell.dayNumber}
+                          </span>
+                          {hasBookings && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
+                              {cell.bookings.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Preview (día + servicio al lado) */}
+                        {hasBookings && (
+                          <div className="mt-1 space-y-1">
+                            {(cell.bookings || []).slice(0, 2).map((b) => (
+                              <div
+                                key={b.id}
+                                className="text-[10px] text-slate-300 truncate"
+                                title={`${b.hour?.slice(0, 5) || "--:--"} · ${
+                                  b.service_name || "—"
+                                }`}
+                              >
+                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                                {b.service_name || "—"}
+                              </div>
+                            ))}
+                            {cell.bookings.length > 2 && (
+                              <div className="text-[10px] text-slate-400">
+                                +{cell.bookings.length - 2} más
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Detalle del día seleccionado */}
+              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-white/10 bg-slate-900/70 flex items-center justify-between">
+                  <div>
+                    <p className="text-[12px] font-semibold">Detalle del día</p>
+                    <p className="text-[11px] text-slate-400">
+                      {selectedDayStr || "—"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={goBookings}
+                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    Ver completo
+                  </button>
+                </div>
+
+                <div className="max-h-[220px] overflow-auto">
+                  {selectedDayBookings.length === 0 ? (
+                    <div className="px-4 py-5 text-[12px] text-slate-400">
+                      No hay reservas para este día.
+                    </div>
+                  ) : (
+                    selectedDayBookings.map((b) => (
+                      <div
+                        key={b.id}
+                        className="px-3 py-3 border-b border-white/10 hover:bg-white/5 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-slate-50 truncate">
+                              {b.hour?.slice(0, 5) || "--:--"} ·{" "}
+                              {b.customer_name || "Cliente"}
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {b.service_name || "—"}
+                            </p>
+                          </div>
+
+                          <span className={getStatusPillClass(b)}>
+                            {getDisplayStatusLabel(b)}
+                          </span>
+                        </div>
+
+                        {depositEnabled && (
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openProof(b)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                            >
+                              Ver PDF
+                            </button>
+
+                            {b.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmBooking(b.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rejectBooking(b.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                >
+                                  Rechazar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-400 mt-3">
+                {depositEnabled
+                  ? "Estados: Pendiente / Confirmado / Cancelado. PDF visible solo con seña."
+                  : "Sin seña: todas las reservas se consideran confirmadas."}
+              </p>
+            </div>
+
+            {/* TRIAL ACTIVO */}
+            {trialActive && !isLifetime && (
+              <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-emerald-300/90 font-semibold">
+                    Prueba gratuita activa
+                  </p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
+                    {daysLeft} días
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mb-2">
+                  {daysLeft} días para enamorarte de Ritto
+                </p>
+                <p className="text-[11px] text-slate-300 mb-4">
+                  Usá la agenda sin límites. Después solo{" "}
+                  <span className="font-semibold">$690/mes</span>.
+                </p>
+                <button
+                  onClick={configurePayment}
+                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
+                >
+                  Configurar método de pago
+                </button>
+                <p className="text-[10px] text-slate-400 mt-3">
+                  • Sin permanencia · Cancelás cuando quieras
+                </p>
+              </div>
+            )}
+
+            {/* SERVICIOS TOP */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Servicios top</p>
+                <p className="text-[11px] text-slate-400">Últimos 30 días</p>
+              </div>
+
+              {topServices.length === 0 ? (
+                <p className="text-[12px] text-slate-400">
+                  No hay suficientes datos todavía.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {topServices.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-medium truncate">
+                          {s.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {s.duration ? `${s.duration} min` : "—"} ·{" "}
+                          {s.price ? `$${Number(s.price)}` : "—"}
+                        </p>
+                      </div>
+                      <span className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 text-slate-200 whitespace-nowrap">
+                        {s.count} turnos
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* LINK PÚBLICO */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <p className="text-sm font-semibold mb-1">Link público</p>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Copiá este link y compartilo con tus clientes.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-slate-200 truncate">
+                  {publicLink || "—"}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyPublicLink}
+                  className="text-[12px] px-4 py-2 rounded-2xl bg-cyan-300 text-slate-950 font-semibold hover:bg-cyan-200 transition"
+                >
+                  {copied ? "Copiado" : "Copiar"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={openPublicLink}
+                className="w-full mt-3 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              >
+                Abrir link público
+              </button>
+            </div>
+
+            {/* ATAJOS RÁPIDOS */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <p className="text-sm font-semibold mb-3">Atajos rápidos</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={goServices}
+                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Crear servicio
+                </button>
+                <button
+                  type="button"
+                  onClick={goScheduleBlocks}
+                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Bloquear horario
+                </button>
+                <button
+                  type="button"
+                  onClick={goAgenda}
+                  className="col-span-2 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Configurar horarios
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
