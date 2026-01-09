@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
 
   // ─────────────────────────────
-  // CALENDARIO (MES)
+  // CALENDARIO (MES) — ÚNICO (YYYY-MM)
   // ─────────────────────────────
   const [calendarMonth, setCalendarMonth] = useState(
     new Date().toISOString().slice(0, 7) // YYYY-MM
@@ -269,7 +269,7 @@ export default function Dashboard() {
   };
 
   /* ─────────────────────────────
-     LOAD BOOKINGS DEL MES (CALENDARIO)
+     LOAD BOOKINGS DEL MES (CALENDARIO) — ÚNICO
   ───────────────────────────── */
   const loadMonthBookings = async (businessId, monthStr) => {
     try {
@@ -305,9 +305,6 @@ export default function Dashboard() {
       setIsMonthLoading(false);
     }
   };
-
-  // La PARTE 2/4 arranca acá (helpers + lógica calendario + trial + render)
-// DASHBOARD.jsx — PARTE 2/4
   /* ─────────────────────────────
      OCUPACIÓN
   ───────────────────────────── */
@@ -380,7 +377,6 @@ export default function Dashboard() {
   const revenueLabel = new Intl.NumberFormat("es-UY").format(
     estimatedRevenue || 0
   );
-
   const occupationLabel = `${occupation || 0}%`;
 
   /* ─────────────────────────────
@@ -435,117 +431,28 @@ export default function Dashboard() {
   const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
   const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
 
-  /* ─────────────────────────────
-     CALENDARIO (MES ACTUAL + NAVEGACIÓN)
-  ───────────────────────────── */
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-  const [monthBookings, setMonthBookings] = useState([]);
-  const [calendarLoading, setCalendarLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState("");
-
   const monthLabel = useMemo(() => {
     try {
-      return calendarMonth.toLocaleDateString("es-UY", {
-        month: "long",
-        year: "numeric",
-      });
+      const [y, m] = (calendarMonth || "").split("-").map(Number);
+      if (!y || !m) return "";
+      const d = new Date(y, m - 1, 1);
+      return d.toLocaleDateString("es-UY", { month: "long", year: "numeric" });
     } catch {
       return "";
     }
   }, [calendarMonth]);
 
-  const monthStartStr = useMemo(() => {
-    const d = new Date(calendarMonth);
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  }, [calendarMonth]);
-
-  const monthEndStr = useMemo(() => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(0); // último día del mes
-    return d.toISOString().slice(0, 10);
-  }, [calendarMonth]);
-
-  const loadMonthBookings = async (bizId, startStr, endStr) => {
-    try {
-      setCalendarLoading(true);
-
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("business_id", bizId)
-        .gte("date", startStr)
-        .lte("date", endStr)
-        .order("date", { ascending: true })
-        .order("hour", { ascending: true });
-
-      if (error) {
-        console.error("Error month bookings:", error);
-        setMonthBookings([]);
-        return;
-      }
-
-      setMonthBookings(data || []);
-    } catch (e) {
-      console.error("loadMonthBookings error:", e);
-      setMonthBookings([]);
-    } finally {
-      setCalendarLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!business?.id) return;
-    loadMonthBookings(business.id, monthStartStr, monthEndStr);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, monthStartStr, monthEndStr]);
-
-  const prevMonth = () => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() - 1);
-    d.setDate(1);
-    setSelectedDay("");
-    setCalendarMonth(d);
-  };
-
-  const nextMonth = () => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(1);
-    setSelectedDay("");
-    setCalendarMonth(d);
-  };
-
-  const monthMap = useMemo(() => {
-    const map = {};
-    (monthBookings || []).forEach((b) => {
-      const key = b.date;
-      if (!map[key]) map[key] = [];
-      map[key].push(b);
-    });
-    return map;
-  }, [monthBookings]);
-
   const calendarDays = useMemo(() => {
-    const first = new Date(calendarMonth);
-    first.setDate(1);
+    const [y, m] = (calendarMonth || "").split("-").map(Number);
+    if (!y || !m) return [];
 
+    const first = new Date(y, m - 1, 1);
     const start = new Date(first);
-    // semana empieza lunes (es-UY)
     const jsDay = start.getDay(); // 0 domingo, 1 lunes...
     const diffToMonday = (jsDay + 6) % 7; // lunes=0
     start.setDate(start.getDate() - diffToMonday);
 
-    const last = new Date(calendarMonth);
-    last.setMonth(last.getMonth() + 1);
-    last.setDate(0);
-
+    const last = new Date(y, m, 0); // último día del mes
     const end = new Date(last);
     const endJsDay = end.getDay();
     const diffToSunday = (7 - endJsDay) % 7;
@@ -559,6 +466,32 @@ export default function Dashboard() {
     }
     return days;
   }, [calendarMonth]);
+
+  const monthMap = useMemo(() => {
+    const map = {};
+    (monthBookings || []).forEach((b) => {
+      const key = b.date;
+      if (!map[key]) map[key] = [];
+      map[key].push(b);
+    });
+    return map;
+  }, [monthBookings]);
+
+  const prevMonth = () => {
+    const [y, m] = (calendarMonth || "").split("-").map(Number);
+    if (!y || !m) return;
+    const d = new Date(y, m - 2, 1);
+    setOpenDay("");
+    setCalendarMonth(d.toISOString().slice(0, 7));
+  };
+
+  const nextMonth = () => {
+    const [y, m] = (calendarMonth || "").split("-").map(Number);
+    if (!y || !m) return;
+    const d = new Date(y, m, 1);
+    setOpenDay("");
+    setCalendarMonth(d.toISOString().slice(0, 7));
+  };
 
   // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
@@ -710,7 +643,6 @@ export default function Dashboard() {
             sublabel="Hoy"
           />
         </section>
-
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
@@ -881,21 +813,25 @@ export default function Dashboard() {
                 <div className="grid grid-cols-7">
                   {calendarDays.map((d) => {
                     const dateStr = d.toISOString().slice(0, 10);
+
+                    const [yy, mm] = (calendarMonth || "").split("-").map(Number);
                     const inMonth =
-                      d.getMonth() === calendarMonth.getMonth() &&
-                      d.getFullYear() === calendarMonth.getFullYear();
+                      yy &&
+                      mm &&
+                      d.getMonth() === mm - 1 &&
+                      d.getFullYear() === yy;
 
                     const list = monthMap[dateStr] || [];
                     const hasAny = list.length > 0;
 
-                    const isSelected = selectedDay === dateStr;
+                    const isSelected = openDay === dateStr;
 
                     return (
                       <button
                         key={dateStr}
                         type="button"
                         onClick={() =>
-                          setSelectedDay((prev) => (prev === dateStr ? "" : dateStr))
+                          setOpenDay((prev) => (prev === dateStr ? "" : dateStr))
                         }
                         className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
                           !inMonth ? "opacity-40" : ""
@@ -948,32 +884,30 @@ export default function Dashboard() {
               </div>
 
               {/* DETALLE DEL DÍA */}
-              {selectedDay && (
+              {openDay && (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold">
-                      {selectedDay}
-                    </p>
+                    <p className="text-sm font-semibold">{openDay}</p>
                     <button
                       type="button"
-                      onClick={() => setSelectedDay("")}
+                      onClick={() => setOpenDay("")}
                       className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
                     >
                       Cerrar
                     </button>
                   </div>
 
-                  {calendarLoading ? (
+                  {isMonthLoading ? (
                     <p className="text-[12px] text-slate-400">
                       Cargando turnos...
                     </p>
-                  ) : (monthMap[selectedDay] || []).length === 0 ? (
+                  ) : (monthMap[openDay] || []).length === 0 ? (
                     <p className="text-[12px] text-slate-400">
                       No hay turnos este día.
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {(monthMap[selectedDay] || []).map((b) => {
+                      {(monthMap[openDay] || []).map((b) => {
                         const st = uiStatus(b);
                         return (
                           <div
@@ -1042,316 +976,6 @@ export default function Dashboard() {
 
           {/* DERECHA (CARDS) */}
           <div className="flex flex-col gap-6">
-        {/* AGENDA + LATERAL */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-          {/* TURNOS SEMANA (SE MANTIENE IGUAL) */}
-          <div className="lg:col-span-2 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold">Turnos de la semana</h2>
-                <p className="text-[11px] text-slate-400">Próximos 7 días</p>
-              </div>
-              <button
-                onClick={goBookings}
-                className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
-              >
-                Ver calendario
-              </button>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-              <div
-                className={`grid text-[11px] border-b border-white/10 bg-slate-900/70 ${
-                  depositEnabled
-                    ? "grid-cols-[auto,auto,1fr,auto]"
-                    : "grid-cols-[auto,auto,1fr]"
-                }`}
-              >
-                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
-                  Fecha
-                </div>
-                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
-                  Hora
-                </div>
-                <div className="px-3 py-2 text-slate-400">
-                  Cliente · Servicio · Estado
-                </div>
-                {depositEnabled && (
-                  <div className="px-3 py-2 text-slate-400 border-l border-white/10 text-right">
-                    Seña
-                  </div>
-                )}
-              </div>
-
-              <div className="max-h-[320px] overflow-auto text-[12px]">
-                {appointmentsToday.length === 0 && (
-                  <div className="px-4 py-6 text-slate-500 text-sm">
-                    Todavía no tenés turnos esta semana.
-                  </div>
-                )}
-
-                {appointmentsToday.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`grid border-b border-white/10 hover:bg-white/5 ${
-                      depositEnabled
-                        ? "grid-cols-[auto,auto,1fr,auto]"
-                        : "grid-cols-[auto,auto,1fr]"
-                    }`}
-                  >
-                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
-                      {item.date || "—"}
-                    </div>
-
-                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
-                      {item.hour?.slice(0, 5) || "--:--"}
-                    </div>
-
-                    <div className="px-3 py-2.5 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-slate-50">
-                          {item.customer_name}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {item.service_name}
-                        </p>
-                      </div>
-
-                      <span className={getStatusPillClass(item)}>
-                        {getDisplayStatusLabel(item)}
-                      </span>
-                    </div>
-
-                    {depositEnabled && (
-                      <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openProof(item)}
-                          className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                        >
-                          Ver PDF
-                        </button>
-
-                        {item.status === "pending" ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => confirmBooking(item.id)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                            >
-                              Confirmar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => rejectBooking(item.id)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                            >
-                              Rechazar
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">—</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* LATERAL (CARDS) */}
-          <div className="flex flex-col gap-6">
-            {/* CALENDARIO MENSUAL */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold">Calendario</p>
-                  <p className="text-[11px] text-slate-400">{monthLabel}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goPrevMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNextMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    →
-                  </button>
-                </div>
-              </div>
-
-              {/* Encabezado días */}
-              <div className="grid grid-cols-7 gap-2 text-[10px] text-slate-400 mb-2">
-                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
-                  <div key={d} className="text-center">
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Grilla calendario */}
-              <div className="grid grid-cols-7 gap-2">
-                {monthLoading ? (
-                  <div className="col-span-7 text-[12px] text-slate-400 py-6 text-center">
-                    Cargando calendario...
-                  </div>
-                ) : (
-                  monthCells.map((cell) => {
-                    const isSelected = cell.dateStr === selectedDayStr;
-                    const hasBookings = (cell.bookings || []).length > 0;
-
-                    return (
-                      <button
-                        key={cell.key}
-                        type="button"
-                        onClick={() =>
-                          cell.inMonth ? setSelectedDayStr(cell.dateStr) : null
-                        }
-                        className={`rounded-2xl border transition p-2 text-left ${
-                          cell.inMonth
-                            ? "border-white/10 bg-white/5 hover:bg-white/10"
-                            : "border-transparent bg-transparent opacity-30 cursor-default"
-                        } ${isSelected ? "ring-2 ring-cyan-300/60" : ""}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-200">
-                            {cell.dayNumber}
-                          </span>
-                          {hasBookings && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
-                              {cell.bookings.length}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Preview (día + servicio al lado) */}
-                        {hasBookings && (
-                          <div className="mt-1 space-y-1">
-                            {(cell.bookings || []).slice(0, 2).map((b) => (
-                              <div
-                                key={b.id}
-                                className="text-[10px] text-slate-300 truncate"
-                                title={`${b.hour?.slice(0, 5) || "--:--"} · ${
-                                  b.service_name || "—"
-                                }`}
-                              >
-                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                                {b.service_name || "—"}
-                              </div>
-                            ))}
-                            {cell.bookings.length > 2 && (
-                              <div className="text-[10px] text-slate-400">
-                                +{cell.bookings.length - 2} más
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Detalle del día seleccionado */}
-              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-                <div className="px-3 py-2 border-b border-white/10 bg-slate-900/70 flex items-center justify-between">
-                  <div>
-                    <p className="text-[12px] font-semibold">Detalle del día</p>
-                    <p className="text-[11px] text-slate-400">
-                      {selectedDayStr || "—"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={goBookings}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    Ver completo
-                  </button>
-                </div>
-
-                <div className="max-h-[220px] overflow-auto">
-                  {selectedDayBookings.length === 0 ? (
-                    <div className="px-4 py-5 text-[12px] text-slate-400">
-                      No hay reservas para este día.
-                    </div>
-                  ) : (
-                    selectedDayBookings.map((b) => (
-                      <div
-                        key={b.id}
-                        className="px-3 py-3 border-b border-white/10 hover:bg-white/5 transition"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[12px] font-medium text-slate-50 truncate">
-                              {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                              {b.customer_name || "Cliente"}
-                            </p>
-                            <p className="text-[11px] text-slate-400 truncate">
-                              {b.service_name || "—"}
-                            </p>
-                          </div>
-
-                          <span className={getStatusPillClass(b)}>
-                            {getDisplayStatusLabel(b)}
-                          </span>
-                        </div>
-
-                        {depositEnabled && (
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openProof(b)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                            >
-                              Ver PDF
-                            </button>
-
-                            {b.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => confirmBooking(b.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                                >
-                                  Confirmar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => rejectBooking(b.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-slate-500">
-                                —
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <p className="text-[10px] text-slate-400 mt-3">
-                {depositEnabled
-                  ? "Estados: Pendiente / Confirmado / Cancelado. PDF visible solo con seña."
-                  : "Sin seña: todas las reservas se consideran confirmadas."}
-              </p>
-            </div>
-
             {/* TRIAL ACTIVO */}
             {trialActive && !isLifetime && (
               <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
@@ -1476,440 +1100,47 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
-        {/* AGENDA + LATERAL */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-          {/* TURNOS SEMANA (SE MANTIENE IGUAL) */}
-          <div className="lg:col-span-2 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold">Turnos de la semana</h2>
-                <p className="text-[11px] text-slate-400">Próximos 7 días</p>
-              </div>
-              <button
-                onClick={goBookings}
-                className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
-              >
-                Ver calendario
-              </button>
-            </div>
+      </main>
+    </div>
+  );
+}
 
-            <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-              <div
-                className={`grid text-[11px] border-b border-white/10 bg-slate-900/70 ${
-                  depositEnabled
-                    ? "grid-cols-[auto,auto,1fr,auto]"
-                    : "grid-cols-[auto,auto,1fr]"
-                }`}
-              >
-                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
-                  Fecha
-                </div>
-                <div className="px-3 py-2 text-slate-400 border-r border-white/10">
-                  Hora
-                </div>
-                <div className="px-3 py-2 text-slate-400">
-                  Cliente · Servicio · Estado
-                </div>
-                {depositEnabled && (
-                  <div className="px-3 py-2 text-slate-400 border-l border-white/10 text-right">
-                    Seña
-                  </div>
-                )}
-              </div>
+/* ─────────────────────────────
+   COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
+   - Mantienen estética existente
+──────────────────────────────────────── */
 
-              <div className="max-h-[320px] overflow-auto text-[12px]">
-                {appointmentsToday.length === 0 && (
-                  <div className="px-4 py-6 text-slate-500 text-sm">
-                    Todavía no tenés turnos esta semana.
-                  </div>
-                )}
+function SidebarItem({ label, onClick, active }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2 rounded-2xl transition border ${
+        active
+          ? "bg-white/10 border-white/15"
+          : "bg-transparent border-transparent hover:bg-white/5 hover:border-white/10"
+      }`}
+    >
+      <span className="text-[12px]">{label}</span>
+    </button>
+  );
+}
 
-                {appointmentsToday.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`grid border-b border-white/10 hover:bg-white/5 ${
-                      depositEnabled
-                        ? "grid-cols-[auto,auto,1fr,auto]"
-                        : "grid-cols-[auto,auto,1fr]"
-                    }`}
-                  >
-                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
-                      {item.date || "—"}
-                    </div>
-
-                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
-                      {item.hour?.slice(0, 5) || "--:--"}
-                    </div>
-
-                    <div className="px-3 py-2.5 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-slate-50">
-                          {item.customer_name}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {item.service_name}
-                        </p>
-                      </div>
-
-                      <span className={getStatusPillClass(item)}>
-                        {getDisplayStatusLabel(item)}
-                      </span>
-                    </div>
-
-                    {depositEnabled && (
-                      <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openProof(item)}
-                          className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                        >
-                          Ver PDF
-                        </button>
-
-                        {item.status === "pending" ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => confirmBooking(item.id)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                            >
-                              Confirmar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => rejectBooking(item.id)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                            >
-                              Rechazar
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">—</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* LATERAL (CARDS) */}
-          <div className="flex flex-col gap-6">
-            {/* CALENDARIO MENSUAL */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold">Calendario</p>
-                  <p className="text-[11px] text-slate-400">{monthLabel}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goPrevMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNextMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    →
-                  </button>
-                </div>
-              </div>
-
-              {/* Encabezado días */}
-              <div className="grid grid-cols-7 gap-2 text-[10px] text-slate-400 mb-2">
-                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
-                  <div key={d} className="text-center">
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Grilla calendario */}
-              <div className="grid grid-cols-7 gap-2">
-                {monthLoading ? (
-                  <div className="col-span-7 text-[12px] text-slate-400 py-6 text-center">
-                    Cargando calendario...
-                  </div>
-                ) : (
-                  monthCells.map((cell) => {
-                    const isSelected = cell.dateStr === selectedDayStr;
-                    const hasBookings = (cell.bookings || []).length > 0;
-
-                    return (
-                      <button
-                        key={cell.key}
-                        type="button"
-                        onClick={() =>
-                          cell.inMonth ? setSelectedDayStr(cell.dateStr) : null
-                        }
-                        className={`rounded-2xl border transition p-2 text-left ${
-                          cell.inMonth
-                            ? "border-white/10 bg-white/5 hover:bg-white/10"
-                            : "border-transparent bg-transparent opacity-30 cursor-default"
-                        } ${isSelected ? "ring-2 ring-cyan-300/60" : ""}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-200">
-                            {cell.dayNumber}
-                          </span>
-                          {hasBookings && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
-                              {cell.bookings.length}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Preview (día + servicio al lado) */}
-                        {hasBookings && (
-                          <div className="mt-1 space-y-1">
-                            {(cell.bookings || []).slice(0, 2).map((b) => (
-                              <div
-                                key={b.id}
-                                className="text-[10px] text-slate-300 truncate"
-                                title={`${b.hour?.slice(0, 5) || "--:--"} · ${
-                                  b.service_name || "—"
-                                }`}
-                              >
-                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                                {b.service_name || "—"}
-                              </div>
-                            ))}
-                            {cell.bookings.length > 2 && (
-                              <div className="text-[10px] text-slate-400">
-                                +{cell.bookings.length - 2} más
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Detalle del día seleccionado */}
-              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-                <div className="px-3 py-2 border-b border-white/10 bg-slate-900/70 flex items-center justify-between">
-                  <div>
-                    <p className="text-[12px] font-semibold">Detalle del día</p>
-                    <p className="text-[11px] text-slate-400">
-                      {selectedDayStr || "—"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={goBookings}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    Ver completo
-                  </button>
-                </div>
-
-                <div className="max-h-[220px] overflow-auto">
-                  {selectedDayBookings.length === 0 ? (
-                    <div className="px-4 py-5 text-[12px] text-slate-400">
-                      No hay reservas para este día.
-                    </div>
-                  ) : (
-                    selectedDayBookings.map((b) => (
-                      <div
-                        key={b.id}
-                        className="px-3 py-3 border-b border-white/10 hover:bg-white/5 transition"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[12px] font-medium text-slate-50 truncate">
-                              {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                              {b.customer_name || "Cliente"}
-                            </p>
-                            <p className="text-[11px] text-slate-400 truncate">
-                              {b.service_name || "—"}
-                            </p>
-                          </div>
-
-                          <span className={getStatusPillClass(b)}>
-                            {getDisplayStatusLabel(b)}
-                          </span>
-                        </div>
-
-                        {depositEnabled && (
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openProof(b)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                            >
-                              Ver PDF
-                            </button>
-
-                            {b.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => confirmBooking(b.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                                >
-                                  Confirmar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => rejectBooking(b.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-slate-500">
-                                —
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <p className="text-[10px] text-slate-400 mt-3">
-                {depositEnabled
-                  ? "Estados: Pendiente / Confirmado / Cancelado. PDF visible solo con seña."
-                  : "Sin seña: todas las reservas se consideran confirmadas."}
-              </p>
-            </div>
-
-            {/* TRIAL ACTIVO */}
-            {trialActive && !isLifetime && (
-              <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] text-emerald-300/90 font-semibold">
-                    Prueba gratuita activa
-                  </p>
-                  <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
-                    {daysLeft} días
-                  </span>
-                </div>
-                <p className="text-sm font-semibold mb-2">
-                  {daysLeft} días para enamorarte de Ritto
-                </p>
-                <p className="text-[11px] text-slate-300 mb-4">
-                  Usá la agenda sin límites. Después solo{" "}
-                  <span className="font-semibold">$690/mes</span>.
-                </p>
-                <button
-                  onClick={configurePayment}
-                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
-                >
-                  Configurar método de pago
-                </button>
-                <p className="text-[10px] text-slate-400 mt-3">
-                  • Sin permanencia · Cancelás cuando quieras
-                </p>
-              </div>
-            )}
-
-            {/* SERVICIOS TOP */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">Servicios top</p>
-                <p className="text-[11px] text-slate-400">Últimos 30 días</p>
-              </div>
-
-              {topServices.length === 0 ? (
-                <p className="text-[12px] text-slate-400">
-                  No hay suficientes datos todavía.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {topServices.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-medium truncate">
-                          {s.name}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {s.duration ? `${s.duration} min` : "—"} ·{" "}
-                          {s.price ? `$${Number(s.price)}` : "—"}
-                        </p>
-                      </div>
-                      <span className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 text-slate-200 whitespace-nowrap">
-                        {s.count} turnos
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* LINK PÚBLICO */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <p className="text-sm font-semibold mb-1">Link público</p>
-              <p className="text-[11px] text-slate-400 mb-3">
-                Copiá este link y compartilo con tus clientes.
-              </p>
-
-              <div className="flex items-center gap-2">
-                <div className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-slate-200 truncate">
-                  {publicLink || "—"}
-                </div>
-                <button
-                  type="button"
-                  onClick={copyPublicLink}
-                  className="text-[12px] px-4 py-2 rounded-2xl bg-cyan-300 text-slate-950 font-semibold hover:bg-cyan-200 transition"
-                >
-                  {copied ? "Copiado" : "Copiar"}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={openPublicLink}
-                className="w-full mt-3 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-              >
-                Abrir link público
-              </button>
-            </div>
-
-            {/* ATAJOS RÁPIDOS */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <p className="text-sm font-semibold mb-3">Atajos rápidos</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={goServices}
-                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Crear servicio
-                </button>
-                <button
-                  type="button"
-                  onClick={goScheduleBlocks}
-                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Bloquear horario
-                </button>
-                <button
-                  type="button"
-                  onClick={goAgenda}
-                  className="col-span-2 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Configurar horarios
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </>
-    );
+function MetricCard({ label, value, pill, sublabel }) {
+  return (
+    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] text-slate-400">{label}</p>
+        {pill ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
+            {pill}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-2xl font-semibold">{value}</p>
+      {sublabel ? (
+        <p className="text-[11px] text-slate-500 mt-1">{sublabel}</p>
+      ) : null}
+    </div>
+  );
 }
