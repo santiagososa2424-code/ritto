@@ -144,6 +144,19 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
+  // GUARDRAIL: si el servicio seleccionado ya no existe (ej: desactivado)
+  // ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedService) return;
+    const exists = (services || []).some((s) => s.id === selectedService.id);
+    if (!exists) {
+      setSelectedService(null);
+      setSelectedHour("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [services]);
+
+  // ────────────────────────────────────────────────
   // HORARIOS DISPONIBLES (LOGICA PRESERVADA)
   // ────────────────────────────────────────────────
   useEffect(() => {
