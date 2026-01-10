@@ -14,17 +14,103 @@ export default function Dashboard() {
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // ─────────────────────────────
-  // CALENDARIO (MES) — ÚNICO (YYYY-MM)
-  // ─────────────────────────────
-  const [calendarMonth, setCalendarMonth] = useState(
-    new Date().toISOString().slice(0, 7) // YYYY-MM
-  );
-  const [monthBookings, setMonthBookings] = useState([]);
-  const [isMonthLoading, setIsMonthLoading] = useState(false);
-  const [openDay, setOpenDay] = useState(""); // día abierto para ver detalle
+ // ─────────────────────────────
+// CALENDARIO (MES) — ÚNICO
+// ─────────────────────────────
+const [calendarMonth, setCalendarMonth] = useState(() => {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+});
 
-  const navigate = useNavigate();
+const [monthBookings, setMonthBookings] = useState([]);
+const [calendarLoading, setCalendarLoading] = useState(false);
+const [selectedDay, setSelectedDay] = useState("");
+
+const monthLabel = useMemo(() => {
+  try {
+    return calendarMonth.toLocaleDateString("es-UY", {
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}, [calendarMonth]);
+
+const monthStartStr = useMemo(() => {
+  const d = new Date(calendarMonth);
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}, [calendarMonth]);
+
+const monthEndStr = useMemo(() => {
+  const d = new Date(calendarMonth);
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}, [calendarMonth]);
+
+const loadMonthBookings = async (bizId, startStr, endStr) => {
+  try {
+    setCalendarLoading(true);
+
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id, date, hour, customer_name, service_name, status, transfer_pdf_url")
+      .eq("business_id", bizId)
+      .gte("date", startStr)
+      .lte("date", endStr)
+      .order("date", { ascending: true })
+      .order("hour", { ascending: true });
+
+    if (error) {
+      console.error("Error loadMonthBookings:", error);
+      setMonthBookings([]);
+      return;
+    }
+
+    setMonthBookings(data || []);
+  } catch (e) {
+    console.error("loadMonthBookings error:", e);
+    setMonthBookings([]);
+  } finally {
+    setCalendarLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (!business?.id) return;
+  loadMonthBookings(business.id, monthStartStr, monthEndStr);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [business?.id, monthStartStr, monthEndStr]);
+
+const prevMonth = () => {
+  const d = new Date(calendarMonth);
+  d.setMonth(d.getMonth() - 1);
+  d.setDate(1);
+  setSelectedDay("");
+  setCalendarMonth(d);
+};
+
+const nextMonth = () => {
+  const d = new Date(calendarMonth);
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(1);
+  setSelectedDay("");
+  setCalendarMonth(d);
+};
+
+const monthMap = useMemo(() => {
+  const map = {};
+  (monthBookings || []).forEach((b) => {
+    const key = b.date;
+    if (!map[key]) map[key] = [];
+    map[key].push(b);
+  });
+  return map;
+}, [monthBookings]);
 
   /* ─────────────────────────────
      HELPERS DE FECHA (FIJOS)
