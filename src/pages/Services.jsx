@@ -49,13 +49,13 @@ export default function Services() {
       }
 
       // Traer negocio
-   const { data: biz, error: bizError } = await supabase
-  .from("businesses")
-  .select("*")
-  .eq("owner_id", user.id)
-  .order("created_at", { ascending: true })
-  .limit(1)
-  .maybeSingle();
+      const { data: biz, error: bizError } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
       if (bizError || !biz) {
         setError("Configurá primero tu negocio.");
@@ -133,9 +133,14 @@ export default function Services() {
   // 🔄 ACTIVAR / DESACTIVAR
   // ----------------------------------------
   const toggleActive = async (service) => {
+    setError("");
+    setSuccess("");
+
+    const nextActive = !service.is_active;
+
     const { error } = await supabase
       .from("services")
-      .update({ is_active: !service.is_active })
+      .update({ is_active: nextActive })
       .eq("id", service.id);
 
     if (error) {
@@ -144,9 +149,7 @@ export default function Services() {
     }
 
     setServices((prev) =>
-      prev.map((s) =>
-        s.id === service.id ? { ...s, is_active: !s.is_active } : s
-      )
+      prev.map((s) => (s.id === service.id ? { ...s, is_active: nextActive } : s))
     );
   };
 
@@ -160,10 +163,14 @@ export default function Services() {
 
     setEditName(service?.name || "");
     setEditPrice(
-      service?.price !== null && service?.price !== undefined ? String(service.price) : ""
+      service?.price !== null && service?.price !== undefined
+        ? String(service.price)
+        : ""
     );
     setEditDuration(
-      service?.duration !== null && service?.duration !== undefined ? Number(service.duration) : 30
+      service?.duration !== null && service?.duration !== undefined
+        ? Number(service.duration)
+        : 30
     );
     setEditDescription(service?.description || "");
 
@@ -202,20 +209,22 @@ export default function Services() {
       description: editDescription,
     };
 
-    const { data, error: updateError } = await supabase
+    // ✅ FIX QUIRÚRGICO: update SIN select/single para evitar 406
+    const { error: updateError } = await supabase
       .from("services")
       .update(payload)
-      .eq("id", editingService.id)
-      .select()
-      .single();
+      .eq("id", editingService.id);
 
     if (updateError) {
       setError(updateError.message);
       return;
     }
 
+    // Actualizar state local manteniendo is_active y resto
     setServices((prev) =>
-      prev.map((s) => (s.id === editingService.id ? data : s))
+      prev.map((s) =>
+        s.id === editingService.id ? { ...s, ...payload } : s
+      )
     );
 
     setSuccess("Servicio actualizado correctamente.");
@@ -336,9 +345,7 @@ export default function Services() {
                 <p className="text-[11px] mt-2">
                   Estado:{" "}
                   <span
-                    className={
-                      s.is_active ? "text-emerald-300" : "text-slate-500"
-                    }
+                    className={s.is_active ? "text-emerald-300" : "text-slate-500"}
                   >
                     {s.is_active ? "Activo" : "Inactivo"}
                   </span>
