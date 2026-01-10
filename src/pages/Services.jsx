@@ -14,6 +14,17 @@ export default function Services() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // ----------------------------------------
+  // ✏️ EDITAR SERVICIO (NUEVO)
+  // ----------------------------------------
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+
+  const [editName, setEditName] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editDuration, setEditDuration] = useState(30);
+  const [editDescription, setEditDescription] = useState("");
+
   useEffect(() => {
     loadData();
   }, []);
@@ -138,6 +149,78 @@ export default function Services() {
   };
 
   // ----------------------------------------
+  // ✏️ EDITAR (NUEVO)
+  // ----------------------------------------
+  const openEdit = (service) => {
+    setError("");
+    setSuccess("");
+    setEditingService(service);
+
+    setEditName(service?.name || "");
+    setEditPrice(
+      service?.price !== null && service?.price !== undefined ? String(service.price) : ""
+    );
+    setEditDuration(
+      service?.duration !== null && service?.duration !== undefined ? Number(service.duration) : 30
+    );
+    setEditDescription(service?.description || "");
+
+    setIsEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setIsEditOpen(false);
+    setEditingService(null);
+
+    setEditName("");
+    setEditPrice("");
+    setEditDuration(30);
+    setEditDescription("");
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!editingService?.id) {
+      setError("No se pudo identificar el servicio a editar.");
+      return;
+    }
+
+    if (!editName || !editPrice || !editDuration) {
+      setError("Completá nombre, precio y duración.");
+      return;
+    }
+
+    const payload = {
+      name: editName,
+      price: Number(editPrice),
+      duration: Number(editDuration),
+      description: editDescription,
+    };
+
+    const { data, error: updateError } = await supabase
+      .from("services")
+      .update(payload)
+      .eq("id", editingService.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setServices((prev) =>
+      prev.map((s) => (s.id === editingService.id ? data : s))
+    );
+
+    setSuccess("Servicio actualizado correctamente.");
+    closeEdit();
+  };
+
+  // ----------------------------------------
   // 🌀 LOADING SCREEN
   // ----------------------------------------
   if (loading) {
@@ -157,7 +240,6 @@ export default function Services() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-4xl mx-auto space-y-10">
-
         {/* TÍTULO */}
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight">Servicios</h1>
@@ -167,16 +249,11 @@ export default function Services() {
         </div>
 
         {/* ALERTAS */}
-        {error && (
-          <Alert text={error} type="error" />
-        )}
-        {success && (
-          <Alert text={success} type="success" />
-        )}
+        {error && <Alert text={error} type="error" />}
+        {success && <Alert text={success} type="success" />}
 
         {/* FORM NUEVO SERVICIO */}
         <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-
           <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
             Agregar nuevo servicio
           </h2>
@@ -223,10 +300,7 @@ export default function Services() {
               />
             </Field>
 
-            <button
-              type="submit"
-              className="button-ritto sm:col-span-2 mt-2"
-            >
+            <button type="submit" className="button-ritto sm:col-span-2 mt-2">
               Crear servicio
             </button>
           </form>
@@ -243,10 +317,10 @@ export default function Services() {
           {services.map((s) => (
             <div
               key={s.id}
-              className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between"
+              className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex items-center justify-between gap-4"
             >
-              <div>
-                <p className="font-semibold text-lg tracking-tight">
+              <div className="min-w-0">
+                <p className="font-semibold text-lg tracking-tight truncate">
                   {s.name}
                 </p>
                 <p className="text-[13px] text-slate-300">
@@ -269,20 +343,100 @@ export default function Services() {
                 </p>
               </div>
 
-              <button
-                onClick={() => toggleActive(s)}
-                className={`px-4 py-2 rounded-2xl text-xs border backdrop-blur-xl transition ${
-                  s.is_active
-                    ? "text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10"
-                    : "text-slate-300 border-white/10 hover:bg-white/5"
-                }`}
-              >
-                {s.is_active ? "Desactivar" : "Activar"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openEdit(s)}
+                  className="px-4 py-2 rounded-2xl text-xs border border-white/10 text-slate-200 hover:bg-white/5 backdrop-blur-xl transition"
+                >
+                  Editar
+                </button>
+
+                <button
+                  onClick={() => toggleActive(s)}
+                  className={`px-4 py-2 rounded-2xl text-xs border backdrop-blur-xl transition ${
+                    s.is_active
+                      ? "text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10"
+                      : "text-slate-300 border-white/10 hover:bg-white/5"
+                  }`}
+                >
+                  {s.is_active ? "Desactivar" : "Activar"}
+                </button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* MODAL EDITAR (NUEVO) */}
+      {isEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-8">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Editar servicio</p>
+                <p className="text-[11px] text-slate-400">
+                  Actualizá nombre, precio, duración o descripción.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="px-3 py-1.5 rounded-2xl text-[11px] border border-white/10 text-slate-200 hover:bg-white/5 transition"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleUpdate}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            >
+              <Field label="Nombre">
+                <input
+                  type="text"
+                  className="input-ritto"
+                  placeholder="Corte clásico"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Precio (UYU)">
+                <input
+                  type="number"
+                  className="input-ritto"
+                  placeholder="650"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Duración (min)">
+                <input
+                  type="number"
+                  className="input-ritto"
+                  value={editDuration}
+                  onChange={(e) => setEditDuration(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Descripción (opcional)" full>
+                <textarea
+                  className="input-ritto resize-none h-20"
+                  placeholder="Descripción breve..."
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </Field>
+
+              <button type="submit" className="button-ritto sm:col-span-2 mt-2">
+                Guardar cambios
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
