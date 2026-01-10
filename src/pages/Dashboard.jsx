@@ -114,6 +114,34 @@ export default function Dashboard() {
     return map;
   }, [monthBookings]);
 
+  // ─────────────────────────────
+  // DÍAS DEL CALENDARIO (Lun–Dom)  ✅ FIX calendarDays
+  // ─────────────────────────────
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+
+    const first = new Date(year, month, 1);
+    first.setHours(0, 0, 0, 0);
+
+    // Lun(0) .. Dom(6)
+    const jsDay = first.getDay(); // Dom(0)..Sab(6)
+    const mondayIndex = (jsDay + 6) % 7;
+
+    const start = new Date(first);
+    start.setDate(first.getDate() - mondayIndex);
+    start.setHours(0, 0, 0, 0);
+
+    const days = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      d.setHours(0, 0, 0, 0);
+      days.push(d);
+    }
+    return days;
+  }, [calendarMonth]);
+
   /* ─────────────────────────────
      HELPERS DE FECHA (FIJOS)
   ───────────────────────────── */
@@ -409,6 +437,7 @@ export default function Dashboard() {
       return 0;
     }
   };
+
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -418,7 +447,6 @@ export default function Dashboard() {
       d.getMinutes()
     ).padStart(2, "0")}`;
   };
-
   const revenueLabel = new Intl.NumberFormat("es-UY").format(
     estimatedRevenue || 0
   );
@@ -810,7 +838,9 @@ export default function Dashboard() {
                         key={dateStr}
                         type="button"
                         onClick={() =>
-                          setSelectedDay((prev) => (prev === dateStr ? "" : dateStr))
+                          setSelectedDay((prev) =>
+                            prev === dateStr ? "" : dateStr
+                          )
                         }
                         className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
                           !inMonth ? "opacity-40" : ""
@@ -826,7 +856,6 @@ export default function Dashboard() {
                             </span>
                           )}
                         </div>
-
                         <div className="mt-2 space-y-1">
                           {(list || []).slice(0, 2).map((b) => {
                             const st = uiStatus(b);
@@ -952,6 +981,7 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+
           {/* DERECHA (CARDS) */}
           <div className="flex flex-col gap-6">
             {/* TRIAL ACTIVO */}
