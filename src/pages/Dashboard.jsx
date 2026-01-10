@@ -14,103 +14,105 @@ export default function Dashboard() {
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
 
- // ─────────────────────────────
-// CALENDARIO (MES) — ÚNICO
-// ─────────────────────────────
-const [calendarMonth, setCalendarMonth] = useState(() => {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-});
-
-const [monthBookings, setMonthBookings] = useState([]);
-const [calendarLoading, setCalendarLoading] = useState(false);
-const [selectedDay, setSelectedDay] = useState("");
-
-const monthLabel = useMemo(() => {
-  try {
-    return calendarMonth.toLocaleDateString("es-UY", {
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}, [calendarMonth]);
-
-const monthStartStr = useMemo(() => {
-  const d = new Date(calendarMonth);
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
-}, [calendarMonth]);
-
-const monthEndStr = useMemo(() => {
-  const d = new Date(calendarMonth);
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(0);
-  return d.toISOString().slice(0, 10);
-}, [calendarMonth]);
-
-const loadMonthBookings = async (bizId, startStr, endStr) => {
-  try {
-    setCalendarLoading(true);
-
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("id, date, hour, customer_name, service_name, status, transfer_pdf_url")
-      .eq("business_id", bizId)
-      .gte("date", startStr)
-      .lte("date", endStr)
-      .order("date", { ascending: true })
-      .order("hour", { ascending: true });
-
-    if (error) {
-      console.error("Error loadMonthBookings:", error);
-      setMonthBookings([]);
-      return;
-    }
-
-    setMonthBookings(data || []);
-  } catch (e) {
-    console.error("loadMonthBookings error:", e);
-    setMonthBookings([]);
-  } finally {
-    setCalendarLoading(false);
-  }
-};
-
-useEffect(() => {
-  if (!business?.id) return;
-  loadMonthBookings(business.id, monthStartStr, monthEndStr);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [business?.id, monthStartStr, monthEndStr]);
-
-const prevMonth = () => {
-  const d = new Date(calendarMonth);
-  d.setMonth(d.getMonth() - 1);
-  d.setDate(1);
-  setSelectedDay("");
-  setCalendarMonth(d);
-};
-
-const nextMonth = () => {
-  const d = new Date(calendarMonth);
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(1);
-  setSelectedDay("");
-  setCalendarMonth(d);
-};
-
-const monthMap = useMemo(() => {
-  const map = {};
-  (monthBookings || []).forEach((b) => {
-    const key = b.date;
-    if (!map[key]) map[key] = [];
-    map[key].push(b);
+  // ─────────────────────────────
+  // CALENDARIO (MES) — ÚNICO
+  // ─────────────────────────────
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
   });
-  return map;
-}, [monthBookings]);
+
+  const [monthBookings, setMonthBookings] = useState([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState("");
+
+  const monthLabel = useMemo(() => {
+    try {
+      return calendarMonth.toLocaleDateString("es-UY", {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "";
+    }
+  }, [calendarMonth]);
+
+  const monthStartStr = useMemo(() => {
+    const d = new Date(calendarMonth);
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  }, [calendarMonth]);
+
+  const monthEndStr = useMemo(() => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(0);
+    return d.toISOString().slice(0, 10);
+  }, [calendarMonth]);
+
+  const loadMonthBookings = async (bizId, startStr, endStr) => {
+    try {
+      setCalendarLoading(true);
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .select(
+          "id, date, hour, customer_name, service_name, status, transfer_pdf_url"
+        )
+        .eq("business_id", bizId)
+        .gte("date", startStr)
+        .lte("date", endStr)
+        .order("date", { ascending: true })
+        .order("hour", { ascending: true });
+
+      if (error) {
+        console.error("Error loadMonthBookings:", error);
+        setMonthBookings([]);
+        return;
+      }
+
+      setMonthBookings(data || []);
+    } catch (e) {
+      console.error("loadMonthBookings error:", e);
+      setMonthBookings([]);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!business?.id) return;
+    loadMonthBookings(business.id, monthStartStr, monthEndStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, monthStartStr, monthEndStr]);
+
+  const prevMonth = () => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() - 1);
+    d.setDate(1);
+    setSelectedDay("");
+    setCalendarMonth(d);
+  };
+
+  const nextMonth = () => {
+    const d = new Date(calendarMonth);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(1);
+    setSelectedDay("");
+    setCalendarMonth(d);
+  };
+
+  const monthMap = useMemo(() => {
+    const map = {};
+    (monthBookings || []).forEach((b) => {
+      const key = b.date;
+      if (!map[key]) map[key] = [];
+      map[key].push(b);
+    });
+    return map;
+  }, [monthBookings]);
 
   /* ─────────────────────────────
      HELPERS DE FECHA (FIJOS)
@@ -128,6 +130,8 @@ const monthMap = useMemo(() => {
   /* ─────────────────────────────
      NAVEGACIÓN
   ───────────────────────────── */
+  const navigate = useNavigate();
+
   const goAgenda = () => navigate("/schedule");
   const goServices = () => navigate("/services");
   const goBookings = () => navigate("/bookings");
@@ -139,13 +143,6 @@ const monthMap = useMemo(() => {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Cuando ya hay negocio, cargar el mes actual del calendario
-  useEffect(() => {
-    if (!business?.id) return;
-    loadMonthBookings(business.id, calendarMonth);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, calendarMonth]);
 
   /* ─────────────────────────────
      LINK PÚBLICO
@@ -205,7 +202,8 @@ const monthMap = useMemo(() => {
       if (error) throw error;
       toast.success("Turno confirmado.");
       loadDashboard();
-      if (business?.id) loadMonthBookings(business.id, calendarMonth);
+      if (business?.id)
+        loadMonthBookings(business.id, monthStartStr, monthEndStr);
     } catch (e) {
       console.error("confirmBooking error:", e);
       toast.error("No se pudo confirmar.");
@@ -222,7 +220,8 @@ const monthMap = useMemo(() => {
       if (error) throw error;
       toast.success("Turno rechazado.");
       loadDashboard();
-      if (business?.id) loadMonthBookings(business.id, calendarMonth);
+      if (business?.id)
+        loadMonthBookings(business.id, monthStartStr, monthEndStr);
     } catch (e) {
       console.error("rejectBooking error:", e);
       toast.error("No se pudo rechazar.");
@@ -294,13 +293,12 @@ const monthMap = useMemo(() => {
         .toISOString()
         .slice(0, 10);
 
-      const { data: recentBookings, error: recentBookingsError } =
-        await supabase
-          .from("bookings")
-          .select("service_id, service_name, status")
-          .eq("business_id", biz.id)
-          .gte("date", date30)
-          .lte("date", todayStr);
+      const { data: recentBookings, error: recentBookingsError } = await supabase
+        .from("bookings")
+        .select("service_id, service_name, status")
+        .eq("business_id", biz.id)
+        .gte("date", date30)
+        .lte("date", todayStr);
 
       if (recentBookingsError) {
         console.error("Error cargando recentBookings:", recentBookingsError);
@@ -355,43 +353,6 @@ const monthMap = useMemo(() => {
   };
 
   /* ─────────────────────────────
-     LOAD BOOKINGS DEL MES (CALENDARIO) — ÚNICO
-  ───────────────────────────── */
-  const loadMonthBookings = async (businessId, monthStr) => {
-    try {
-      setIsMonthLoading(true);
-
-      const [y, m] = (monthStr || "").split("-").map(Number);
-      if (!y || !m) return;
-
-      const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
-      const lastDay = new Date(y, m, 0).getDate();
-      const monthEnd = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-
-      const { data, error } = await supabase
-        .from("bookings")
-        .select(
-          "id, date, hour, customer_name, service_name, status, transfer_pdf_url"
-        )
-        .eq("business_id", businessId)
-        .gte("date", monthStart)
-        .lte("date", monthEnd)
-        .order("date", { ascending: true })
-        .order("hour", { ascending: true });
-
-      if (error) {
-        console.error("Error loadMonthBookings:", error);
-        return;
-      }
-
-      setMonthBookings(data || []);
-    } catch (e) {
-      console.error("loadMonthBookings error:", e);
-    } finally {
-      setIsMonthLoading(false);
-    }
-  };
-  /* ─────────────────────────────
      OCUPACIÓN
   ───────────────────────────── */
   const calculateOccupation = async (businessId, dateStr, biz) => {
@@ -399,7 +360,6 @@ const monthMap = useMemo(() => {
       const dayName = new Date(dateStr)
         .toLocaleDateString("es-UY", { weekday: "long" })
         .toLowerCase();
-
       const { data: schedules, error: schedulesError } = await supabase
         .from("schedules")
         .select("*")
@@ -516,68 +476,6 @@ const monthMap = useMemo(() => {
   const isTrial = subscription === "trial";
   const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
   const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
-
-  const monthLabel = useMemo(() => {
-    try {
-      const [y, m] = (calendarMonth || "").split("-").map(Number);
-      if (!y || !m) return "";
-      const d = new Date(y, m - 1, 1);
-      return d.toLocaleDateString("es-UY", { month: "long", year: "numeric" });
-    } catch {
-      return "";
-    }
-  }, [calendarMonth]);
-
-  const calendarDays = useMemo(() => {
-    const [y, m] = (calendarMonth || "").split("-").map(Number);
-    if (!y || !m) return [];
-
-    const first = new Date(y, m - 1, 1);
-    const start = new Date(first);
-    const jsDay = start.getDay(); // 0 domingo, 1 lunes...
-    const diffToMonday = (jsDay + 6) % 7; // lunes=0
-    start.setDate(start.getDate() - diffToMonday);
-
-    const last = new Date(y, m, 0); // último día del mes
-    const end = new Date(last);
-    const endJsDay = end.getDay();
-    const diffToSunday = (7 - endJsDay) % 7;
-    end.setDate(end.getDate() + diffToSunday);
-
-    const days = [];
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      days.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return days;
-  }, [calendarMonth]);
-
-  const monthMap = useMemo(() => {
-    const map = {};
-    (monthBookings || []).forEach((b) => {
-      const key = b.date;
-      if (!map[key]) map[key] = [];
-      map[key].push(b);
-    });
-    return map;
-  }, [monthBookings]);
-
-  const prevMonth = () => {
-    const [y, m] = (calendarMonth || "").split("-").map(Number);
-    if (!y || !m) return;
-    const d = new Date(y, m - 2, 1);
-    setOpenDay("");
-    setCalendarMonth(d.toISOString().slice(0, 7));
-  };
-
-  const nextMonth = () => {
-    const [y, m] = (calendarMonth || "").split("-").map(Number);
-    if (!y || !m) return;
-    const d = new Date(y, m, 1);
-    setOpenDay("");
-    setCalendarMonth(d.toISOString().slice(0, 7));
-  };
 
   // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
@@ -727,6 +625,7 @@ const monthMap = useMemo(() => {
             sublabel="Hoy"
           />
         </section>
+
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
@@ -853,6 +752,61 @@ const monthMap = useMemo(() => {
                 </div>
               </div>
             </div>
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {item.service_name}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
+                              st
+                            )}`}
+                          >
+                            {statusLabel(st)}
+                          </span>
+                        </div>
+
+                        {depositEnabled && (
+                          <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openProof(item)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                            >
+                              Ver PDF
+                            </button>
+
+                            {st === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rejectBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                >
+                                  Rechazar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
             {/* CALENDARIO MENSUAL */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
@@ -898,24 +852,21 @@ const monthMap = useMemo(() => {
                   {calendarDays.map((d) => {
                     const dateStr = d.toISOString().slice(0, 10);
 
-                    const [yy, mm] = (calendarMonth || "").split("-").map(Number);
                     const inMonth =
-                      yy &&
-                      mm &&
-                      d.getMonth() === mm - 1 &&
-                      d.getFullYear() === yy;
+                      d.getMonth() === calendarMonth.getMonth() &&
+                      d.getFullYear() === calendarMonth.getFullYear();
 
                     const list = monthMap[dateStr] || [];
                     const hasAny = list.length > 0;
 
-                    const isSelected = openDay === dateStr;
+                    const isSelected = selectedDay === dateStr;
 
                     return (
                       <button
                         key={dateStr}
                         type="button"
                         onClick={() =>
-                          setOpenDay((prev) => (prev === dateStr ? "" : dateStr))
+                          setSelectedDay((prev) => (prev === dateStr ? "" : dateStr))
                         }
                         className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
                           !inMonth ? "opacity-40" : ""
@@ -968,30 +919,30 @@ const monthMap = useMemo(() => {
               </div>
 
               {/* DETALLE DEL DÍA */}
-              {openDay && (
+              {selectedDay && (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold">{openDay}</p>
+                    <p className="text-sm font-semibold">{selectedDay}</p>
                     <button
                       type="button"
-                      onClick={() => setOpenDay("")}
+                      onClick={() => setSelectedDay("")}
                       className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
                     >
                       Cerrar
                     </button>
                   </div>
 
-                  {isMonthLoading ? (
+                  {calendarLoading ? (
                     <p className="text-[12px] text-slate-400">
                       Cargando turnos...
                     </p>
-                  ) : (monthMap[openDay] || []).length === 0 ? (
+                  ) : (monthMap[selectedDay] || []).length === 0 ? (
                     <p className="text-[12px] text-slate-400">
                       No hay turnos este día.
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {(monthMap[openDay] || []).map((b) => {
+                      {(monthMap[selectedDay] || []).map((b) => {
                         const st = uiStatus(b);
                         return (
                           <div
