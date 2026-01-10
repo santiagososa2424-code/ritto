@@ -409,7 +409,6 @@ export default function Dashboard() {
       return 0;
     }
   };
-
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -752,61 +751,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-                            </p>
-                            <p className="text-[11px] text-slate-400">
-                              {item.service_name}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
-                              st
-                            )}`}
-                          >
-                            {statusLabel(st)}
-                          </span>
-                        </div>
-
-                        {depositEnabled && (
-                          <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openProof(item)}
-                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                            >
-                              Ver PDF
-                            </button>
-
-                            {st === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => confirmBooking(item.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                                >
-                                  Confirmar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => rejectBooking(item.id)}
-                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-slate-500">
-                                —
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
             {/* CALENDARIO MENSUAL */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
@@ -1008,7 +952,6 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-
           {/* DERECHA (CARDS) */}
           <div className="flex flex-col gap-6">
             {/* TRIAL ACTIVO */}
