@@ -49,11 +49,13 @@ export default function Services() {
       }
 
       // Traer negocio
-      const { data: biz, error: bizError } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("owner_id", user.id)
-        .single();
+   const { data: biz, error: bizError } = await supabase
+  .from("businesses")
+  .select("*")
+  .eq("owner_id", user.id)
+  .order("created_at", { ascending: true })
+  .limit(1)
+  .maybeSingle();
 
       if (bizError || !biz) {
         setError("Configurá primero tu negocio.");
