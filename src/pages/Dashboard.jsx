@@ -107,7 +107,8 @@ export default function Dashboard() {
   const monthMap = useMemo(() => {
     const map = {};
     (monthBookings || []).forEach((b) => {
-      const key = b.date;
+      const key = (b?.date || "").slice(0, 10); // <- CLAVE
+      if (!key) return;
       if (!map[key]) map[key] = [];
       map[key].push(b);
     });
