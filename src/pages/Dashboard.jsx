@@ -56,11 +56,10 @@ export default function Dashboard() {
     try {
       setCalendarLoading(true);
 
+      // FIX: mismo origen que semanal (evita quedar vacío si una columna no existe)
       const { data, error } = await supabase
         .from("bookings")
-        .select(
-          "id, date, hour, customer_name, service_name, status, transfer_pdf_url"
-        )
+        .select("*")
         .eq("business_id", bizId)
         .gte("date", startStr)
         .lte("date", endStr)
@@ -107,7 +106,7 @@ export default function Dashboard() {
   const monthMap = useMemo(() => {
     const map = {};
     (monthBookings || []).forEach((b) => {
-      const key = (b?.date || "").slice(0, 10); // <- CLAVE
+      const key = (b?.date || "").slice(0, 10);
       if (!key) return;
       if (!map[key]) map[key] = [];
       map[key].push(b);
@@ -116,7 +115,7 @@ export default function Dashboard() {
   }, [monthBookings]);
 
   // ─────────────────────────────
-  // DÍAS DEL CALENDARIO (Lun–Dom)  ✅ FIX calendarDays
+  // DÍAS DEL CALENDARIO (Lun–Dom)
   // ─────────────────────────────
   const calendarDays = useMemo(() => {
     const year = calendarMonth.getFullYear();
@@ -213,7 +212,7 @@ export default function Dashboard() {
      ACCIONES SEÑA (MINIMAL)
   ───────────────────────────── */
   const openProof = (booking) => {
-    const url = booking?.transfer_pdf_url;
+    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
     if (!url) {
       toast.error("Este turno no tiene comprobante.");
       return;
@@ -380,145 +379,6 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
-
-  /* ─────────────────────────────
-     OCUPACIÓN
-  ───────────────────────────── */
-  const calculateOccupation = async (businessId, dateStr, biz) => {
-    try {
-      const dayName = new Date(dateStr)
-        .toLocaleDateString("es-UY", { weekday: "long" })
-        .toLowerCase();
-      const { data: schedules, error: schedulesError } = await supabase
-        .from("schedules")
-        .select("*")
-        .eq("business_id", businessId);
-
-      if (schedulesError) {
-        console.error("Error cargando schedules:", schedulesError);
-        return 0;
-      }
-
-      const todays = (schedules || []).filter(
-        (s) => (s.day_of_week || "").toLowerCase() === dayName
-      );
-
-      if (!todays.length) return 0;
-
-      const interval = biz.slot_interval_minutes || 30;
-      let totalSlots = 0;
-
-      todays.forEach((s) => {
-        let curr = s.start_time.slice(0, 5);
-        const end = s.end_time.slice(0, 5);
-
-        while (curr < end) {
-          totalSlots += s.capacity_per_slot || 1;
-          curr = addMinutes(curr, interval);
-        }
-      });
-
-      if (totalSlots === 0) return 0;
-
-      const { data: used, error: usedError } = await supabase
-        .from("bookings")
-        .select("id")
-        .eq("business_id", businessId)
-        .eq("date", dateStr)
-        .eq("status", "confirmed");
-
-      if (usedError) {
-        console.error("Error cargando used slots:", usedError);
-        return 0;
-      }
-
-      return Math.round(((used?.length || 0) / totalSlots) * 100);
-    } catch (e) {
-      console.error("calculateOccupation error", e);
-      return 0;
-    }
-  };
-
-  const addMinutes = (time, mins) => {
-    const [h, m] = time.split(":").map(Number);
-    const d = new Date();
-    d.setHours(h);
-    d.setMinutes(m + Number(mins));
-    return `${String(d.getHours()).padStart(2, "0")}:${String(
-      d.getMinutes()
-    ).padStart(2, "0")}`;
-  };
-  const revenueLabel = new Intl.NumberFormat("es-UY").format(
-    estimatedRevenue || 0
-  );
-  const occupationLabel = `${occupation || 0}%`;
-
-  /* ─────────────────────────────
-     ESTADOS (LÓGICA SEÑA)
-     - Si NO hay seña: todo se muestra como Confirmado
-     - Si hay seña: se respeta status real (pending/confirmed/cancelled)
-  ───────────────────────────── */
-  const uiStatus = (booking) => {
-    if (!depositEnabled) return "confirmed";
-    return booking?.status || "confirmed";
-  };
-
-  const statusBadgeClasses = (status) => {
-    return status === "confirmed"
-      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
-      : status === "pending"
-      ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-      : status === "cancelled"
-      ? "border-rose-500/60 bg-rose-500/10 text-rose-200"
-      : "border-slate-500/60 bg-slate-500/10 text-slate-200";
-  };
-
-  const statusLabel = (status) => {
-    return status === "confirmed"
-      ? "Confirmado"
-      : status === "pending"
-      ? "Pendiente"
-      : status === "cancelled"
-      ? "Rechazado"
-      : "—";
-  };
-
-  // ─────────────────────────────
-  // LÓGICA DE PLAN / TRIAL SEGÚN TU TABLA REAL
-  // ─────────────────────────────
-  const today = new Date();
-  const trialEndsDate = business?.trial_ends_at
-    ? new Date(business.trial_ends_at)
-    : null;
-
-  const msDiff =
-    trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
-      ? trialEndsDate.getTime() - today.getTime()
-      : null;
-
-  const daysLeft =
-    msDiff !== null ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : null;
-
-  const subscription = business?.subscription_status || null;
-  const isLifetime = subscription === "lifetime_free";
-  const isTrial = subscription === "trial";
-  const trialActive = isTrial && daysLeft !== null && daysLeft > 0;
-  const trialExpired = isTrial && daysLeft !== null && daysLeft <= 0;
-
-  // Loader inicial si todavía está cargando y no hay negocio
-  if (isLoading && !business) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
-        <div className="flex flex-col items-center gap-4 animate-fadeIn">
-          <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-blue-400 to-cyan-300 flex items-center justify-center text-black text-4xl font-extrabold animate-pulse shadow-xl">
-            R
-          </div>
-          <p className="text-white/80 animate-pulse">Cargando tu panel...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
       {/* Overlay solo si el trial terminó y NO es lifetime */}
@@ -823,7 +683,11 @@ export default function Dashboard() {
 
                 <div className="grid grid-cols-7">
                   {calendarDays.map((d) => {
-                    const dateStr = d.toISOString().slice(0, 10);
+                    // FIX: dateStr LOCAL (evita desfasaje UTC y matchea con monthMap)
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    const day = String(d.getDate()).padStart(2, "0");
+                    const dateStr = `${y}-${m}-${day}`;
 
                     const inMonth =
                       d.getMonth() === calendarMonth.getMonth() &&
@@ -1116,7 +980,6 @@ export default function Dashboard() {
 
 /* ─────────────────────────────
    COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
-   - Mantienen estética existente
 ──────────────────────────────────────── */
 
 function SidebarItem({ label, onClick, active }) {
