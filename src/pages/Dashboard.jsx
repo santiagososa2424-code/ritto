@@ -59,7 +59,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("bookings")
         .select(
-          "id, date, hour, customer_name, service_name, status, transfer_pdf_url"
+          "id, date, hour, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
         )
         .eq("business_id", bizId)
         .gte("date", startStr)
@@ -213,7 +213,7 @@ export default function Dashboard() {
      ACCIONES SEÑA (MINIMAL)
   ───────────────────────────── */
   const openProof = (booking) => {
-    const url = booking?.transfer_pdf_url;
+    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
     if (!url) {
       toast.error("Este turno no tiene comprobante.");
       return;
@@ -398,7 +398,6 @@ export default function Dashboard() {
         console.error("Error cargando schedules:", schedulesError);
         return 0;
       }
-
       const todays = (schedules || []).filter(
         (s) => (s.day_of_week || "").toLowerCase() === dayName
       );
@@ -823,7 +822,11 @@ export default function Dashboard() {
 
                 <div className="grid grid-cols-7">
                   {calendarDays.map((d) => {
-                    const dateStr = d.toISOString().slice(0, 10);
+                    // FIX: dateStr LOCAL (evita desfase UTC)
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    const day = String(d.getDate()).padStart(2, "0");
+                    const dateStr = `${y}-${m}-${day}`;
 
                     const inMonth =
                       d.getMonth() === calendarMonth.getMonth() &&
