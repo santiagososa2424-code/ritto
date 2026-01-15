@@ -299,7 +299,7 @@ export default function BusinessSetup() {
                   <Field label="Alias para transferencias">
                     <input
                       className="input-ritto"
-                      placeholder="Ej: mi.negocio.uy"
+                      placeholder="
                       value={depositTransferAlias}
                       onChange={(e) => setDepositTransferAlias(e.target.value)}
                     />
