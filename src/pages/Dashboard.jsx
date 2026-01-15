@@ -874,7 +874,6 @@ export default function Dashboard() {
                     {monthLabel}
                   </p>
                 </div>
-// Dashboard.jsx — PARTE 3/3
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
