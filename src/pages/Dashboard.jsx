@@ -1,3 +1,4 @@
+// Dashboard.jsx — PARTE 1/3
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -65,14 +66,37 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarMonth]);
 
+  /* ─────────────────────────────
+     FIX: HORA UI (si no hay hour, deriva desde start_time)
+  ───────────────────────────── */
+  const hourLabel = (b) => {
+    if (b?.hour) return b.hour?.slice(0, 5);
+    if (b?.start_time) {
+      const d = new Date(b.start_time);
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+    return "--:--";
+  };
+
+  /* ─────────────────────────────
+     FIX: loadMonthBookings robusto (date y/o start_time)
+     - No cambia estética ni lógica general: solo asegura que el mes cargue.
+  ───────────────────────────── */
   const loadMonthBookings = async (bizId, startStr, endStr) => {
     try {
       setCalendarLoading(true);
 
-      const { data, error } = await supabase
+      // Rango ISO por si algunas reservas vienen por start_time (timestamptz)
+      const startISO = new Date(`${startStr}T00:00:00`).toISOString();
+      const endISO = new Date(`${endStr}T23:59:59`).toISOString();
+
+      // 1) Intento principal: por date
+      const { data: byDate, error: byDateError } = await supabase
         .from("bookings")
         .select(
-          "id, date, hour, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
+          "id, date, hour, start_time, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
         )
         .eq("business_id", bizId)
         .gte("date", startStr)
@@ -80,13 +104,32 @@ export default function Dashboard() {
         .order("date", { ascending: true })
         .order("hour", { ascending: true });
 
-      if (error) {
-        console.error("Error loadMonthBookings:", error);
+      if (!byDateError && (byDate || []).length > 0) {
+        setMonthBookings(byDate || []);
+        return;
+      }
+
+      // 2) Fallback: por start_time
+      const { data: byStartTime, error: byStartTimeError } = await supabase
+        .from("bookings")
+        .select(
+          "id, date, hour, start_time, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
+        )
+        .eq("business_id", bizId)
+        .gte("start_time", startISO)
+        .lte("start_time", endISO)
+        .order("start_time", { ascending: true });
+
+      if (byStartTimeError) {
+        console.error(
+          "Error loadMonthBookings fallback(start_time):",
+          byStartTimeError
+        );
         setMonthBookings([]);
         return;
       }
 
-      setMonthBookings(data || []);
+      setMonthBookings(byStartTime || []);
     } catch (e) {
       console.error("loadMonthBookings error:", e);
       setMonthBookings([]);
@@ -119,14 +162,41 @@ export default function Dashboard() {
     setCalendarMonth(d);
   };
 
+  /* ─────────────────────────────
+     FIX: monthMap robusto (clave por date o start_time)
+     - Esto hace que el indicador y el contenido del mes siempre calcen.
+  ───────────────────────────── */
   const monthMap = useMemo(() => {
     const map = {};
+
     (monthBookings || []).forEach((b) => {
-      const key = (b?.date || "").slice(0, 10); // <- CLAVE
+      let key = (b?.date || "").slice(0, 10);
+
+      if (!key && b?.start_time) {
+        const d = new Date(b.start_time);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        key = `${y}-${m}-${day}`;
+      }
+
       if (!key) return;
       if (!map[key]) map[key] = [];
       map[key].push(b);
     });
+
+    Object.keys(map).forEach((k) => {
+      map[k].sort((a, b) => {
+        const ah = a?.hour ? String(a.hour).slice(0, 5) : "";
+        const bh = b?.hour ? String(b.hour).slice(0, 5) : "";
+        if (ah && bh) return ah.localeCompare(bh);
+
+        const at = a?.start_time ? new Date(a.start_time).getTime() : 0;
+        const bt = b?.start_time ? new Date(b.start_time).getTime() : 0;
+        return at - bt;
+      });
+    });
+
     return map;
   }, [monthBookings]);
 
@@ -431,7 +501,7 @@ export default function Dashboard() {
           curr = addMinutes(curr, interval);
         }
       });
-
+// Dashboard.jsx — PARTE 2/3
       if (totalSlots === 0) return 0;
 
       const { data: used, error: usedError } = await supabase
@@ -804,7 +874,7 @@ export default function Dashboard() {
                     {monthLabel}
                   </p>
                 </div>
-
+// Dashboard.jsx — PARTE 3/3
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -891,8 +961,7 @@ export default function Dashboard() {
                                 className="flex items-center justify-between gap-2"
                               >
                                 <p className="text-[10px] text-slate-300 truncate">
-                                  {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                                  {b.service_name || "Servicio"}
+                                  {hourLabel(b)} · {b.service_name || "Servicio"}
                                 </p>
                                 <span
                                   className={`text-[10px] px-2 py-0.5 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
@@ -950,8 +1019,7 @@ export default function Dashboard() {
                           >
                             <div className="min-w-0">
                               <p className="text-[12px] font-medium truncate">
-                                {b.hour?.slice(0, 5) || "--:--"} ·{" "}
-                                {b.customer_name || "Cliente"}
+                                {hourLabel(b)} · {b.customer_name || "Cliente"}
                               </p>
                               <p className="text-[11px] text-slate-400 truncate">
                                 {b.service_name || "Servicio"}
