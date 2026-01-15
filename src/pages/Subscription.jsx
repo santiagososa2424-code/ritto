@@ -8,56 +8,92 @@ export default function Subscription() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const CHECKOUT_URL =
-    "https://zightivavvfcoyuswpuq.supabase.co/functions/v1/create-mercadopago-checkout";
-
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {
+    setError("");
+    setLoading(true);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    setUser(user);
-
-    // obtener la suscripción del usuario
-    const { data: sub } = await supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    if (sub) {
-      setSubscription(sub);
-
-      const now = new Date();
-      const expires = new Date(sub.expires_at);
-
-      // calcular días restantes
-      const diff = Math.ceil((expires - now) / (1000 * 60 * 60 * 24));
-      setDaysLeft(diff);
+    if (!user) {
+      setLoading(false);
+      return;
     }
 
+    setUser(user);
+
+    // ✅ En tu app real lo venimos manejando desde businesses:
+    // - subscription_status: "trial" | "active" | "lifetime_free" | ...
+    // - trial_ends_at: timestamp
+    const { data: biz, error: bizErr } = await supabase
+      .from("businesses")
+      .select("id, subscription_status, trial_ends_at")
+      .eq("owner_id", user.id)
+      .single();
+
+    if (bizErr || !biz) {
+      // fallback suave: no rompemos UI
+      setSubscription(null);
+      setDaysLeft(0);
+      setLoading(false);
+      return;
+    }
+
+    const now = new Date();
+
+    const trialEndsDate = biz.trial_ends_at ? new Date(biz.trial_ends_at) : null;
+    const msDiff =
+      trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
+        ? trialEndsDate.getTime() - now.getTime()
+        : null;
+
+    const diffDays =
+      msDiff !== null ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : 0;
+
+    // armamos un objeto "subscription" compatible con tu UI actual
+    const subObj = {
+      active:
+        biz.subscription_status === "active" ||
+        biz.subscription_status === "lifetime_free",
+      status: biz.subscription_status || null,
+      expires_at: biz.trial_ends_at || null,
+    };
+
+    setSubscription(subObj);
+    setDaysLeft(diffDays);
     setLoading(false);
   };
 
   const handlePayment = async () => {
     setError("");
 
+    if (!user?.id) {
+      setError("No se pudo validar el usuario.");
+      return;
+    }
+
     try {
-      const res = await fetch(CHECKOUT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.id,
-        }),
-      });
+      // ✅ Llamada correcta: usa el mismo proyecto que supabaseClient.js
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "create-mercadopago-checkout",
+        {
+          body: { user_id: user.id },
+        }
+      );
 
-      const data = await res.json();
+      if (fnError) {
+        console.error(fnError);
+        setError("No se pudo generar el link de pago.");
+        return;
+      }
 
-      if (data.init_point) {
+      if (data?.init_point) {
         window.location.href = data.init_point;
       } else {
         setError("No se pudo generar el link de pago.");
