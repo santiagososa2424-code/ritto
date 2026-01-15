@@ -296,14 +296,14 @@ export default function BusinessSetup() {
                     />
                   </Field>
 
-                  <Field label="Alias para transferencias">
-                    <input
-                      className="input-ritto"
-                      placeholder="
-                      value={depositTransferAlias}
-                      onChange={(e) => setDepositTransferAlias(e.target.value)}
-                    />
-                  </Field>
+               <Field label="Número de transferencia">
+  <input
+    className="input-ritto"
+    value={depositTransferAlias}
+    onChange={(e) => setDepositTransferAlias(e.target.value)}
+  />
+</Field>
+
                 </div>
               </>
             )}
