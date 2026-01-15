@@ -13,18 +13,21 @@ export default function Billing() {
         return;
       }
 
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-subscription`,
+      const { data, error } = await supabase.functions.invoke(
+        "create-mercadopago-checkout",
         {
-          method: "POST",
+          body: { user_id: session.user.id },
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
         }
       );
 
-      const data = await res.json();
+      if (error) {
+        console.error("invoke error:", error);
+        toast.error("No se pudo iniciar el pago");
+        return;
+      }
 
       if (!data?.init_point) {
         toast.error("No se pudo iniciar el pago");
@@ -33,6 +36,7 @@ export default function Billing() {
 
       window.location.href = data.init_point;
     } catch (e) {
+      console.error("startPayment error:", e);
       toast.error("Error iniciando el pago");
     }
   };
@@ -40,14 +44,11 @@ export default function Billing() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6 text-slate-50">
-        
         <p className="text-[11px] text-emerald-400 uppercase tracking-widest mb-1">
           Plan mensual
         </p>
 
-        <h1 className="text-xl font-semibold mb-2">
-          Activar plan de Ritto
-        </h1>
+        <h1 className="text-xl font-semibold mb-2">Activar plan de Ritto</h1>
 
         <p className="text-sm text-slate-300 mb-5">
           Accedé a la agenda completa, reservas online y gestión sin límites.
