@@ -7,13 +7,16 @@ export default function BusinessSetup() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [mapUrl, setMapUrl] = useState("");
+  // const [mapUrl, setMapUrl] = useState(""); // (ELIMINADO)
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
   const [depositEnabled, setDepositEnabled] = useState(false);
+  // mantenemos en state por compat, pero solo permitimos fixed
   const [depositType, setDepositType] = useState("fixed");
-  const [depositValue, setDepositValue] = useState(0);
+
+  // FIX: input como string para poder borrar el 0
+  const [depositValue, setDepositValue] = useState("");
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -66,12 +69,19 @@ export default function BusinessSetup() {
 
     setName(biz.name || "");
     setAddress(biz.address || "");
-    setMapUrl(biz.map_url || "");
+    // setMapUrl(biz.map_url || ""); // (ELIMINADO)
     setEmail(biz.email || "");
     setPhone(biz.phone || "");
+
     setDepositEnabled(biz.deposit_enabled || false);
-    setDepositType(biz.deposit_type || "fixed");
-    setDepositValue(biz.deposit_value || 0);
+
+    // Solo fixed (por ahora). Si había percentage guardado, lo forzamos a fixed en UI.
+    setDepositType("fixed");
+
+    // FIX: string (si viene null/0, mostramos "0" o "" según preferencia)
+    // Acá conviene mostrar "0" si está activo y tiene 0, pero permitir borrar.
+    const dv = biz.deposit_value;
+    setDepositValue(dv === null || dv === undefined ? "" : String(dv));
   };
 
   const saveBusiness = async () => {
@@ -114,18 +124,23 @@ export default function BusinessSetup() {
       slugToSave = finalSlug;
     }
 
+    // FIX: convertir depositValue string -> number (seguro)
+    const parsedDepositValue = depositEnabled
+      ? Math.max(0, parseInt(String(depositValue || "0"), 10) || 0)
+      : 0;
+
     const { error: updateError } = await supabase
       .from("businesses")
       .update({
         name,
         slug: slugToSave,
         address,
-        map_url: mapUrl,
+        // map_url: mapUrl, // (ELIMINADO)
         email,
         phone,
         deposit_enabled: depositEnabled,
-        deposit_type: depositType,
-        deposit_value: depositValue,
+        deposit_type: "fixed", // forzado
+        deposit_value: parsedDepositValue,
       })
       .eq("id", business.id);
 
@@ -146,7 +161,6 @@ export default function BusinessSetup() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -194,13 +208,7 @@ export default function BusinessSetup() {
             />
           </Field>
 
-          <Field label="Google Maps URL">
-            <input
-              className="input-ritto"
-              value={mapUrl}
-              onChange={(e) => setMapUrl(e.target.value)}
-            />
-          </Field>
+          {/* Google Maps URL ELIMINADO */}
 
           <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 space-y-3">
             <label className="flex items-center gap-2 text-xs">
@@ -214,14 +222,15 @@ export default function BusinessSetup() {
 
             {depositEnabled && (
               <>
+                {/* Tipo de seña: solo Monto fijo (sin porcentaje) */}
                 <Field label="Tipo de seña">
                   <select
                     className="input-ritto"
                     value={depositType}
                     onChange={(e) => setDepositType(e.target.value)}
+                    disabled
                   >
                     <option value="fixed">Monto fijo</option>
-                    <option value="percentage">Porcentaje</option>
                   </select>
                 </Field>
 
@@ -230,9 +239,9 @@ export default function BusinessSetup() {
                     type="number"
                     className="input-ritto"
                     value={depositValue}
-                    onChange={(e) =>
-                      setDepositValue(Number(e.target.value))
-                    }
+                    onChange={(e) => setDepositValue(e.target.value)}
+                    placeholder="Ej: 200"
+                    min="0"
                   />
                 </Field>
               </>
