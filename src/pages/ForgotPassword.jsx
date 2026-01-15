@@ -19,7 +19,7 @@ export default function ForgotPassword() {
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
       {
-        redirectTo: "https://ritto.lat/reset-password",
+        redirectTo: "https://www.ritto.lat/reset-password",
       }
     );
 
@@ -35,11 +35,11 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen bg-[#0A0F1F] flex items-center justify-center px-6">
-
-      <div className="w-full max-w-md bg-[#0D1326] border border-[#1C243A]
+      <div
+        className="w-full max-w-md bg-[#0D1326] border border-[#1C243A]
                       rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.25)]
-                      p-10 text-white">
-
+                      p-10 text-white"
+      >
         {/* LOGO */}
         <div className="flex justify-center mb-6">
           <img src="/ritto-logo.svg" alt="Ritto" className="h-14 drop-shadow-xl" />
@@ -54,22 +54,25 @@ export default function ForgotPassword() {
         </p>
 
         {error && (
-          <p className="text-red-400 bg-red-400/10 border border-red-400/20
-                        px-3 py-2 rounded-lg mb-4 text-center text-sm">
+          <p
+            className="text-red-400 bg-red-400/10 border border-red-400/20
+                        px-3 py-2 rounded-lg mb-4 text-center text-sm"
+          >
             {error}
           </p>
         )}
 
         {success && (
-          <p className="text-green-400 bg-green-400/10 border border-green-400/20
-                        px-3 py-2 rounded-lg mb-4 text-center text-sm">
+          <p
+            className="text-green-400 bg-green-400/10 border border-green-400/20
+                        px-3 py-2 rounded-lg mb-4 text-center text-sm"
+          >
             {success}
           </p>
         )}
 
         {/* FORM */}
         <form onSubmit={handleReset} className="space-y-4">
-
           <div>
             <label className="block mb-1 text-blue-100/80 text-sm">Email</label>
             <input
@@ -94,14 +97,10 @@ export default function ForgotPassword() {
 
         {/* VOLVER */}
         <p className="text-center text-blue-100/50 text-sm mt-6">
-          <a
-            href="/login"
-            className="text-blue-400 hover:text-blue-300 underline"
-          >
+          <a href="/login" className="text-blue-400 hover:text-blue-300 underline">
             Volver al inicio de sesión
           </a>
         </p>
-
       </div>
     </div>
   );
