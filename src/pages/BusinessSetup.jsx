@@ -30,6 +30,7 @@ export default function BusinessSetup() {
 
   useEffect(() => {
     loadBusiness();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─────────────────────────────
@@ -107,14 +108,23 @@ export default function BusinessSetup() {
       return;
     }
 
+    // FIX: convertir depositValue string -> number (seguro)
+    const parsedDepositValue = depositEnabled
+      ? Math.max(0, parseInt(String(depositValue || "0"), 10) || 0)
+      : 0;
+
     // Si activa seña, pedimos los datos mínimos de transferencia
     if (depositEnabled) {
-      if (!String(depositValue || "").trim()) {
+      if (parsedDepositValue <= 0) {
         setError("Ingresá el valor de la seña.");
         return;
       }
-      if (!depositBank.trim() || !depositAccountName.trim() || !depositTransferAlias.trim()) {
-        setError("Completá Banco, Nombre y Alias para transferencias.");
+      if (
+        !depositBank.trim() ||
+        !depositAccountName.trim() ||
+        !depositTransferAlias.trim()
+      ) {
+        setError("Completá Banco, Nombre del titular y Número de transferencia.");
         return;
       }
     }
@@ -144,11 +154,6 @@ export default function BusinessSetup() {
 
       slugToSave = finalSlug;
     }
-
-    // FIX: convertir depositValue string -> number (seguro)
-    const parsedDepositValue = depositEnabled
-      ? Math.max(0, parseInt(String(depositValue || "0"), 10) || 0)
-      : 0;
 
     const { error: updateError } = await supabase
       .from("businesses")
@@ -267,7 +272,6 @@ export default function BusinessSetup() {
                     className="input-ritto"
                     value={depositValue}
                     onChange={(e) => setDepositValue(e.target.value)}
-                    placeholder="Ej: 200"
                     min="0"
                   />
                 </Field>
@@ -281,7 +285,6 @@ export default function BusinessSetup() {
                   <Field label="Banco">
                     <input
                       className="input-ritto"
-                      placeholder="Ej: Itaú / BROU / Santander"
                       value={depositBank}
                       onChange={(e) => setDepositBank(e.target.value)}
                     />
@@ -290,20 +293,18 @@ export default function BusinessSetup() {
                   <Field label="Nombre del titular">
                     <input
                       className="input-ritto"
-                      placeholder="Ej: Juan Pérez"
                       value={depositAccountName}
                       onChange={(e) => setDepositAccountName(e.target.value)}
                     />
                   </Field>
 
-               <Field label="Número de transferencia">
-  <input
-    className="input-ritto"
-    value={depositTransferAlias}
-    onChange={(e) => setDepositTransferAlias(e.target.value)}
-  />
-</Field>
-
+                  <Field label="Número de transferencia">
+                    <input
+                      className="input-ritto"
+                      value={depositTransferAlias}
+                      onChange={(e) => setDepositTransferAlias(e.target.value)}
+                    />
+                  </Field>
                 </div>
               </>
             )}
