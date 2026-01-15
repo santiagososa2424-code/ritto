@@ -1,4 +1,3 @@
-// Dashboard.jsx — PARTE 1/3
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -8,225 +7,11 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [appointmentsToday, setAppointmentsToday] = useState([]);
-  const [topServices, setTopServices] = useState([]);
   const [occupation, setOccupation] = useState(0);
   const [estimatedRevenue, setEstimatedRevenue] = useState(0);
 
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
-
-  // ─────────────────────────────
-  // CALENDARIO (MES) — ÚNICO
-  // ─────────────────────────────
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-
-  const [monthBookings, setMonthBookings] = useState([]);
-  const [calendarLoading, setCalendarLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState("");
-
-  // FIX: helper fecha LOCAL (evita desfase UTC)
-  const localDateStr = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
-  const monthLabel = useMemo(() => {
-    try {
-      return calendarMonth.toLocaleDateString("es-UY", {
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  }, [calendarMonth]);
-
-  // FIX: start/end del mes en formato LOCAL (no toISOString)
-  const monthStartStr = useMemo(() => {
-    const d = new Date(calendarMonth);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return localDateStr(d);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarMonth]);
-
-  const monthEndStr = useMemo(() => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(0);
-    d.setHours(0, 0, 0, 0);
-    return localDateStr(d);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarMonth]);
-
-  /* ─────────────────────────────
-     FIX: HORA UI (si no hay hour, deriva desde start_time)
-  ───────────────────────────── */
-  const hourLabel = (b) => {
-    if (b?.hour) return b.hour?.slice(0, 5);
-    if (b?.start_time) {
-      const d = new Date(b.start_time);
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      return `${hh}:${mm}`;
-    }
-    return "--:--";
-  };
-
-  /* ─────────────────────────────
-     FIX: loadMonthBookings robusto (date y/o start_time)
-     - No cambia estética ni lógica general: solo asegura que el mes cargue.
-  ───────────────────────────── */
-  const loadMonthBookings = async (bizId, startStr, endStr) => {
-    try {
-      setCalendarLoading(true);
-
-      // Rango ISO por si algunas reservas vienen por start_time (timestamptz)
-      const startISO = new Date(`${startStr}T00:00:00`).toISOString();
-      const endISO = new Date(`${endStr}T23:59:59`).toISOString();
-
-      // 1) Intento principal: por date
-      const { data: byDate, error: byDateError } = await supabase
-        .from("bookings")
-        .select(
-          "id, date, hour, start_time, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
-        )
-        .eq("business_id", bizId)
-        .gte("date", startStr)
-        .lte("date", endStr)
-        .order("date", { ascending: true })
-        .order("hour", { ascending: true });
-
-      if (!byDateError && (byDate || []).length > 0) {
-        setMonthBookings(byDate || []);
-        return;
-      }
-
-      // 2) Fallback: por start_time
-      const { data: byStartTime, error: byStartTimeError } = await supabase
-        .from("bookings")
-        .select(
-          "id, date, hour, start_time, customer_name, service_name, status, transfer_pdf_url, deposit_receipt_path"
-        )
-        .eq("business_id", bizId)
-        .gte("start_time", startISO)
-        .lte("start_time", endISO)
-        .order("start_time", { ascending: true });
-
-      if (byStartTimeError) {
-        console.error(
-          "Error loadMonthBookings fallback(start_time):",
-          byStartTimeError
-        );
-        setMonthBookings([]);
-        return;
-      }
-
-      setMonthBookings(byStartTime || []);
-    } catch (e) {
-      console.error("loadMonthBookings error:", e);
-      setMonthBookings([]);
-    } finally {
-      setCalendarLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!business?.id) return;
-    loadMonthBookings(business.id, monthStartStr, monthEndStr);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, monthStartStr, monthEndStr]);
-
-  const prevMonth = () => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() - 1);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    setSelectedDay("");
-    setCalendarMonth(d);
-  };
-
-  const nextMonth = () => {
-    const d = new Date(calendarMonth);
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    setSelectedDay("");
-    setCalendarMonth(d);
-  };
-
-  /* ─────────────────────────────
-     FIX: monthMap robusto (clave por date o start_time)
-     - Esto hace que el indicador y el contenido del mes siempre calcen.
-  ───────────────────────────── */
-  const monthMap = useMemo(() => {
-    const map = {};
-
-    (monthBookings || []).forEach((b) => {
-      let key = (b?.date || "").slice(0, 10);
-
-      if (!key && b?.start_time) {
-        const d = new Date(b.start_time);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        key = `${y}-${m}-${day}`;
-      }
-
-      if (!key) return;
-      if (!map[key]) map[key] = [];
-      map[key].push(b);
-    });
-
-    Object.keys(map).forEach((k) => {
-      map[k].sort((a, b) => {
-        const ah = a?.hour ? String(a.hour).slice(0, 5) : "";
-        const bh = b?.hour ? String(b.hour).slice(0, 5) : "";
-        if (ah && bh) return ah.localeCompare(bh);
-
-        const at = a?.start_time ? new Date(a.start_time).getTime() : 0;
-        const bt = b?.start_time ? new Date(b.start_time).getTime() : 0;
-        return at - bt;
-      });
-    });
-
-    return map;
-  }, [monthBookings]);
-
-  // ─────────────────────────────
-  // DÍAS DEL CALENDARIO (Lun–Dom)  ✅ FIX calendarDays
-  // ─────────────────────────────
-  const calendarDays = useMemo(() => {
-    const year = calendarMonth.getFullYear();
-    const month = calendarMonth.getMonth();
-
-    const first = new Date(year, month, 1);
-    first.setHours(0, 0, 0, 0);
-
-    // Lun(0) .. Dom(6)
-    const jsDay = first.getDay(); // Dom(0)..Sab(6)
-    const mondayIndex = (jsDay + 6) % 7;
-
-    const start = new Date(first);
-    start.setDate(first.getDate() - mondayIndex);
-    start.setHours(0, 0, 0, 0);
-
-    const days = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      d.setHours(0, 0, 0, 0);
-      days.push(d);
-    }
-    return days;
-  }, [calendarMonth]);
 
   /* ─────────────────────────────
      HELPERS DE FECHA (FIJOS)
@@ -316,8 +101,6 @@ export default function Dashboard() {
       if (error) throw error;
       toast.success("Turno confirmado.");
       loadDashboard();
-      if (business?.id)
-        loadMonthBookings(business.id, monthStartStr, monthEndStr);
     } catch (e) {
       console.error("confirmBooking error:", e);
       toast.error("No se pudo confirmar.");
@@ -334,8 +117,6 @@ export default function Dashboard() {
       if (error) throw error;
       toast.success("Turno rechazado.");
       loadDashboard();
-      if (business?.id)
-        loadMonthBookings(business.id, monthStartStr, monthEndStr);
     } catch (e) {
       console.error("rejectBooking error:", e);
       toast.error("No se pudo rechazar.");
@@ -418,38 +199,19 @@ export default function Dashboard() {
         console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      /* ───────── TOP SERVICIOS ───────── */
-      const counts = {};
-      (recentBookings || []).forEach((b) => {
-        const key = b.service_id || b.service_name;
-        counts[key] = (counts[key] || 0) + 1;
-      });
-
-      const top = Object.entries(counts)
-        .map(([id, count]) => {
-          const service =
-            servicesMap.get(id) ||
-            (servicesData || []).find((s) => String(s.name) === String(id));
-
-          return {
-            id,
-            name: service?.name || id,
-            duration: service?.duration,
-            price: service?.price,
-            count,
-          };
-        })
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-
-      setTopServices(top);
-
       /* ───────── INGRESOS ───────── */
       let totalRev = 0;
       (recentBookings || [])
-        .filter((b) => b.status === "confirmed")
+        .filter((b) => {
+          if (!depositEnabled) return b.status !== "cancelled";
+          return b.status === "confirmed";
+        })
         .forEach((b) => {
-          const svc = servicesMap.get(b.service_id);
+          const svc =
+            servicesMap.get(b.service_id) ||
+            (servicesData || []).find(
+              (s) => String(s.name) === String(b.service_name)
+            );
           totalRev += Number(svc?.price) || 0;
         });
 
@@ -465,15 +227,25 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
-
   /* ─────────────────────────────
-     OCUPACIÓN
+     OCUPACIÓN (FIX)
+     - Normaliza días (acentos)
+     - Cuenta pending+confirmed si hay seña
+     - Si no hay seña: cuenta todo excepto cancelled (incluye null)
   ───────────────────────────── */
+  const normalizeDay = (str) =>
+    (str || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
   const calculateOccupation = async (businessId, dateStr, biz) => {
     try {
-      const dayName = new Date(dateStr)
-        .toLocaleDateString("es-UY", { weekday: "long" })
-        .toLowerCase();
+      const dayName = normalizeDay(
+        new Date(dateStr).toLocaleDateString("es-UY", { weekday: "long" })
+      );
+
       const { data: schedules, error: schedulesError } = await supabase
         .from("schedules")
         .select("*")
@@ -483,8 +255,9 @@ export default function Dashboard() {
         console.error("Error cargando schedules:", schedulesError);
         return 0;
       }
+
       const todays = (schedules || []).filter(
-        (s) => (s.day_of_week || "").toLowerCase() === dayName
+        (s) => normalizeDay(s.day_of_week) === dayName
       );
 
       if (!todays.length) return 0;
@@ -501,22 +274,26 @@ export default function Dashboard() {
           curr = addMinutes(curr, interval);
         }
       });
-// Dashboard.jsx — PARTE 2/3
+
       if (totalSlots === 0) return 0;
 
       const { data: used, error: usedError } = await supabase
         .from("bookings")
-        .select("id")
+        .select("status")
         .eq("business_id", businessId)
-        .eq("date", dateStr)
-        .eq("status", "confirmed");
+        .eq("date", dateStr);
 
       if (usedError) {
         console.error("Error cargando used slots:", usedError);
         return 0;
       }
 
-      return Math.round(((used?.length || 0) / totalSlots) * 100);
+      const occupied = (used || []).filter((b) => {
+        if (!depositEnabled) return b.status !== "cancelled";
+        return b.status === "confirmed" || b.status === "pending";
+      }).length;
+
+      return Math.round((occupied / totalSlots) * 100);
     } catch (e) {
       console.error("calculateOccupation error", e);
       return 0;
@@ -532,6 +309,7 @@ export default function Dashboard() {
       d.getMinutes()
     ).padStart(2, "0")}`;
   };
+
   const revenueLabel = new Intl.NumberFormat("es-UY").format(
     estimatedRevenue || 0
   );
@@ -628,7 +406,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
       {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
         <div className="flex items-center gap-3 mb-10">
@@ -864,215 +641,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
-            {/* CALENDARIO MENSUAL */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-sm font-semibold">Calendario</h2>
-                  <p className="text-[11px] text-slate-400 capitalize">
-                    {monthLabel}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={prevMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextMonth}
-                    className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    →
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-                <div className="grid grid-cols-7 text-[11px] border-b border-white/10 bg-slate-900/70">
-                  {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
-                    <div
-                      key={d}
-                      className="px-3 py-2 text-slate-400 border-r border-white/10 last:border-r-0"
-                    >
-                      {d}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-7">
-                  {calendarDays.map((d) => {
-                    // FIX: dateStr LOCAL (evita desfase UTC)
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, "0");
-                    const day = String(d.getDate()).padStart(2, "0");
-                    const dateStr = `${y}-${m}-${day}`;
-
-                    const inMonth =
-                      d.getMonth() === calendarMonth.getMonth() &&
-                      d.getFullYear() === calendarMonth.getFullYear();
-
-                    const list = monthMap[dateStr] || [];
-                    const hasAny = list.length > 0;
-
-                    const isSelected = selectedDay === dateStr;
-
-                    return (
-                      <button
-                        key={dateStr}
-                        type="button"
-                        onClick={() =>
-                          setSelectedDay((prev) =>
-                            prev === dateStr ? "" : dateStr
-                          )
-                        }
-                        className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
-                          !inMonth ? "opacity-40" : ""
-                        } ${isSelected ? "bg-white/5" : ""} ${
-                          // INDICADOR SUAVE de día con reservas (sin romper estética)
-                          hasAny && inMonth ? "bg-white/[0.04]" : ""
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[12px] text-slate-200 flex items-center gap-2">
-                            {d.getDate()}
-                            {hasAny && inMonth && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80"></span>
-                            )}
-                          </span>
-
-                          {hasAny && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
-                              {list.length}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-2 space-y-1">
-                          {(list || []).slice(0, 2).map((b) => {
-                            const st = uiStatus(b);
-                            return (
-                              <div
-                                key={b.id}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <p className="text-[10px] text-slate-300 truncate">
-                                  {hourLabel(b)} · {b.service_name || "Servicio"}
-                                </p>
-                                <span
-                                  className={`text-[10px] px-2 py-0.5 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
-                                    st
-                                  )}`}
-                                >
-                                  {statusLabel(st)}
-                                </span>
-                              </div>
-                            );
-                          })}
-
-                          {list.length > 2 && (
-                            <p className="text-[10px] text-slate-500">
-                              +{list.length - 2} más
-                            </p>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* DETALLE DEL DÍA */}
-              {selectedDay && (
-                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold">{selectedDay}</p>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDay("")}
-                      className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  {calendarLoading ? (
-                    <p className="text-[12px] text-slate-400">
-                      Cargando turnos...
-                    </p>
-                  ) : (monthMap[selectedDay] || []).length === 0 ? (
-                    <p className="text-[12px] text-slate-400">
-                      No hay turnos este día.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(monthMap[selectedDay] || []).map((b) => {
-                        const st = uiStatus(b);
-                        return (
-                          <div
-                            key={b.id}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/40 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-[12px] font-medium truncate">
-                                {hourLabel(b)} · {b.customer_name || "Cliente"}
-                              </p>
-                              <p className="text-[11px] text-slate-400 truncate">
-                                {b.service_name || "Servicio"}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
-                                  st
-                                )}`}
-                              >
-                                {statusLabel(st)}
-                              </span>
-
-                              {depositEnabled && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => openProof(b)}
-                                    className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                                  >
-                                    Ver PDF
-                                  </button>
-
-                                  {st === "pending" ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => confirmBooking(b.id)}
-                                        className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                                      >
-                                        Confirmar
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => rejectBooking(b.id)}
-                                        className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                                      >
-                                        Rechazar
-                                      </button>
-                                    </>
-                                  ) : null}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* DERECHA (CARDS) */}
@@ -1107,42 +675,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* SERVICIOS TOP */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">Servicios top</p>
-                <p className="text-[11px] text-slate-400">Últimos 30 días</p>
-              </div>
-
-              {topServices.length === 0 ? (
-                <p className="text-[12px] text-slate-400">
-                  No hay suficientes datos todavía.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {topServices.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-medium truncate">
-                          {s.name}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {s.duration ? `${s.duration} min` : "—"} ·{" "}
-                          {s.price ? `$${Number(s.price)}` : "—"}
-                        </p>
-                      </div>
-                      <span className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 text-slate-200 whitespace-nowrap">
-                        {s.count} turnos
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* LINK PÚBLICO */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <p className="text-sm font-semibold mb-1">Link público</p>
@@ -1170,34 +702,6 @@ export default function Dashboard() {
               >
                 Abrir link público
               </button>
-            </div>
-
-            {/* ATAJOS RÁPIDOS */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
-              <p className="text-sm font-semibold mb-3">Atajos rápidos</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={goServices}
-                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Crear servicio
-                </button>
-                <button
-                  type="button"
-                  onClick={goScheduleBlocks}
-                  className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Bloquear horario
-                </button>
-                <button
-                  type="button"
-                  onClick={goAgenda}
-                  className="col-span-2 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  Configurar horarios
-                </button>
-              </div>
             </div>
           </div>
         </section>
