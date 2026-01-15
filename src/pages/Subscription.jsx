@@ -28,9 +28,6 @@ export default function Subscription() {
 
     setUser(user);
 
-    // ✅ En tu app real lo venimos manejando desde businesses:
-    // - subscription_status: "trial" | "active" | "lifetime_free" | ...
-    // - trial_ends_at: timestamp
     const { data: biz, error: bizErr } = await supabase
       .from("businesses")
       .select("id, subscription_status, trial_ends_at")
@@ -38,7 +35,6 @@ export default function Subscription() {
       .single();
 
     if (bizErr || !biz) {
-      // fallback suave: no rompemos UI
       setSubscription(null);
       setDaysLeft(0);
       setLoading(false);
@@ -46,8 +42,8 @@ export default function Subscription() {
     }
 
     const now = new Date();
-
     const trialEndsDate = biz.trial_ends_at ? new Date(biz.trial_ends_at) : null;
+
     const msDiff =
       trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
         ? trialEndsDate.getTime() - now.getTime()
@@ -56,7 +52,6 @@ export default function Subscription() {
     const diffDays =
       msDiff !== null ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : 0;
 
-    // armamos un objeto "subscription" compatible con tu UI actual
     const subObj = {
       active:
         biz.subscription_status === "active" ||
@@ -73,17 +68,27 @@ export default function Subscription() {
   const handlePayment = async () => {
     setError("");
 
-    if (!user?.id) {
+    if (!user?.id || !user?.email) {
       setError("No se pudo validar el usuario.");
       return;
     }
 
     try {
-      // ✅ Llamada correcta: usa el mismo proyecto que supabaseClient.js
+      // ✅ Para suscripción: mandamos amount + email (lo que tu Edge Function necesita)
       const { data, error: fnError } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
         {
-          body: { user_id: user.id },
+          body: {
+            amount: 690,
+            description: "Suscripción Ritto — Plan mensual",
+            customer_name: user.email,
+            customer_email: user.email,
+
+            // ✅ usamos un destino fijo para suscripción (no slug de negocio)
+            // tu function arma back_urls con `https://ritto.lat/${slug}?status=...`
+            // entonces le pasamos un slug que sea una ruta real
+            slug: "payment-success",
+          },
         }
       );
 
@@ -95,10 +100,18 @@ export default function Subscription() {
 
       if (data?.init_point) {
         window.location.href = data.init_point;
-      } else {
-        setError("No se pudo generar el link de pago.");
+        return;
       }
+
+      // por si tu function todavía devuelve { url }
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      setError("No se pudo generar el link de pago.");
     } catch (err) {
+      console.error(err);
       setError("Hubo un error de conexión.");
     }
   };
