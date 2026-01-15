@@ -60,18 +60,21 @@ export default function ScheduleBlocks() {
     setError("");
     setSuccess("");
 
+    if (!businessId) return;
+
     if (!singleDate) {
       setError("Elegí una fecha.");
       return;
     }
 
-    const { error: insertError } = await supabase
-      .from("schedule_blocks")
-      .insert({
-        business_id: businessId,
-        date: singleDate,
-        reason,
-      });
+    const { error: insertError } = await supabase.from("schedule_blocks").insert({
+      business_id: businessId,
+      date: singleDate,
+      // FIX: la tabla exige NOT NULL
+      start_time: "00:00",
+      end_time: "23:59",
+      reason,
+    });
 
     if (insertError) {
       setError(insertError.message);
@@ -90,6 +93,8 @@ export default function ScheduleBlocks() {
   const addRange = async () => {
     setError("");
     setSuccess("");
+
+    if (!businessId) return;
 
     if (!rangeStart || !rangeEnd) {
       setError("Elegí las fechas del rango.");
@@ -113,12 +118,13 @@ export default function ScheduleBlocks() {
     const inserts = days.map((d) => ({
       business_id: businessId,
       date: d,
+      // FIX: la tabla exige NOT NULL
+      start_time: "00:00",
+      end_time: "23:59",
       reason,
     }));
 
-    const { error: insertError } = await supabase
-      .from("schedule_blocks")
-      .insert(inserts);
+    const { error: insertError } = await supabase.from("schedule_blocks").insert(inserts);
 
     if (insertError) {
       setError(insertError.message);
