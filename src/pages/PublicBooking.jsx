@@ -18,7 +18,10 @@ export default function PublicBooking() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // NUEVO
+  const [phone, setPhone] = useState("");
+
+  // NUEVO: comprobante PDF (solo si seña activa)
+  const [receiptFile, setReceiptFile] = useState(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -37,7 +40,6 @@ export default function PublicBooking() {
 
   const normalizeHHMM = (t) => {
     if (!t) return "";
-    // acepta "09:00:00" o "09:00"
     const s = String(t).slice(0, 5);
     return /^\d{2}:\d{2}$/.test(s) ? s : "";
   };
@@ -85,7 +87,6 @@ export default function PublicBooking() {
 
       setBusiness(biz);
 
-      // Servicios (no rompo lógica; solo aseguro orden y fallback)
       const { data: servs, error: servErr } = await supabase
         .from("services")
         .select("*")
@@ -96,7 +97,6 @@ export default function PublicBooking() {
       if (servErr) console.error(servErr);
       setServices(servs || []);
 
-      // Horarios
       const { data: scheds, error: schedErr } = await supabase
         .from("schedules")
         .select("*")
@@ -105,7 +105,6 @@ export default function PublicBooking() {
       if (schedErr) console.error(schedErr);
       setSchedules(scheds || []);
 
-      // Bloqueos
       const { data: blks, error: blkErr } = await supabase
         .from("schedule_blocks")
         .select("*")
@@ -123,7 +122,7 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // GUARDRAIL: si el servicio seleccionado ya no existe (ej: desactivado)
+  // GUARDRAIL: si el servicio seleccionado ya no existe
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedService) return;
@@ -154,7 +153,6 @@ export default function PublicBooking() {
 
     const dateStr = selectedDate;
 
-    // Día bloqueado completo
     const isBlocked = blocks.some((b) => b.date === dateStr);
     if (isBlocked) {
       setAvailableHours([]);
@@ -217,7 +215,6 @@ export default function PublicBooking() {
       }
     });
 
-    // Deduplicar y priorizar mayor remaining
     const map = new Map();
     slots.forEach((s) => {
       const prev = map.get(s.hour);
@@ -243,26 +240,42 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
-  // SEÑA (SIN CAMBIOS)
+  // SEÑA (TRANSFERENCIA) — SOLO MONTO FIJO
   // ────────────────────────────────────────────────
   const usesDeposit =
-    business?.deposit_enabled && Number(business.deposit_value) > 0;
+    business?.deposit_enabled === true && Number(business.deposit_value) > 0;
 
-  const calculateDepositAmount = () => {
+  const depositAmount = useMemo(() => {
     if (!usesDeposit || !selectedService) return 0;
-
-    const val = Number(business.deposit_value);
-    const price = Number(selectedService.price);
-
-    if (business.deposit_type === "percentage") {
-      return Math.round((price * val) / 100);
-    }
-
-    return val;
-  };
+    return Number(business.deposit_value) || 0; // fijo
+  }, [usesDeposit, business?.deposit_value, selectedService]);
 
   // ────────────────────────────────────────────────
-  // SUBMIT (SIN ROMPER FLUJO)
+  // UPLOAD PDF (storage)
+  // ────────────────────────────────────────────────
+  const uploadReceiptPdf = async (bizId, file) => {
+    const cleanName = String(file.name || "comprobante.pdf")
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9._-]/g, "");
+
+    const path = `${bizId}/${Date.now()}-${cleanName}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("booking_receipts")
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "application/pdf",
+      });
+
+    if (upErr) throw upErr;
+
+    // guardamos el path (no URL pública); el dashboard puede abrirlo con createSignedUrl si querés luego
+    return path;
+  };
+  // ────────────────────────────────────────────────
+  // SUBMIT (TRANSFERENCIA) — SIN ROMPER FLUJO
   // ────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -286,72 +299,83 @@ export default function PublicBooking() {
       return;
     }
 
-    setIsProcessing(true);
-
-    // SIN SEÑA
-    if (!usesDeposit) {
-      const { error: insertError } = await supabase.from("bookings").insert({
-        business_id: business.id,
-        service_id: selectedService.id,
-        service_name: selectedService.name,
-        date: selectedDate,
-        hour: `${selectedHour}:00`,
-        customer_name: name,
-        customer_email: email,
-        customer_phone: phone, // NUEVO
-        status: "confirmed",
-        deposit_paid: false,
-      });
-
-      if (insertError) {
-        setError(insertError.message);
-        setIsProcessing(false);
-        return;
-      }
-
-      setSuccess("Reserva confirmada. Te enviamos un email ✉️");
-      setIsProcessing(false);
+    // si seña está activa, exigimos comprobante
+    if (usesDeposit && !receiptFile) {
+      setError("Subí el comprobante en PDF para confirmar la seña.");
       return;
     }
 
-    // CON SEÑA (Mercado Pago)
-    const amount = calculateDepositAmount();
+    setIsProcessing(true);
 
-    const { data, error: fnError } = await supabase.functions.invoke(
-      "create-mercadopago-checkout",
-      {
-        body: {
+    try {
+      // 1) SIN SEÑA -> confirmed como hoy
+      if (!usesDeposit) {
+        const { error: insertError } = await supabase.from("bookings").insert({
           business_id: business.id,
-          amount,
-          description: `Seña — ${selectedService.name}`,
           service_id: selectedService.id,
           service_name: selectedService.name,
-          service_price: selectedService.price,
           date: selectedDate,
           hour: `${selectedHour}:00`,
           customer_name: name,
           customer_email: email,
-          customer_phone: phone, // NUEVO
-          slug: business.slug,
-        },
+          customer_phone: phone,
+          status: "confirmed",
+          deposit_paid: false,
+          deposit_receipt_path: null,
+        });
+
+        if (insertError) throw insertError;
+
+        setSuccess("Reserva confirmada. Te enviamos un email ✉️");
+        setIsProcessing(false);
+        return;
       }
-    );
 
-    if (fnError || !data?.init_point) {
-      console.error(fnError);
-      setError("No se pudo iniciar el pago.");
+      // 2) CON SEÑA (TRANSFERENCIA) -> pending + pdf
+      let receiptPath = null;
+
+      if (receiptFile) {
+        // validación mínima (sin romper UX)
+        if (receiptFile.type !== "application/pdf") {
+          setError("El comprobante debe ser un archivo PDF.");
+          setIsProcessing(false);
+          return;
+        }
+        receiptPath = await uploadReceiptPdf(business.id, receiptFile);
+      }
+
+      const { error: insertPendingError } = await supabase
+        .from("bookings")
+        .insert({
+          business_id: business.id,
+          service_id: selectedService.id,
+          service_name: selectedService.name,
+          date: selectedDate,
+          hour: `${selectedHour}:00`,
+          customer_name: name,
+          customer_email: email,
+          customer_phone: phone,
+          status: "pending",
+          deposit_paid: true, // hay comprobante adjunto
+          deposit_receipt_path: receiptPath,
+        });
+
+      if (insertPendingError) throw insertPendingError;
+
+      setSuccess(
+        `Reserva enviada. El negocio confirmará la seña de $${depositAmount}.`
+      );
       setIsProcessing(false);
-      return;
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No se pudo crear la reserva.");
+      setIsProcessing(false);
     }
-
-    window.location.href = data.init_point;
   };
 
   // ────────────────────────────────────────────────
   // UI
   // ────────────────────────────────────────────────
-  const depositAmount = calculateDepositAmount();
-
   const minDate = useMemo(() => {
     const t = new Date();
     const yyyy = t.getFullYear();
@@ -403,12 +427,13 @@ export default function PublicBooking() {
             </button>
           )}
         </div>
+
         {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl bg-slate-900/70 border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl p-6 space-y-6"
         >
-          {/* SERVICIO (CAMBIO ÚNICO: pills) */}
+          {/* SERVICIO */}
           <Field label="Servicio">
             {services.length === 0 ? (
               <p className="text-[12px] text-slate-400">
@@ -500,14 +525,35 @@ export default function PublicBooking() {
           {/* SEÑA */}
           {usesDeposit && selectedService && (
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200">
-              <p className="font-semibold">Seña requerida</p>
+              <p className="font-semibold">Esta reserva requiere una seña</p>
               <p>
-                Para confirmar el turno aboná{" "}
+                Monto:{" "}
                 <span className="font-bold text-emerald-300">
                   ${depositAmount}
-                </span>
+                </span>{" "}
+                (transferencia)
+              </p>
+              <p className="text-[11px] text-emerald-200/80 mt-1">
+                Subí el comprobante en PDF y el negocio confirmará tu turno.
               </p>
             </div>
+          )}
+
+          {/* COMPROBANTE PDF (solo si seña activa) */}
+          {usesDeposit && (
+            <Field label="Comprobante (PDF)">
+              <input
+                type="file"
+                accept="application/pdf"
+                className="input-ritto"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+              />
+              {receiptFile ? (
+                <p className="text-[10px] text-slate-400 mt-2 truncate">
+                  {receiptFile.name}
+                </p>
+              ) : null}
+            </Field>
           )}
 
           {/* DATOS CLIENTE */}
@@ -548,7 +594,7 @@ export default function PublicBooking() {
             {isProcessing
               ? "Procesando…"
               : usesDeposit
-              ? "Ir a pagar la seña"
+              ? "Enviar comprobante"
               : "Confirmar reserva"}
           </button>
 
