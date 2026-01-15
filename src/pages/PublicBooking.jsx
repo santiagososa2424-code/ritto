@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
@@ -12,17 +12,17 @@ export default function PublicBooking() {
 
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
-  const [availableHours, setAvailableHours] = useState([]); // compatibilidad con UI anterior
-  const [slotsUI, setSlotsUI] = useState([]); // [{hour, available, remaining, capacity}]
+  const [availableHours, setAvailableHours] = useState([]);
+  const [slotsUI, setSlotsUI] = useState([]);
   const [selectedHour, setSelectedHour] = useState("");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  // NUEVO: captura comprobante (solo si seña activa)
+  // PASO SEÑA (aparece recién después de “Reservar”)
+  const [showDepositStep, setShowDepositStep] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
-  const fileInputRef = useRef(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -252,9 +252,9 @@ export default function PublicBooking() {
   }, [usesDeposit, business?.deposit_value, selectedService]);
 
   // ────────────────────────────────────────────────
-  // UPLOAD CAPTURA (storage)
+  // UPLOAD COMPROBANTE (storage)
   // ────────────────────────────────────────────────
-  const uploadReceiptImage = async (bizId, file) => {
+  const uploadReceipt = async (bizId, file) => {
     const cleanName = String(file.name || "comprobante")
       .toLowerCase()
       .replace(/\s+/g, "-")
@@ -267,22 +267,17 @@ export default function PublicBooking() {
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type || "image/*",
+        contentType: file.type || "application/octet-stream",
       });
 
     if (upErr) throw upErr;
-
     return path;
   };
 
   // ────────────────────────────────────────────────
-  // SUBMIT (TRANSFERENCIA) — SIN ROMPER FLUJO
+  // SUBMIT (2 PASOS SI HAY SEÑA)
   // ────────────────────────────────────────────────
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
+  const validateBaseFields = () => {
     if (
       !selectedService ||
       !selectedDate ||
@@ -292,25 +287,26 @@ export default function PublicBooking() {
       !phone.trim()
     ) {
       setError("Completá todos los campos.");
-      return;
+      return false;
     }
-
     if (!business) {
       setError("No se pudo validar el negocio.");
-      return;
+      return false;
     }
+    return true;
+  };
 
-    // si seña está activa, exigimos captura
-    if (usesDeposit && !receiptFile) {
-      setError("Subí la captura del comprobante para enviar la reserva.");
-      return;
-    }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-    setIsProcessing(true);
+    if (!validateBaseFields()) return;
 
-    try {
-      // 1) SIN SEÑA -> confirmed como hoy
-      if (!usesDeposit) {
+    // SIN SEÑA: mismo flujo que hoy
+    if (!usesDeposit) {
+      setIsProcessing(true);
+      try {
         const { error: insertError } = await supabase.from("bookings").insert({
           business_id: business.id,
           service_id: selectedService.id,
@@ -328,22 +324,45 @@ export default function PublicBooking() {
         if (insertError) throw insertError;
 
         setSuccess("Reserva confirmada. Te enviamos un email ✉️");
+      } catch (err) {
+        console.error(err);
+        setError(err?.message || "No se pudo crear la reserva.");
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // CON SEÑA: primer click en “Reservar” muestra el paso de comprobante
+    if (!showDepositStep) {
+      setShowDepositStep(true);
+      setReceiptFile(null);
+      return;
+    }
+
+    // CON SEÑA: segundo click en “Confirmar reserva” exige comprobante y crea pending
+    if (!receiptFile) {
+      setError("Subí tu captura del comprobante para confirmar la reserva.");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      let receiptPath = null;
+
+      // Aceptamos captura (imagen) o PDF (por si alguien igual sube PDF)
+      const okType =
+        String(receiptFile.type || "").startsWith("image/") ||
+        receiptFile.type === "application/pdf";
+
+      if (!okType) {
+        setError("El comprobante debe ser una imagen o un PDF.");
         setIsProcessing(false);
         return;
       }
 
-      // 2) CON SEÑA (TRANSFERENCIA) -> pending + captura
-      let receiptPath = null;
-
-      if (receiptFile) {
-        const okTypes = ["image/jpeg", "image/png", "image/webp"];
-        if (!okTypes.includes(receiptFile.type)) {
-          setError("La captura debe ser JPG, PNG o WEBP.");
-          setIsProcessing(false);
-          return;
-        }
-        receiptPath = await uploadReceiptImage(business.id, receiptFile);
-      }
+      receiptPath = await uploadReceipt(business.id, receiptFile);
 
       const { error: insertPendingError } = await supabase
         .from("bookings")
@@ -366,10 +385,12 @@ export default function PublicBooking() {
       setSuccess(
         `Reserva enviada. El negocio confirmará la seña de $${depositAmount}.`
       );
-      setIsProcessing(false);
+      setShowDepositStep(false);
+      setReceiptFile(null);
     } catch (err) {
       console.error(err);
       setError(err?.message || "No se pudo crear la reserva.");
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -384,6 +405,13 @@ export default function PublicBooking() {
     const dd = String(t.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }, []);
+
+  useEffect(() => {
+    // si el usuario cambia algo base, cerramos el paso seña para evitar inconsistencias
+    setShowDepositStep(false);
+    setReceiptFile(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedService?.id, selectedDate, selectedHour]);
 
   if (loading) {
     return (
@@ -400,6 +428,10 @@ export default function PublicBooking() {
       </div>
     );
   }
+
+  const bank = business.deposit_bank || "—";
+  const accountName = business.deposit_account_name || "—";
+  const transferNumber = business.deposit_transfer_alias || "—";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
@@ -452,8 +484,6 @@ export default function PublicBooking() {
                       onClick={() => {
                         setSelectedService(s);
                         setSelectedHour("");
-                        setReceiptFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
                       }}
                       className={`px-3 py-2 rounded-2xl text-[12px] border transition ${
                         isSelected
@@ -525,68 +555,6 @@ export default function PublicBooking() {
             )}
           </Field>
 
-          {/* SEÑA */}
-          {usesDeposit && selectedService && (
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200">
-              <p className="font-semibold">
-                Esta reserva requiere una seña de{" "}
-                <span className="font-bold text-emerald-300">
-                  ${depositAmount}
-                </span>
-              </p>
-              <p className="text-[11px] text-emerald-200/80 mt-1">
-                Luego de ingresar tus datos, subí una captura del comprobante y
-                el negocio confirmará tu turno.
-              </p>
-            </div>
-          )}
-
-          {/* CAPTURA (solo si seña activa) - SIN BLOQUE FEO */}
-          {usesDeposit && (
-            <Field label="Captura del comprobante">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-              />
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                >
-                  {receiptFile ? "Cambiar captura" : "Subir captura"}
-                </button>
-
-                {receiptFile ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReceiptFile(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                    className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                  >
-                    Quitar
-                  </button>
-                ) : null}
-              </div>
-
-              {receiptFile ? (
-                <p className="text-[10px] text-slate-400 mt-2 truncate">
-                  {receiptFile.name}
-                </p>
-              ) : (
-                <p className="text-[10px] text-slate-500 mt-2">
-                  Formatos: JPG / PNG / WEBP
-                </p>
-              )}
-            </Field>
-          )}
-
           {/* DATOS CLIENTE */}
           <Field label="Tus datos">
             <input
@@ -614,6 +582,85 @@ export default function PublicBooking() {
             />
           </Field>
 
+          {/* PASO SEÑA (APARECE AL FINAL, SOLO DESPUÉS DE “RESERVAR”) */}
+          {usesDeposit && showDepositStep && (
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200 space-y-3">
+              <div>
+                <p className="font-semibold">Esta reserva requiere una seña</p>
+                <p>
+                  Monto:{" "}
+                  <span className="font-bold text-emerald-300">
+                    ${depositAmount}
+                  </span>{" "}
+                  (transferencia)
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-[12px] text-slate-200">
+                <p className="text-[11px] text-slate-300 mb-2">
+                  Datos para transferir:
+                </p>
+                <div className="space-y-1">
+                  <p className="text-[12px]">
+                    <span className="text-slate-400">Banco:</span> {bank}
+                  </p>
+                  <p className="text-[12px]">
+                    <span className="text-slate-400">Nombre:</span> {accountName}
+                  </p>
+                  <p className="text-[12px]">
+                    <span className="text-slate-400">Número de transferencia:</span>{" "}
+                    {transferNumber}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] text-emerald-200/80">
+                  Subí tu captura del comprobante y el negocio confirmará tu turno.
+                </p>
+
+                {/* Sin “bloque feo”: input oculto + botón estilado */}
+                <input
+                  id="receipt-upload"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                />
+
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="receipt-upload"
+                    className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition cursor-pointer"
+                  >
+                    Subir comprobante
+                  </label>
+
+                  {receiptFile ? (
+                    <span className="text-[11px] text-slate-300 truncate">
+                      {receiptFile.name}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">
+                      Ningún archivo seleccionado
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDepositStep(false);
+                  setReceiptFile(null);
+                }}
+                className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              >
+                Volver
+              </button>
+            </div>
+          )}
+
           {error && <Alert error text={error} />}
           {success && <Alert success text={success} />}
 
@@ -625,7 +672,9 @@ export default function PublicBooking() {
             {isProcessing
               ? "Procesando…"
               : usesDeposit
-              ? "Enviar comprobante"
+              ? showDepositStep
+                ? "Confirmar reserva"
+                : "Reservar"
               : "Confirmar reserva"}
           </button>
 
