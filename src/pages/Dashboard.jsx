@@ -347,49 +347,42 @@ export default function Dashboard() {
   };
 
   // ─────────────────────────────
-  // LÓGICA DE PLAN / TRIAL (FIX)
-  // - El banner "enamorarte" SOLO en trial
-  // - Si hay subscription_paid_until futuro => PLAN ACTIVO (prioridad)
+  // LÓGICA DE PLAN / TRIAL (PRIORIDAD: PLAN > TRIAL)
   // ─────────────────────────────
   const now = new Date();
 
   const subscription = business?.subscription_status || null;
   const isLifetime = subscription === "lifetime_free";
-  const isTrial = subscription === "trial";
 
-  // PLAN ACTIVO por paid_until (independiente del status)
   const paidUntilDate = business?.subscription_paid_until
     ? new Date(business.subscription_paid_until)
     : null;
 
-  const paidMsDiff =
+  const msPlan =
     paidUntilDate && !Number.isNaN(paidUntilDate.getTime())
       ? paidUntilDate.getTime() - now.getTime()
       : null;
 
   const planDaysLeft =
-    paidMsDiff !== null ? Math.ceil(paidMsDiff / (1000 * 60 * 60 * 24)) : null;
+    msPlan !== null ? Math.ceil(msPlan / (1000 * 60 * 60 * 24)) : null;
 
   const hasActivePlan = planDaysLeft !== null && planDaysLeft > 0;
 
-  // TRIAL solo si NO hay plan activo
   const trialEndsDate = business?.trial_ends_at
     ? new Date(business.trial_ends_at)
     : null;
 
-  const trialMsDiff =
+  const msTrial =
     trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
       ? trialEndsDate.getTime() - now.getTime()
       : null;
 
   const trialDaysLeft =
-    trialMsDiff !== null
-      ? Math.ceil(trialMsDiff / (1000 * 60 * 60 * 24))
-      : null;
+    msTrial !== null ? Math.ceil(msTrial / (1000 * 60 * 60 * 24)) : null;
 
+  const isTrial = subscription === "trial";
   const trialActive =
     !hasActivePlan && isTrial && trialDaysLeft !== null && trialDaysLeft > 0;
-
   const trialExpired =
     !hasActivePlan && isTrial && trialDaysLeft !== null && trialDaysLeft <= 0;
 
@@ -406,6 +399,7 @@ export default function Dashboard() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
       {/* Overlay solo si el trial terminó, NO es lifetime y NO hay plan activo */}
@@ -468,7 +462,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* PLAN ACTIVO (prioridad sobre trial) */}
               {!isLifetime && hasActivePlan && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs">Plan activo</span>
@@ -478,8 +471,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* TRIAL (solo si NO hay plan activo) */}
-              {trialActive && (
+              {trialActive && !isLifetime && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs">Prueba gratuita</span>
                   <span className="text-emerald-400 font-medium">
@@ -517,17 +509,11 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={
-                trialExpired && !isLifetime && !hasActivePlan
-                  ? configurePayment
-                  : goAgenda
-              }
+              onClick={trialExpired && !isLifetime && !hasActivePlan ? configurePayment : goAgenda}
               className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10"
             >
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              {trialExpired && !isLifetime && !hasActivePlan
-                ? "Agenda bloqueada"
-                : "Agenda activa"}
+              {trialExpired && !isLifetime && !hasActivePlan ? "Agenda bloqueada" : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -699,20 +685,17 @@ export default function Dashboard() {
                     {planDaysLeft} días
                   </span>
                 </div>
-
                 <p className="text-sm font-semibold mb-2">
-                  {planDaysLeft} días restantes
+                  Tenés el plan activo por {planDaysLeft} días
                 </p>
-
                 <p className="text-[11px] text-slate-300 mb-4">
-                  Tenés la agenda sin límites.
+                  Tu agenda está habilitada y tus clientes pueden reservar sin límites.
                 </p>
-
                 <button
                   onClick={configurePayment}
                   className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
                 >
-                  Gestionar plan
+                  Administrar plan
                 </button>
                 <p className="text-[10px] text-slate-400 mt-3">
                   • Sin permanencia · Cancelás cuando quieras
@@ -720,8 +703,8 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* TRIAL ACTIVO (solo si NO hay plan activo) */}
-            {trialActive && !isLifetime && !hasActivePlan && (
+            {/* TRIAL ACTIVO */}
+            {trialActive && !isLifetime && (
               <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] text-emerald-300/90 font-semibold">
@@ -784,7 +767,6 @@ export default function Dashboard() {
     </div>
   );
 }
-
 /* ─────────────────────────────
    COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
    - Mantienen estética existente
