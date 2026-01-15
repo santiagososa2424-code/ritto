@@ -58,6 +58,10 @@ export default function Bookings() {
     loadReservations(businessId, date);
   };
 
+  const handleRefresh = () => {
+    loadReservations(businessId, date);
+  };
+
   const grouped = reservations.reduce((acc, r) => {
     if (!acc[r.date]) acc[r.date] = [];
     acc[r.date].push(r);
@@ -78,15 +82,6 @@ export default function Bookings() {
   return (
     <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-10">
-
-        {/* Volver */}
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="text-slate-300 hover:text-emerald-300 text-sm transition"
-        >
-          ← Volver al Dashboard
-        </button>
-
         {/* Header */}
         <Header
           title="Reservas"
@@ -96,7 +91,6 @@ export default function Bookings() {
         {/* FILTRO */}
         <Card title="Filtrar reservas">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
             <input
               type="date"
               className="input-ritto"
@@ -108,34 +102,21 @@ export default function Bookings() {
               Filtrar
             </button>
 
-            <button
-              onClick={() => {
-                setDate("");
-                loadReservations(businessId, "");
-              }}
-              className="w-full mt-0 bg-white/10 text-slate-300 rounded-2xl text-sm py-3 border border-white/20 hover:bg-white/20 transition"
-            >
-              Limpiar
-            </button>
-
-            <button
-              onClick={() => loadReservations(businessId, date)}
-              className="w-full mt-0 bg-black text-white rounded-2xl text-sm py-3 border border-white/20 hover:bg-white/10 transition"
-            >
+            <button onClick={handleRefresh} className="button-ritto">
               Actualizar
             </button>
           </div>
         </Card>
-
         {/* LISTA */}
         {loadingList ? (
           <div className="text-slate-400 text-sm">Cargando reservas...</div>
         ) : reservations.length === 0 ? (
-          <div className="text-slate-400 text-sm">No hay reservas para esta fecha.</div>
+          <div className="text-slate-400 text-sm">
+            No hay reservas para esta fecha.
+          </div>
         ) : (
           Object.keys(grouped).map((day) => (
             <Card key={day} title={day}>
-
               <div className="space-y-3">
                 {grouped[day].map((r) => (
                   <div
@@ -151,7 +132,9 @@ export default function Bookings() {
                         {r.customer_name}
                       </p>
 
-                      <p className="text-[12px] text-slate-400">{r.customer_email}</p>
+                      <p className="text-[12px] text-slate-400">
+                        {r.customer_email}
+                      </p>
 
                       {r.customer_phone && (
                         <p className="text-[12px] text-slate-400">
@@ -178,7 +161,6 @@ export default function Bookings() {
                   </div>
                 ))}
               </div>
-
             </Card>
           ))
         )}
