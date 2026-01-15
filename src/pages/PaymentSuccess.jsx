@@ -4,25 +4,64 @@ import { supabase } from "../supabaseClient";
 export default function PaymentSuccess() {
   useEffect(() => {
     const run = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const status = params.get("status");
-      if (status !== "success") return;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get("status");
+        if (status !== "success") return;
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
+        // MP suele mandar payment_id o collection_id
+        const paymentId =
+          params.get("payment_id") || params.get("collection_id");
 
-      // Si preferís activar por business_id, traelo antes.
-      await supabase.functions.invoke("create-mercadopago-checkout", {
-        body: {
-          action: "activate_subscription",
-          user_id: session.user.id,
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // ✅ Preferido: verificar en MP antes de activar
+        if (paymentId) {
+          const { error } = await supabase.functions.invoke(
+            "create-mercadopago-checkout",
+            {
+              body: {
+                action: "verify_and_activate",
+                payment_id: paymentId,
+                user_id: session.user.id,
+                expected_amount: 690, // opcional: valida monto
+              },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            }
+          );
+
+          if (error) {
+            console.error("verify_and_activate error:", error, error?.context);
+          }
+
+          return;
+        }
+
+        // 🟡 Fallback: si MP no mandó payment_id por alguna razón, activamos como antes
+        const { error: fallbackErr } = await supabase.functions.invoke(
+          "create-mercadopago-checkout",
+          {
+            body: {
+              action: "activate_subscription",
+              user_id: session.user.id,
+            },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        if (fallbackErr) {
+          console.error("activate_subscription error:", fallbackErr, fallbackErr?.context);
+        }
+      } catch (e) {
+        console.error("PaymentSuccess run error:", e);
+      }
     };
 
     run();
