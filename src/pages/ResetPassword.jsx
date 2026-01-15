@@ -1,91 +1,85 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  const navigate = useNavigate();
+  const [password2, setPassword2] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    // Si el link vino con recovery, Supabase toma la sesión desde la URL (detectSessionInUrl=true)
+    // Cuando entrás desde el mail, Supabase mete tokens en la URL (hash)
+    // Esta llamada intenta “tomar” esa sesión automáticamente.
     const init = async () => {
-      setError("");
-      setSuccess("");
+      try {
+        setMsg("");
+        // En supabase-js v2, esto suele bastar:
+        // - si el link trae tokens en el hash, detectSessionInUrl los procesa
+        // - luego la sesión aparece en getSession()
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          setReady(true);
+          return;
+        }
 
-      const { data } = await supabase.auth.getSession();
-      const session = data?.session;
-
-      // Si no hay sesión, el link es inválido/expiró o la URL config está mal
-      if (!session) {
-        setError("El enlace es inválido o expiró. Pedí un nuevo reset.");
-        setLoading(false);
-        return;
+        // Si todavía no hay sesión, igual dejamos la UI lista:
+        // a veces tarda un tick en persistir.
+        setTimeout(async () => {
+          const { data: again } = await supabase.auth.getSession();
+          setReady(!!again?.session);
+        }, 300);
+      } catch (e) {
+        setReady(false);
       }
-
-      setLoading(false);
     };
 
     init();
   }, []);
 
-  const handleUpdate = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setMsg("");
 
-    if (!password.trim() || password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+    if (!password || password.length < 6) {
+      setMsg("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (password !== password2) {
+      setMsg("Las contraseñas no coinciden.");
       return;
     }
 
-    if (password !== confirm) {
-      setError("Las contraseñas no coinciden.");
-      return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setMsg(error.message || "No se pudo actualizar la contraseña.");
+        setLoading(false);
+        return;
+      }
+
+      setMsg("Contraseña actualizada. Ya podés iniciar sesión.");
+    } catch (err) {
+      setMsg("No se pudo actualizar la contraseña.");
+    } finally {
+      setLoading(false);
     }
-
-    const { error: upErr } = await supabase.auth.updateUser({ password });
-
-    if (upErr) {
-      setError(upErr.message);
-      return;
-    }
-
-    setSuccess("Contraseña actualizada. Ya podés iniciar sesión.");
-    setTimeout(() => navigate("/login"), 900);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
-        Cargando...
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
-      <div className="max-w-md mx-auto rounded-3xl bg-slate-900/70 border border-white/10 p-6 space-y-4">
-        <h1 className="text-xl font-semibold">Restablecer contraseña</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6">
+        <p className="text-xs text-slate-400 mb-1">Recuperación</p>
+        <h1 className="text-xl font-semibold mb-4">Restablecer contraseña</h1>
 
-        {error && (
-          <div className="rounded-2xl px-4 py-2 text-xs border border-rose-500/40 bg-rose-500/10 text-rose-200">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="rounded-2xl px-4 py-2 text-xs border border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
-            {success}
-          </div>
-        )}
-
-        {!success && (
-          <form onSubmit={handleUpdate} className="space-y-3">
+        {!ready ? (
+          <p className="text-sm text-slate-300">
+            Si llegaste desde el email, esperá un segundo y recargá esta página.
+            Si sigue sin habilitarse, abrí el link del email en el mismo navegador donde usás Ritto.
+          </p>
+        ) : (
+          <form onSubmit={onSubmit} className="space-y-3">
             <input
               type="password"
               className="input-ritto"
@@ -97,11 +91,22 @@ export default function ResetPassword() {
               type="password"
               className="input-ritto"
               placeholder="Repetir contraseña"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
+              value={password2}
+              onChange={(e) => setPassword2(e.target.value)}
             />
-            <button type="submit" className="button-ritto w-full">
-              Guardar contraseña
+
+            {msg && (
+              <div className="rounded-2xl px-4 py-2 text-[12px] border border-white/10 bg-white/5 text-slate-200">
+                {msg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="button-ritto w-full disabled:opacity-60"
+            >
+              {loading ? "Guardando…" : "Guardar nueva contraseña"}
             </button>
           </form>
         )}
