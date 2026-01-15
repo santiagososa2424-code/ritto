@@ -18,6 +18,11 @@ export default function BusinessSetup() {
   // FIX: input como string para poder borrar el 0
   const [depositValue, setDepositValue] = useState("");
 
+  // NUEVO: transferencia (solo si seña activa)
+  const [depositBank, setDepositBank] = useState("");
+  const [depositAccountName, setDepositAccountName] = useState("");
+  const [depositTransferAlias, setDepositTransferAlias] = useState("");
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -79,9 +84,13 @@ export default function BusinessSetup() {
     setDepositType("fixed");
 
     // FIX: string (si viene null/0, mostramos "0" o "" según preferencia)
-    // Acá conviene mostrar "0" si está activo y tiene 0, pero permitir borrar.
     const dv = biz.deposit_value;
     setDepositValue(dv === null || dv === undefined ? "" : String(dv));
+
+    // NUEVO: datos de transferencia
+    setDepositBank(biz.deposit_bank || "");
+    setDepositAccountName(biz.deposit_account_name || "");
+    setDepositTransferAlias(biz.deposit_transfer_alias || "");
   };
 
   const saveBusiness = async () => {
@@ -96,6 +105,18 @@ export default function BusinessSetup() {
     if (!email.trim()) {
       setError("El email del negocio es obligatorio.");
       return;
+    }
+
+    // Si activa seña, pedimos los datos mínimos de transferencia
+    if (depositEnabled) {
+      if (!String(depositValue || "").trim()) {
+        setError("Ingresá el valor de la seña.");
+        return;
+      }
+      if (!depositBank.trim() || !depositAccountName.trim() || !depositTransferAlias.trim()) {
+        setError("Completá Banco, Nombre y Alias para transferencias.");
+        return;
+      }
     }
 
     let slugToSave = business.slug;
@@ -141,6 +162,11 @@ export default function BusinessSetup() {
         deposit_enabled: depositEnabled,
         deposit_type: "fixed", // forzado
         deposit_value: parsedDepositValue,
+
+        // NUEVO: transferencia
+        deposit_bank: depositEnabled ? depositBank : null,
+        deposit_account_name: depositEnabled ? depositAccountName : null,
+        deposit_transfer_alias: depositEnabled ? depositTransferAlias : null,
       })
       .eq("id", business.id);
 
@@ -161,6 +187,7 @@ export default function BusinessSetup() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -244,6 +271,40 @@ export default function BusinessSetup() {
                     min="0"
                   />
                 </Field>
+
+                {/* NUEVO: Datos de transferencia */}
+                <div className="pt-2 border-t border-white/10 space-y-4">
+                  <p className="text-[11px] text-slate-400">
+                    Estos datos se muestran al cliente cuando la seña está activa.
+                  </p>
+
+                  <Field label="Banco">
+                    <input
+                      className="input-ritto"
+                      placeholder="Ej: Itaú / BROU / Santander"
+                      value={depositBank}
+                      onChange={(e) => setDepositBank(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field label="Nombre del titular">
+                    <input
+                      className="input-ritto"
+                      placeholder="Ej: Juan Pérez"
+                      value={depositAccountName}
+                      onChange={(e) => setDepositAccountName(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field label="Alias para transferencias">
+                    <input
+                      className="input-ritto"
+                      placeholder="Ej: mi.negocio.uy"
+                      value={depositTransferAlias}
+                      onChange={(e) => setDepositTransferAlias(e.target.value)}
+                    />
+                  </Field>
+                </div>
               </>
             )}
           </div>
