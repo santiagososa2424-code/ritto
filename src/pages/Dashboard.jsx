@@ -13,6 +13,18 @@ export default function Dashboard() {
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  // ✅ MOBILE SIDEBAR (drawer)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => {
+      // md breakpoint (Tailwind): 768px
+      if (window.innerWidth >= 768) setMobileSidebarOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   /* ─────────────────────────────
      HELPERS DE FECHA (FIJOS)
   ───────────────────────────── */
@@ -37,6 +49,12 @@ export default function Dashboard() {
   const goSetup = () => navigate("/setup");
   const goScheduleBlocks = () => navigate("/schedule-blocks");
   const configurePayment = () => navigate("/billing");
+
+  // ✅ wrapper para cerrar drawer y navegar (sin tocar lógica)
+  const nav = (fn) => () => {
+    setMobileSidebarOpen(false);
+    fn();
+  };
 
   useEffect(() => {
     loadDashboard();
@@ -426,7 +444,102 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* SIDEBAR */}
+      {/* ✅ MOBILE SIDEBAR DRAWER */}
+      <div
+        className={`md:hidden fixed inset-0 z-50 ${
+          mobileSidebarOpen ? "" : "pointer-events-none"
+        }`}
+      >
+        <div
+          className={`absolute inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity ${
+            mobileSidebarOpen ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+
+        <div
+          className={`absolute left-0 top-0 h-full w-[86%] max-w-[320px] bg-slate-900/80 border-r border-white/10 backdrop-blur-2xl shadow-[0_18px_60px_rgba(0,0,0,0.7)] transition-transform ${
+            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="px-5 py-5 flex items-center justify-between border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
+                R
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Ritto</p>
+                <p className="text-[11px] text-slate-400">Agenda inteligente</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(false)}
+              className="h-10 w-10 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              aria-label="Cerrar menú"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="px-5 py-5 flex flex-col h-[calc(100%-80px)]">
+            <nav className="space-y-1 text-sm flex-1">
+              <SidebarItem
+                label="Resumen"
+                active
+                onClick={nav(() => navigate("/dashboard"))}
+              />
+              <SidebarItem label="Servicios" onClick={nav(goServices)} />
+              <SidebarItem label="Horarios" onClick={nav(goAgenda)} />
+              <SidebarItem label="Bloqueos" onClick={nav(goScheduleBlocks)} />
+              <SidebarItem label="Ajustes" onClick={nav(goSetup)} />
+            </nav>
+
+            <div className="mt-6 pt-4 border-t border-white/10 text-[11px]">
+              <p className="text-slate-500 mb-1">Plan actual</p>
+
+              {business && (
+                <>
+                  {isLifetime && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs">Acceso de por vida</span>
+                      <span className="text-cyan-300 font-medium">Lifetime</span>
+                    </div>
+                  )}
+
+                  {!isLifetime && hasActivePlan && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs">Plan activo</span>
+                      <span className="text-emerald-400 font-medium">
+                        {planDaysLeft} días restantes
+                      </span>
+                    </div>
+                  )}
+
+                  {trialActive && !isLifetime && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs">Prueba gratuita</span>
+                      <span className="text-emerald-400 font-medium">
+                        {trialDaysLeft} días restantes
+                      </span>
+                    </div>
+                  )}
+
+                  {trialExpired && !isLifetime && !hasActivePlan && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs">Prueba finalizada</span>
+                      <span className="text-rose-400 font-medium">Bloqueado</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SIDEBAR (desktop igual que antes) */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
         <div className="flex items-center gap-3 mb-10">
           <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
@@ -495,25 +608,43 @@ export default function Dashboard() {
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 uppercase tracking-[0.18em]">
-              Panel de control
-            </p>
-            <h1 className="text-xl font-semibold">
-              Bienvenido,{" "}
-              <span className="text-emerald-400">
-                {business?.name || "Ritto"}
-              </span>
-            </h1>
+          <div className="flex items-center gap-3">
+            {/* ✅ HAMBURGER (solo mobile) */}
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              aria-label="Abrir menú"
+            >
+              <span className="text-slate-200 text-xl leading-none">☰</span>
+            </button>
+
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-[0.18em]">
+                Panel de control
+              </p>
+              <h1 className="text-xl font-semibold">
+                Bienvenido,{" "}
+                <span className="text-emerald-400">
+                  {business?.name || "Ritto"}
+                </span>
+              </h1>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={trialExpired && !isLifetime && !hasActivePlan ? configurePayment : goAgenda}
+              onClick={
+                trialExpired && !isLifetime && !hasActivePlan
+                  ? configurePayment
+                  : goAgenda
+              }
               className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10"
             >
               <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              {trialExpired && !isLifetime && !hasActivePlan ? "Agenda bloqueada" : "Agenda activa"}
+              {trialExpired && !isLifetime && !hasActivePlan
+                ? "Agenda bloqueada"
+                : "Agenda activa"}
             </button>
 
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
@@ -660,7 +791,9 @@ export default function Dashboard() {
                                 </button>
                               </>
                             ) : (
-                              <span className="text-[11px] text-slate-500">—</span>
+                              <span className="text-[11px] text-slate-500">
+                                —
+                              </span>
                             )}
                           </div>
                         )}
@@ -689,7 +822,8 @@ export default function Dashboard() {
                   Tenés el plan activo por {planDaysLeft} días
                 </p>
                 <p className="text-[11px] text-slate-300 mb-4">
-                  Tu agenda está habilitada y tus clientes pueden reservar sin límites.
+                  Tu agenda está habilitada y tus clientes pueden reservar sin
+                  límites.
                 </p>
                 <button
                   onClick={configurePayment}
