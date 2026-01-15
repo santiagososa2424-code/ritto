@@ -18,6 +18,7 @@ export default function PublicBooking() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(""); // NUEVO
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -46,28 +47,6 @@ export default function PublicBooking() {
     const [y, m, d] = yyyyMmDd.split("-").map(Number);
     const dt = new Date(y, m - 1, d, 12, 0, 0);
     return dt.toLocaleDateString("es-UY", { weekday: "long" });
-  };
-
-  // ────────────────────────────────────────────────
-  // MAPA (EMBED) + TELÉFONO
-  // ────────────────────────────────────────────────
-  const mapEmbedUrl = useMemo(() => {
-    const raw = business?.map_url;
-    if (!raw) return null;
-
-    if (raw.includes("google.com/maps/embed")) return raw;
-
-    if (raw.includes("google.com/maps")) {
-      const hasQuery = raw.includes("?");
-      return raw + (hasQuery ? "&output=embed" : "?output=embed");
-    }
-
-    return raw;
-  }, [business?.map_url]);
-
-  const openMap = () => {
-    if (!business?.map_url) return;
-    window.open(business.map_url, "_blank");
   };
 
   // ────────────────────────────────────────────────
@@ -295,7 +274,8 @@ export default function PublicBooking() {
       !selectedDate ||
       !selectedHour ||
       !name.trim() ||
-      !email.trim()
+      !email.trim() ||
+      !phone.trim()
     ) {
       setError("Completá todos los campos.");
       return;
@@ -318,6 +298,7 @@ export default function PublicBooking() {
         hour: `${selectedHour}:00`,
         customer_name: name,
         customer_email: email,
+        customer_phone: phone, // NUEVO
         status: "confirmed",
         deposit_paid: false,
       });
@@ -350,6 +331,7 @@ export default function PublicBooking() {
           hour: `${selectedHour}:00`,
           customer_name: name,
           customer_email: email,
+          customer_phone: phone, // NUEVO
           slug: business.slug,
         },
       }
@@ -421,20 +403,6 @@ export default function PublicBooking() {
             </button>
           )}
         </div>
-
-        {/* MAPA */}
-        {business?.map_url && (
-          <div className="rounded-3xl border border-white/10 shadow-xl">
-            <button
-              type="button"
-              onClick={openMap}
-              className="w-full px-4 py-4 rounded-3xl bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 transition text-sm font-medium"
-            >
-              📍 Ver dirección
-            </button>
-          </div>
-        )}
-
         {/* FORM */}
         <form
           onSubmit={handleSubmit}
@@ -554,10 +522,18 @@ export default function PublicBooking() {
 
             <input
               type="email"
-              className="input-ritto"
+              className="input-ritto mb-2"
               placeholder="Tu email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <input
+              type="tel"
+              className="input-ritto"
+              placeholder="Tu teléfono"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </Field>
 
