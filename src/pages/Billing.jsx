@@ -13,10 +13,25 @@ export default function Billing() {
         return;
       }
 
+      // ✅ La Edge Function exige (mínimo): amount + customer_email
+      const payload = {
+        user_id: session.user.id,
+        amount: 690,
+        description: "Suscripción Ritto (Plan mensual)",
+        customer_email: session.user.email,
+        customer_name: session.user.email,
+        slug: "payment-success",
+      };
+
+      if (!payload.customer_email) {
+        toast.error("Tu usuario no tiene email. Reingresá y probá de nuevo.");
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
         {
-          body: { user_id: session.user.id },
+          body: payload,
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -25,11 +40,13 @@ export default function Billing() {
 
       if (error) {
         console.error("invoke error:", error);
+        console.error("invoke error context:", error?.context);
         toast.error("No se pudo iniciar el pago");
         return;
       }
 
       if (!data?.init_point) {
+        console.error("invoke missing init_point, data:", data);
         toast.error("No se pudo iniciar el pago");
         return;
       }
