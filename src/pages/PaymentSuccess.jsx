@@ -6,58 +6,58 @@ export default function PaymentSuccess() {
     const run = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const status = params.get("status");
-        if (status !== "success") return;
 
-        // MP suele mandar payment_id o collection_id
-        const paymentId =
-          params.get("payment_id") || params.get("collection_id");
+        // MP puede mandar status o collection_status
+        const status = (params.get("status") || params.get("collection_status") || "").toLowerCase();
+
+        // Aceptamos approved/success (y dejamos pasar vacío si hay paymentId, por si MP no manda status)
+        const paymentId = params.get("payment_id") || params.get("collection_id");
+
+        const isOkStatus = status === "approved" || status === "success";
+
+        if (!paymentId && !isOkStatus) return;
 
         const {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) return;
 
-        // ✅ Preferido: verificar en MP antes de activar
-        if (paymentId) {
-          const { error } = await supabase.functions.invoke(
-            "create-mercadopago-checkout",
-            {
-              body: {
-                action: "verify_and_activate",
-                payment_id: paymentId,
-                user_id: session.user.id,
-                expected_amount: 690, // opcional: valida monto
-              },
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            }
-          );
+        // Buscar el negocio más reciente del usuario (para saber qué activar)
+        const { data: biz, error: bizErr } = await supabase
+          .from("businesses")
+          .select("id")
+          .eq("owner_id", session.user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-          if (error) {
-            console.error("verify_and_activate error:", error, error?.context);
-          }
-
+        if (bizErr) {
+          console.error("PaymentSuccess businesses fetch error:", bizErr);
           return;
         }
 
-        // 🟡 Fallback: si MP no mandó payment_id por alguna razón, activamos como antes
-        const { error: fallbackErr } = await supabase.functions.invoke(
-          "create-mercadopago-checkout",
-          {
-            body: {
-              action: "activate_subscription",
-              user_id: session.user.id,
-            },
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          }
-        );
+        const businessId = biz?.id;
+        if (!businessId) {
+          console.error("PaymentSuccess: no business found for user");
+          return;
+        }
 
-        if (fallbackErr) {
-          console.error("activate_subscription error:", fallbackErr, fallbackErr?.context);
+        // Verificar y activar en backend
+        const { error } = await supabase.functions.invoke("create-mercadopago-checkout", {
+          body: {
+            action: "verify_and_activate",
+            payment_id: paymentId,
+            user_id: session.user.id,
+            business_id: businessId,
+            expected_amount: 690,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (error) {
+          console.error("verify_and_activate error:", error, error?.context);
         }
       } catch (e) {
         console.error("PaymentSuccess run error:", e);
