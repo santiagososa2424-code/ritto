@@ -28,6 +28,14 @@ export default function Dashboard() {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
 
+  // FIX: helper fecha LOCAL (evita desfase UTC)
+  const localDateStr = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   const monthLabel = useMemo(() => {
     try {
       return calendarMonth.toLocaleDateString("es-UY", {
@@ -39,17 +47,22 @@ export default function Dashboard() {
     }
   }, [calendarMonth]);
 
+  // FIX: start/end del mes en formato LOCAL (no toISOString)
   const monthStartStr = useMemo(() => {
     const d = new Date(calendarMonth);
     d.setDate(1);
-    return d.toISOString().slice(0, 10);
+    d.setHours(0, 0, 0, 0);
+    return localDateStr(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarMonth]);
 
   const monthEndStr = useMemo(() => {
     const d = new Date(calendarMonth);
     d.setMonth(d.getMonth() + 1);
     d.setDate(0);
-    return d.toISOString().slice(0, 10);
+    d.setHours(0, 0, 0, 0);
+    return localDateStr(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarMonth]);
 
   const loadMonthBookings = async (bizId, startStr, endStr) => {
@@ -92,6 +105,7 @@ export default function Dashboard() {
     const d = new Date(calendarMonth);
     d.setMonth(d.getMonth() - 1);
     d.setDate(1);
+    d.setHours(0, 0, 0, 0);
     setSelectedDay("");
     setCalendarMonth(d);
   };
@@ -100,6 +114,7 @@ export default function Dashboard() {
     const d = new Date(calendarMonth);
     d.setMonth(d.getMonth() + 1);
     d.setDate(1);
+    d.setHours(0, 0, 0, 0);
     setSelectedDay("");
     setCalendarMonth(d);
   };
@@ -807,7 +822,6 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-
               <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
                 <div className="grid grid-cols-7 text-[11px] border-b border-white/10 bg-slate-900/70">
                   {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
@@ -848,18 +862,26 @@ export default function Dashboard() {
                         }
                         className={`min-h-[84px] p-2 border-r border-b border-white/10 text-left hover:bg-white/5 transition ${
                           !inMonth ? "opacity-40" : ""
-                        } ${isSelected ? "bg-white/5" : ""}`}
+                        } ${isSelected ? "bg-white/5" : ""} ${
+                          // INDICADOR SUAVE de día con reservas (sin romper estética)
+                          hasAny && inMonth ? "bg-white/[0.04]" : ""
+                        }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[12px] text-slate-200">
+                          <span className="text-[12px] text-slate-200 flex items-center gap-2">
                             {d.getDate()}
+                            {hasAny && inMonth && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80"></span>
+                            )}
                           </span>
+
                           {hasAny && (
                             <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
                               {list.length}
                             </span>
                           )}
                         </div>
+
                         <div className="mt-2 space-y-1">
                           {(list || []).slice(0, 2).map((b) => {
                             const st = uiStatus(b);
