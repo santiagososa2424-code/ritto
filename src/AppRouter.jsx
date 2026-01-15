@@ -40,6 +40,7 @@ export default function AppRouter() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
+        <Route path="/reset-password" element={<UpdatePassword />} />
 
         {/* 🔒 Privadas */}
         <Route
