@@ -13,9 +13,28 @@ export default function Billing() {
         return;
       }
 
-      // ✅ La Edge Function exige (mínimo): amount + customer_email
+      // ✅ Buscar business_id del usuario (para que la activación pegue SIEMPRE)
+      const { data: biz, error: bizErr } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (bizErr) {
+        console.error("bizErr:", bizErr);
+        toast.error("No se pudo obtener el negocio");
+        return;
+      }
+
+      if (!biz?.id) {
+        console.error("No se encontró negocio para este usuario");
+        toast.error("No se encontró tu negocio");
+        return;
+      }
+
       const payload = {
         user_id: session.user.id,
+        business_id: biz.id, // ✅ CLAVE
         amount: 690,
         description: "Suscripción Ritto (Plan mensual)",
         customer_email: session.user.email,
@@ -84,7 +103,7 @@ export default function Billing() {
         </button>
 
         <p className="text-[11px] text-slate-400 mt-4 text-center">
-          Sin permanencia · Cancelás cuando quieras
+          Sinigidmente · Cancelás cuando quieras
         </p>
       </div>
     </div>
