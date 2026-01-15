@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
@@ -20,8 +20,9 @@ export default function PublicBooking() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  // NUEVO: comprobante PDF (solo si seña activa)
+  // NUEVO: captura comprobante (solo si seña activa)
   const [receiptFile, setReceiptFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -247,14 +248,14 @@ export default function PublicBooking() {
 
   const depositAmount = useMemo(() => {
     if (!usesDeposit || !selectedService) return 0;
-    return Number(business.deposit_value) || 0; // fijo
+    return Number(business.deposit_value) || 0;
   }, [usesDeposit, business?.deposit_value, selectedService]);
 
   // ────────────────────────────────────────────────
-  // UPLOAD PDF (storage)
+  // UPLOAD CAPTURA (storage)
   // ────────────────────────────────────────────────
-  const uploadReceiptPdf = async (bizId, file) => {
-    const cleanName = String(file.name || "comprobante.pdf")
+  const uploadReceiptImage = async (bizId, file) => {
+    const cleanName = String(file.name || "comprobante")
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9._-]/g, "");
@@ -266,14 +267,14 @@ export default function PublicBooking() {
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: "application/pdf",
+        contentType: file.type || "image/*",
       });
 
     if (upErr) throw upErr;
 
-    // guardamos el path (no URL pública); el dashboard puede abrirlo con createSignedUrl si querés luego
     return path;
   };
+
   // ────────────────────────────────────────────────
   // SUBMIT (TRANSFERENCIA) — SIN ROMPER FLUJO
   // ────────────────────────────────────────────────
@@ -299,9 +300,9 @@ export default function PublicBooking() {
       return;
     }
 
-    // si seña está activa, exigimos comprobante
+    // si seña está activa, exigimos captura
     if (usesDeposit && !receiptFile) {
-      setError("Subí el comprobante en PDF para confirmar la seña.");
+      setError("Subí la captura del comprobante para enviar la reserva.");
       return;
     }
 
@@ -331,17 +332,17 @@ export default function PublicBooking() {
         return;
       }
 
-      // 2) CON SEÑA (TRANSFERENCIA) -> pending + pdf
+      // 2) CON SEÑA (TRANSFERENCIA) -> pending + captura
       let receiptPath = null;
 
       if (receiptFile) {
-        // validación mínima (sin romper UX)
-        if (receiptFile.type !== "application/pdf") {
-          setError("El comprobante debe ser un archivo PDF.");
+        const okTypes = ["image/jpeg", "image/png", "image/webp"];
+        if (!okTypes.includes(receiptFile.type)) {
+          setError("La captura debe ser JPG, PNG o WEBP.");
           setIsProcessing(false);
           return;
         }
-        receiptPath = await uploadReceiptPdf(business.id, receiptFile);
+        receiptPath = await uploadReceiptImage(business.id, receiptFile);
       }
 
       const { error: insertPendingError } = await supabase
@@ -451,6 +452,8 @@ export default function PublicBooking() {
                       onClick={() => {
                         setSelectedService(s);
                         setSelectedHour("");
+                        setReceiptFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
                       }}
                       className={`px-3 py-2 rounded-2xl text-[12px] border transition ${
                         isSelected
@@ -525,34 +528,62 @@ export default function PublicBooking() {
           {/* SEÑA */}
           {usesDeposit && selectedService && (
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-200">
-              <p className="font-semibold">Esta reserva requiere una seña</p>
-              <p>
-                Monto:{" "}
+              <p className="font-semibold">
+                Esta reserva requiere una seña de{" "}
                 <span className="font-bold text-emerald-300">
                   ${depositAmount}
-                </span>{" "}
-                (transferencia)
+                </span>
               </p>
               <p className="text-[11px] text-emerald-200/80 mt-1">
-                Subí el comprobante en PDF y el negocio confirmará tu turno.
+                Luego de ingresar tus datos, subí una captura del comprobante y
+                el negocio confirmará tu turno.
               </p>
             </div>
           )}
 
-          {/* COMPROBANTE PDF (solo si seña activa) */}
+          {/* CAPTURA (solo si seña activa) - SIN BLOQUE FEO */}
           {usesDeposit && (
-            <Field label="Comprobante (PDF)">
+            <Field label="Captura del comprobante">
               <input
+                ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
-                className="input-ritto"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
                 onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
               />
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  {receiptFile ? "Cambiar captura" : "Subir captura"}
+                </button>
+
+                {receiptFile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  >
+                    Quitar
+                  </button>
+                ) : null}
+              </div>
+
               {receiptFile ? (
                 <p className="text-[10px] text-slate-400 mt-2 truncate">
                   {receiptFile.name}
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-[10px] text-slate-500 mt-2">
+                  Formatos: JPG / PNG / WEBP
+                </p>
+              )}
             </Field>
           )}
 
