@@ -76,6 +76,7 @@ export default function Billing() {
       toast.error("Error iniciando el pago");
     }
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6 text-slate-50">
@@ -102,7 +103,7 @@ export default function Billing() {
         </button>
 
         <p className="text-[11px] text-slate-400 mt-4 text-center">
-          Sinigidmente · Cancelás cuando quieras
+          Sin permanencia · Cancelás cuando quieras
         </p>
       </div>
     </div>
