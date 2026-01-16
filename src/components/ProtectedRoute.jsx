@@ -76,7 +76,10 @@ export default function ProtectedRoute({ children }) {
 
       // trial
       if (business.subscription_status === "trial") {
-        const trialEnds = business.trial_ends_at ? new Date(business.trial_ends_at) : null;
+        const trialEnds = business.trial_ends_at
+          ? new Date(business.trial_ends_at)
+          : null;
+
         const trialOk =
           trialEnds &&
           !Number.isNaN(trialEnds.getTime()) &&
@@ -110,6 +113,12 @@ export default function ProtectedRoute({ children }) {
     };
   }, []);
 
+  // ✅ Si estás en /paywall, ProtectedRoute no debería “decorar” ni interferir
+  // (por si alguna ruta lo envuelve por error en el futuro).
+  if (location.pathname === "/paywall") {
+    return <>{children}</>;
+  }
+
   if (loading || allowed === null || hasSession === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900">
@@ -126,11 +135,9 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  // ✅ Hay sesión pero no acceso => paywall
+  // ✅ Hay sesión pero no acceso => paywall (return directo, sin if que no retorna)
   if (!allowed) {
-    if (location.pathname !== "/paywall") {
-      return <Navigate to="/paywall" replace />;
-    }
+    return <Navigate to="/paywall" replace />;
   }
 
   const isDashboard = location.pathname === "/dashboard";
