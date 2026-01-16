@@ -263,7 +263,7 @@ export default function PublicBooking() {
     const path = `${bizId}/${Date.now()}-${cleanName}`;
 
     const { error: upErr } = await supabase.storage
-      .from("booking_receipts")
+      .from("ritto_receipts")
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
