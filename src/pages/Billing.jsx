@@ -6,7 +6,14 @@ export default function Billing() {
     try {
       const {
         data: { session },
+        error: sessErr,
       } = await supabase.auth.getSession();
+
+      if (sessErr) {
+        console.error("getSession error:", sessErr);
+        toast.error("Sesión no válida");
+        return;
+      }
 
       if (!session) {
         toast.error("Sesión no válida");
@@ -14,10 +21,13 @@ export default function Billing() {
       }
 
       // ✅ Buscar business_id del usuario (para que la activación pegue SIEMPRE)
+      // (alineado con la Edge Function: tabla businesses + owner_id + latest)
       const { data: biz, error: bizErr } = await supabase
         .from("businesses")
         .select("id")
-        .eq("owner_id", session.user.id) // ✅ FIX: era user_id
+        .eq("owner_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (bizErr) {
@@ -32,28 +42,21 @@ export default function Billing() {
         return;
       }
 
+      // ✅ NUEVO: usar action de suscripción (no depende de customer_email)
+      // No rompe nada: PaymentSuccess sigue verificando/activando como antes.
       const payload = {
+        action: "create_subscription_checkout",
         user_id: session.user.id,
-        business_id: biz.id, // ✅ CLAVE
+        business_id: biz.id,
         amount: 690,
-        description: "Suscripción Ritto (Plan mensual)",
-        customer_email: session.user.email,
-        customer_name: session.user.email,
         slug: "payment-success",
       };
-
-      if (!payload.customer_email) {
-        toast.error("Tu usuario no tiene email. Reingresá y probá de nuevo.");
-        return;
-      }
 
       const { data, error } = await supabase.functions.invoke(
         "create-mercadopago-checkout",
         {
           body: payload,
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          // Nota: no pasamos Authorization manual; supabase-js usa la sesión actual.
         }
       );
 
