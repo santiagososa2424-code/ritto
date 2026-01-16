@@ -363,7 +363,6 @@ export default function Dashboard() {
       ? "Rechazado"
       : "—";
   };
-
   // ─────────────────────────────
   // LÓGICA DE PLAN / TRIAL (PRIORIDAD: PLAN > TRIAL)
   // ─────────────────────────────
@@ -386,23 +385,24 @@ export default function Dashboard() {
 
   const hasActivePlan = planDaysLeft !== null && planDaysLeft > 0;
 
-  const trialEndsDate = business?.trial_ends_at
-    ? new Date(business.trial_ends_at)
+  // ✅ FIX: trial robusto (si la fecha llega en formato raro, igual bloquea)
+  const isTrial = subscription === "trial";
+
+  const trialEndsMs = business?.trial_ends_at
+    ? Date.parse(business.trial_ends_at)
+    : NaN;
+
+  // FAIL-SAFE: si es trial y la fecha es inválida => lo tratamos como vencido
+  const msTrial = !Number.isNaN(trialEndsMs)
+    ? trialEndsMs - now.getTime()
+    : -1;
+
+  const trialDaysLeft = isTrial
+    ? Math.ceil(msTrial / (1000 * 60 * 60 * 24))
     : null;
 
-  const msTrial =
-    trialEndsDate && !Number.isNaN(trialEndsDate.getTime())
-      ? trialEndsDate.getTime() - now.getTime()
-      : null;
-
-  const trialDaysLeft =
-    msTrial !== null ? Math.ceil(msTrial / (1000 * 60 * 60 * 24)) : null;
-
-  const isTrial = subscription === "trial";
-  const trialActive =
-    !hasActivePlan && isTrial && trialDaysLeft !== null && trialDaysLeft > 0;
-  const trialExpired =
-    !hasActivePlan && isTrial && trialDaysLeft !== null && trialDaysLeft <= 0;
+  const trialActive = !hasActivePlan && isTrial && trialDaysLeft > 0;
+  const trialExpired = !hasActivePlan && isTrial && trialDaysLeft <= 0;
 
   // Loader inicial si todavía está cargando y no hay negocio
   if (isLoading && !business) {
@@ -603,7 +603,6 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
-
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
