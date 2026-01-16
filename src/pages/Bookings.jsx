@@ -103,15 +103,36 @@ export default function Bookings() {
   };
 
   /* ─────────────────────────────
-     ACCIONES SEÑA (IGUAL QUE DASHBOARD)
+     ACCIONES SEÑA (FIX STORAGE)
   ───────────────────────────── */
   const openProof = (booking) => {
-    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
-    if (!url) {
+    // Si ya es URL absoluta (por ej transfer_pdf_url)
+    if (
+      booking?.transfer_pdf_url &&
+      /^https?:\/\//i.test(booking.transfer_pdf_url)
+    ) {
+      window.open(booking.transfer_pdf_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Path del bucket
+    const path = booking?.deposit_receipt_path;
+    if (!path) {
       toast.error("Este turno no tiene comprobante.");
       return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+
+    // Convertir path → URL pública
+    const { data, error } = supabase.storage
+      .from("ritto_receipts")
+      .getPublicUrl(path);
+
+    if (error || !data?.publicUrl) {
+      toast.error("No se pudo abrir el comprobante.");
+      return;
+    }
+
+    window.open(data.publicUrl, "_blank", "noopener,noreferrer");
   };
 
   const confirmBooking = async (bookingId) => {
@@ -156,16 +177,15 @@ export default function Bookings() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-10">
-        {/* Header */}
         <Header
           title="Reservas"
           subtitle="Acá podés ver todos los turnos filtrados por fecha."
         />
 
-        {/* FILTRO */}
         <Card title="Filtrar reservas">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
@@ -185,7 +205,6 @@ export default function Bookings() {
           </div>
         </Card>
 
-        {/* LISTA */}
         {loadingList ? (
           <div className="text-slate-400 text-sm">Cargando reservas...</div>
         ) : reservations.length === 0 ? (
@@ -223,35 +242,31 @@ export default function Bookings() {
                           </p>
                         )}
 
-                        {/* ✅ Acciones de seña SOLO si corresponde */}
                         {depositEnabled && (
                           <div className="mt-3 flex items-center gap-2">
                             <button
-                              type="button"
                               onClick={() => openProof(r)}
                               className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
                             >
                               Ver comprobante
                             </button>
 
-                            {st === "pending" ? (
+                            {st === "pending" && (
                               <>
                                 <button
-                                  type="button"
                                   onClick={() => confirmBooking(r.id)}
                                   className="text-[11px] px-3 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
                                 >
                                   Confirmar
                                 </button>
                                 <button
-                                  type="button"
                                   onClick={() => rejectBooking(r.id)}
                                   className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                                 >
                                   Rechazar
                                 </button>
                               </>
-                            ) : null}
+                            )}
                           </div>
                         )}
                       </div>
