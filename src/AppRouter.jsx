@@ -16,7 +16,7 @@ import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 import Bookings from "./pages/Bookings.jsx";
 import Billing from "./pages/Billing.jsx";
 
-// ✅ NUEVO: Paywall (solo en pages)
+// ✅ Paywall (debe ser PUBLICO)
 import Paywall from "./pages/Paywall.jsx";
 
 // 📦 Booking público
@@ -37,6 +37,9 @@ export default function AppRouter() {
         {/* 🌐 Públicas */}
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/payment-success" element={<PaymentSuccess />} />
+
+        {/* ✅ PAYWALL PUBLICO (sin ProtectedRoute) */}
+        <Route path="/paywall" element={<Paywall />} />
 
         {/* 🔐 Auth */}
         <Route path="/login" element={<Login />} />
@@ -60,16 +63,6 @@ export default function AppRouter() {
           element={
             <ProtectedRoute>
               <Billing />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* ✅ NUEVO: PAYWALL (privada, pero ProtectedRoute la deja entrar aunque no tenga acceso) */}
-        <Route
-          path="/paywall"
-          element={
-            <ProtectedRoute>
-              <Paywall />
             </ProtectedRoute>
           }
         />
