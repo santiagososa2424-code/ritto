@@ -16,6 +16,9 @@ import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 import Bookings from "./pages/Bookings.jsx";
 import Billing from "./pages/Billing.jsx";
 
+// ✅ NUEVO: Paywall (solo en pages)
+import Paywall from "./pages/Paywall.jsx";
+
 // 📦 Booking público
 import PublicBooking from "./pages/PublicBooking.jsx";
 import BookingSuccess from "./pages/BookingSuccess.jsx";
@@ -23,7 +26,6 @@ import PaymentSuccess from "./pages/PaymentSuccess.jsx";
 
 // 🔐 Middleware
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import RequireActiveAccess from "./components/RequireActiveAccess.jsx";
 
 export default function AppRouter() {
   return (
@@ -48,14 +50,11 @@ export default function AppRouter() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <Dashboard />
-              </RequireActiveAccess>
+              <Dashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* ✅ Billing SIEMPRE accesible (logueado) para poder pagar */}
         <Route
           path="/billing"
           element={
@@ -65,13 +64,21 @@ export default function AppRouter() {
           }
         />
 
+        {/* ✅ NUEVO: PAYWALL (privada, pero ProtectedRoute la deja entrar aunque no tenga acceso) */}
+        <Route
+          path="/paywall"
+          element={
+            <ProtectedRoute>
+              <Paywall />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/setup"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <BusinessSetup />
-              </RequireActiveAccess>
+              <BusinessSetup />
             </ProtectedRoute>
           }
         />
@@ -80,9 +87,7 @@ export default function AppRouter() {
           path="/services"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <Services />
-              </RequireActiveAccess>
+              <Services />
             </ProtectedRoute>
           }
         />
@@ -91,9 +96,7 @@ export default function AppRouter() {
           path="/schedule"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <Schedule />
-              </RequireActiveAccess>
+              <Schedule />
             </ProtectedRoute>
           }
         />
@@ -102,9 +105,7 @@ export default function AppRouter() {
           path="/schedule-blocks"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <ScheduleBlocks />
-              </RequireActiveAccess>
+              <ScheduleBlocks />
             </ProtectedRoute>
           }
         />
@@ -113,9 +114,7 @@ export default function AppRouter() {
           path="/bookings"
           element={
             <ProtectedRoute>
-              <RequireActiveAccess>
-                <Bookings />
-              </RequireActiveAccess>
+              <Bookings />
             </ProtectedRoute>
           }
         />
