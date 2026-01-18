@@ -137,6 +137,7 @@ export default function PublicBooking() {
 
   // ────────────────────────────────────────────────
   // HORARIOS DISPONIBLES (LOGICA PRESERVADA)
+  // ✅ FIX: bloquea por DURACIÓN REAL del servicio (no solo 1 slot)
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (selectedDate && selectedService && business) {
@@ -147,7 +148,7 @@ export default function PublicBooking() {
       setSelectedHour("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, selectedService, business, schedules, blocks]);
+  }, [selectedDate, selectedService, business, schedules, blocks, services]);
 
   const calculateAvailableHours = async () => {
     if (!business || !selectedService || !selectedDate) return;
@@ -176,46 +177,102 @@ export default function PublicBooking() {
       return;
     }
 
+    // Traer bookings con service_id para calcular duración real de cada reserva
     const { data: bookings } = await supabase
       .from("bookings")
-      .select("hour, status")
+      .select("hour, status, service_id")
       .eq("business_id", business.id)
       .eq("date", dateStr);
 
-    const step =
-      Number(business.slot_interval_minutes) ||
-      Number(selectedService.duration) ||
-      30;
+    // Intervalo base SIEMPRE = slot_interval_minutes (no usar duración del servicio como step)
+    const interval = Number(business.slot_interval_minutes) || 30;
+
+    const serviceDuration = Number(selectedService.duration) || interval;
+
+    // Duración por servicio (ya tenés services cargados)
+    const durationByServiceId = new Map(
+      (services || []).map((s) => [s.id, Number(s.duration) || interval])
+    );
+
+    const toMins = (hhmmOrHHMMSS) => {
+      const s = String(hhmmOrHHMMSS || "").slice(0, 5);
+      const [h, m] = s.split(":").map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      return h * 60 + m;
+    };
+
+    const toHHMM = (mins) => {
+      const h = String(Math.floor(mins / 60)).padStart(2, "0");
+      const m = String(mins % 60).padStart(2, "0");
+      return `${h}:${m}`;
+    };
+
+    const overlaps = (aStart, aEnd, bStart, bEnd) =>
+      aStart < bEnd && aEnd > bStart;
+
+    // Normalizar bookings del día a rangos [start,end) en minutos
+    const bookingRanges = (bookings || [])
+      .filter((b) => b && (b.status === "confirmed" || b.status === "pending"))
+      .map((b) => {
+        const start = toMins(b.hour);
+        const dur = durationByServiceId.get(b.service_id) || interval; // fallback seguro
+        if (start === null) return null;
+        return { start, end: start + dur };
+      })
+      .filter(Boolean);
+
+    // Cuenta cuántos bookings pisan un sub-slot [t, t+interval)
+    const countOverlapInSubSlot = (t) => {
+      const subStart = t;
+      const subEnd = t + interval;
+      let c = 0;
+      for (const r of bookingRanges) {
+        if (overlaps(r.start, r.end, subStart, subEnd)) c++;
+      }
+      return c;
+    };
 
     const hoursSet = new Set();
     const slots = [];
 
     todays.forEach((slot) => {
-      let current = normalizeHHMM(slot.start_time);
-      const end = normalizeHHMM(slot.end_time);
+      const startHHMM = normalizeHHMM(slot.start_time);
+      const endHHMM = normalizeHHMM(slot.end_time);
 
-      while (current && current < end) {
-        const normalized = `${current}:00`;
+      const dayStart = toMins(startHHMM);
+      const dayEnd = toMins(endHHMM);
 
-        const used =
-          (bookings || []).filter(
-            (b) =>
-              b.hour === normalized &&
-              (b.status === "confirmed" || b.status === "pending")
-          ).length || 0;
+      if (dayStart === null || dayEnd === null) return;
 
-        const capacity = slot.capacity_per_slot || 1;
-        const remaining = Math.max(capacity - used, 0);
-        const available = remaining > 0;
+      const capacity = slot.capacity_per_slot || 1;
 
-        slots.push({ hour: current, available, remaining, capacity });
+      // Generamos posibles starts por intervalos base,
+      // y exigimos que la duración completa entre dentro del horario del negocio
+      for (let t = dayStart; t + serviceDuration <= dayEnd; t += interval) {
+        let maxUsed = 0;
+        let ok = true;
 
-        if (available) hoursSet.add(current);
+        // Validar capacidad en TODOS los sub-slots que cubre el servicio
+        for (let x = t; x < t + serviceDuration; x += interval) {
+          const used = countOverlapInSubSlot(x);
+          if (used > maxUsed) maxUsed = used;
+          if (used >= capacity) {
+            ok = false;
+            break;
+          }
+        }
 
-        current = addMinutes(current, step);
+        const hour = toHHMM(t);
+        const remaining = Math.max(capacity - maxUsed, 0);
+        const available = ok && remaining > 0;
+
+        slots.push({ hour, available, remaining, capacity });
+
+        if (available) hoursSet.add(hour);
       }
     });
 
+    // Mantener tu lógica de “si hay duplicado, quedate con el que tenga más remaining”
     const map = new Map();
     slots.forEach((s) => {
       const prev = map.get(s.hour);
