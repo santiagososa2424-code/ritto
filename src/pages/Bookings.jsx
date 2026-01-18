@@ -76,8 +76,10 @@ export default function Bookings() {
 
   /* ─────────────────────────────
      ESTADOS (MISMA LÓGICA QUE DASHBOARD)
+     ✅ FIX: cancelled siempre se respeta aunque no haya seña
   ───────────────────────────── */
   const uiStatus = (booking) => {
+    if (booking?.status === "cancelled") return "cancelled";
     if (!depositEnabled) return "confirmed";
     return booking?.status || "confirmed";
   };
@@ -88,7 +90,7 @@ export default function Bookings() {
       : status === "pending"
       ? "Pendiente"
       : status === "cancelled"
-      ? "Rechazado"
+      ? "Cancelado"
       : "—";
   };
 
@@ -151,7 +153,8 @@ export default function Bookings() {
     }
   };
 
-  const rejectBooking = async (bookingId) => {
+  // ✅ Rechazar (seña) o Liberar turno (sin seña) = cancelar
+  const cancelBooking = async (bookingId) => {
     try {
       const { error } = await supabase
         .from("bookings")
@@ -159,13 +162,17 @@ export default function Bookings() {
         .eq("id", bookingId);
 
       if (error) throw error;
-      toast.success("Turno rechazado.");
+
+      toast.success("Turno liberado.");
       loadReservations(businessId, date);
     } catch (e) {
-      console.error("rejectBooking error:", e);
-      toast.error("No se pudo rechazar.");
+      console.error("cancelBooking error:", e);
+      toast.error("No se pudo liberar.");
     }
   };
+
+  // Alias para mantener tu nombre viejo si lo usabas en otros lados
+  const rejectBooking = async (bookingId) => cancelBooking(bookingId);
 
   if (loading) {
     return (
@@ -217,6 +224,7 @@ export default function Bookings() {
               <div className="space-y-3">
                 {grouped[day].map((r) => {
                   const st = uiStatus(r);
+                  const hasDeposit = r.deposit_paid === true;
 
                   return (
                     <div
@@ -242,44 +250,57 @@ export default function Bookings() {
                           </p>
                         )}
 
-                        {depositEnabled && (
-                          <div className="mt-3 flex items-center gap-2">
+                        {/* ✅ Acciones */}
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          {/* Si hay seña habilitada, se mantiene lo de comprobante */}
+                          {depositEnabled && (
                             <button
                               onClick={() => openProof(r)}
                               className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
                             >
                               Ver comprobante
                             </button>
+                          )}
 
-                            {st === "pending" && (
-                              <>
-                                <button
-                                  onClick={() => confirmBooking(r.id)}
-                                  className="text-[11px] px-3 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
-                                >
-                                  Confirmar
-                                </button>
-                                <button
-                                  onClick={() => rejectBooking(r.id)}
-                                  className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
+                          {/* ✅ Caso CON seña: si está pending, confirmar / rechazar (igual que antes) */}
+                          {depositEnabled && st === "pending" && (
+                            <>
+                              <button
+                                onClick={() => confirmBooking(r.id)}
+                                className="text-[11px] px-3 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                              >
+                                Confirmar
+                              </button>
+                              <button
+                                onClick={() => rejectBooking(r.id)}
+                                className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                              >
+                                Rechazar
+                              </button>
+                            </>
+                          )}
+
+                          {/* ✅ Caso SIN seña: permitir “liberar turno” si no está cancelado */}
+                          {!hasDeposit && st !== "cancelled" && (
+                            <button
+                              onClick={() => cancelBooking(r.id)}
+                              className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                            >
+                              Liberar turno
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="text-right">
                         <span
                           className={`px-3 py-1 text-xs rounded-full font-semibold ${
-                            r.deposit_paid
+                            hasDeposit
                               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                               : "bg-white/10 text-slate-300 border border-white/20"
                           }`}
                         >
-                          {r.deposit_paid ? "Con seña" : "Sin seña"}
+                          {hasDeposit ? "Con seña" : "Sin seña"}
                         </span>
 
                         <p
