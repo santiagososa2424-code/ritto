@@ -39,6 +39,16 @@ export default function Dashboard() {
   const depositEnabled = business?.deposit_enabled === true;
 
   /* ─────────────────────────────
+     NORMALIZADORES (FIX)
+  ───────────────────────────── */
+  const normStatus = (s) => String(s || "").toLowerCase().trim();
+
+  const isCancelledStatus = (s) => {
+    const st = normStatus(s);
+    return st === "cancelled" || st === "canceled" || st === "rejected";
+  };
+
+  /* ─────────────────────────────
      NAVEGACIÓN
   ───────────────────────────── */
   const navigate = useNavigate();
@@ -143,7 +153,8 @@ export default function Dashboard() {
 
   /* ─────────────────────────────
      LOAD DASHBOARD (ÚNICO ORIGEN)
-     ✅ FIX: usar depositEnabled del biz recién cargado (evita ingresos “pegados”)
+     ✅ FIX: usar depositEnabled del biz recién cargado
+     ✅ FIX: normalizar status para ingresos (evita “pegado”)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -171,7 +182,7 @@ export default function Dashboard() {
         return;
       }
 
-      // ✅ IMPORTANTE: este valor es el “source of truth” para cálculos
+      // ✅ source of truth para cálculos
       const depositOn = biz.deposit_enabled === true;
 
       setBusiness(biz);
@@ -221,16 +232,24 @@ export default function Dashboard() {
         console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      /* ───────── INGRESOS ─────────
-         ✅ FIX: usa depositOn (el del negocio recién cargado)
-         - Sin seña: cuenta todo excepto cancelled (incluye null)
+      /* ───────── INGRESOS (FIX REAL) ─────────
+         - Sin seña: cuenta todo excepto cancelados (incluye null)
          - Con seña: solo confirmed
-      ───────── */
+         ✅ FIX: status normalizado
+      */
       let totalRev = 0;
+
       (recentBookings || [])
         .filter((b) => {
-          if (!depositOn) return b.status !== "cancelled";
-          return b.status === "confirmed";
+          const st = normStatus(b?.status);
+
+          if (!depositOn) {
+            // cuenta todo lo que NO sea cancelado
+            return !isCancelledStatus(st);
+          }
+
+          // con seña: solo confirmados
+          return st === "confirmed";
         })
         .forEach((b) => {
           const svc =
@@ -262,9 +281,10 @@ export default function Dashboard() {
   /* ─────────────────────────────
      OCUPACIÓN (FIX)
      - Normaliza días (acentos)
-     - Cuenta pending+confirmed si hay seña
-     - Si no hay seña: cuenta todo excepto cancelled (incluye null)
+     - Con seña: confirmed + pending
+     - Sin seña: todo excepto cancelados
      ✅ FIX: recibe depositOn para evitar valores viejos
+     ✅ FIX: status normalizado
   ───────────────────────────── */
   const normalizeDay = (str) =>
     (str || "")
@@ -322,8 +342,11 @@ export default function Dashboard() {
       }
 
       const occupied = (used || []).filter((b) => {
-        if (!depositOn) return b.status !== "cancelled";
-        return b.status === "confirmed" || b.status === "pending";
+        const st = normStatus(b?.status);
+
+        if (!depositOn) return !isCancelledStatus(st);
+
+        return st === "confirmed" || st === "pending";
       }).length;
 
       return Math.round((occupied / totalSlots) * 100);
@@ -349,14 +372,19 @@ export default function Dashboard() {
 
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
-     - Si NO hay seña: todo se muestra como Confirmado
-     - Si hay seña: se respeta status real (pending/confirmed/cancelled)
-     ✅ FIX: cancelled siempre se respeta
+     ✅ FIX: cancelled siempre se respeta (con status normalizado)
   ───────────────────────────── */
   const uiStatus = (booking) => {
-    if (booking?.status === "cancelled") return "cancelled";
+    const st = normStatus(booking?.status);
+
+    // siempre respetar cancelado (incluye variantes)
+    if (isCancelledStatus(st)) return "cancelled";
+
+    // si NO hay seña: todo lo demás es confirmado
     if (!depositEnabled) return "confirmed";
-    return booking?.status || "confirmed";
+
+    // si hay seña: respetar status real, fallback confirmed
+    return st || "confirmed";
   };
 
   // ✅ Turnos activos para métrica semanal (no cuenta cancelados)
@@ -407,14 +435,12 @@ export default function Dashboard() {
 
   const hasActivePlan = planDaysLeft !== null && planDaysLeft > 0;
 
-  // ✅ FIX: trial robusto (si la fecha llega en formato raro, igual bloquea)
   const isTrial = subscription === "trial";
 
   const trialEndsMs = business?.trial_ends_at
     ? Date.parse(business.trial_ends_at)
     : NaN;
 
-  // FAIL-SAFE: si es trial y la fecha es inválida => lo tratamos como vencido
   const msTrial = !Number.isNaN(trialEndsMs)
     ? trialEndsMs - now.getTime()
     : -1;
