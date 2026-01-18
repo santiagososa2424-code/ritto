@@ -133,11 +133,11 @@ export default function Dashboard() {
         .eq("id", bookingId);
 
       if (error) throw error;
-      toast.success("Turno rechazado.");
+      toast.success("Turno cancelado.");
       loadDashboard();
     } catch (e) {
       console.error("rejectBooking error:", e);
-      toast.error("No se pudo rechazar.");
+      toast.error("No se pudo cancelar.");
     }
   };
 
@@ -221,7 +221,9 @@ export default function Dashboard() {
       let totalRev = 0;
       (recentBookings || [])
         .filter((b) => {
+          // ✅ Sin seña: cuenta todo excepto cancelled
           if (!depositEnabled) return b.status !== "cancelled";
+          // ✅ Con seña: solo cuenta confirmados
           return b.status === "confirmed";
         })
         .forEach((b) => {
@@ -307,6 +309,7 @@ export default function Dashboard() {
         return 0;
       }
 
+      // ✅ Cancelado baja ocupación en ambos casos
       const occupied = (used || []).filter((b) => {
         if (!depositEnabled) return b.status !== "cancelled";
         return b.status === "confirmed" || b.status === "pending";
@@ -333,23 +336,27 @@ export default function Dashboard() {
     estimatedRevenue || 0
   );
   const occupationLabel = `${occupation || 0}%`;
-
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      - Si NO hay seña: todo se muestra como Confirmado
      - Si hay seña: se respeta status real (pending/confirmed/cancelled)
   ───────────────────────────── */
-const uiStatus = (booking) => {
-  // ✅ Siempre respetar cancelled
-  if (booking?.status === "cancelled") return "cancelled";
+  const uiStatus = (booking) => {
+    // ✅ Siempre respetar cancelled
+    if (booking?.status === "cancelled") return "cancelled";
 
-  // Si NO hay seña: todo lo demás se muestra como Confirmado
-  if (!depositEnabled) return "confirmed";
+    // Si NO hay seña: todo lo demás se muestra como Confirmado
+    if (!depositEnabled) return "confirmed";
 
-  // Si hay seña: respetar status real
-  return booking?.status || "confirmed";
-};
+    // Si hay seña: respetar status real
+    return booking?.status || "confirmed";
+  };
 
+  // ✅ Turnos activos para métrica semanal (no cuenta cancelados)
+  const activeWeekCount = useMemo(() => {
+    return (appointmentsToday || []).filter((b) => uiStatus(b) !== "cancelled")
+      .length;
+  }, [appointmentsToday, depositEnabled]);
 
   const statusBadgeClasses = (status) => {
     return status === "confirmed"
@@ -367,9 +374,10 @@ const uiStatus = (booking) => {
       : status === "pending"
       ? "Pendiente"
       : status === "cancelled"
-      ? "Rechazado"
+      ? "Cancelado"
       : "—";
   };
+
   // ─────────────────────────────
   // LÓGICA DE PLAN / TRIAL (PRIORIDAD: PLAN > TRIAL)
   // ─────────────────────────────
@@ -610,6 +618,7 @@ const uiStatus = (booking) => {
           )}
         </div>
       </aside>
+
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -658,12 +667,11 @@ const uiStatus = (booking) => {
             </div>
           </div>
         </header>
-
         {/* MÉTRICAS */}
         <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           <MetricCard
             label="Turnos de la semana"
-            value={appointmentsToday.length}
+            value={activeWeekCount}
             pill="Agenda"
             sublabel="Próximos 7 días"
           />
@@ -907,6 +915,7 @@ const uiStatus = (booking) => {
     </div>
   );
 }
+
 /* ─────────────────────────────
    COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
    - Mantienen estética existente
