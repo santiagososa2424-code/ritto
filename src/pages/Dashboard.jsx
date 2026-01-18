@@ -143,6 +143,7 @@ export default function Dashboard() {
 
   /* ─────────────────────────────
      LOAD DASHBOARD (ÚNICO ORIGEN)
+     ✅ FIX: usar depositEnabled del biz recién cargado (evita ingresos “pegados”)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -169,6 +170,9 @@ export default function Dashboard() {
         toast.error("No se pudo cargar tu negocio.");
         return;
       }
+
+      // ✅ IMPORTANTE: este valor es el “source of truth” para cálculos
+      const depositOn = biz.deposit_enabled === true;
 
       setBusiness(biz);
 
@@ -217,13 +221,15 @@ export default function Dashboard() {
         console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      /* ───────── INGRESOS ───────── */
+      /* ───────── INGRESOS ─────────
+         ✅ FIX: usa depositOn (el del negocio recién cargado)
+         - Sin seña: cuenta todo excepto cancelled (incluye null)
+         - Con seña: solo confirmed
+      ───────── */
       let totalRev = 0;
       (recentBookings || [])
         .filter((b) => {
-          // ✅ Sin seña: cuenta todo excepto cancelled
-          if (!depositEnabled) return b.status !== "cancelled";
-          // ✅ Con seña: solo cuenta confirmados
+          if (!depositOn) return b.status !== "cancelled";
           return b.status === "confirmed";
         })
         .forEach((b) => {
@@ -238,7 +244,12 @@ export default function Dashboard() {
       setEstimatedRevenue(totalRev);
 
       /* ───────── OCUPACIÓN HOY ───────── */
-      const occupationValue = await calculateOccupation(biz.id, todayStr, biz);
+      const occupationValue = await calculateOccupation(
+        biz.id,
+        todayStr,
+        biz,
+        depositOn
+      );
       setOccupation(occupationValue);
     } catch (err) {
       console.error("Dashboard error", err);
@@ -253,6 +264,7 @@ export default function Dashboard() {
      - Normaliza días (acentos)
      - Cuenta pending+confirmed si hay seña
      - Si no hay seña: cuenta todo excepto cancelled (incluye null)
+     ✅ FIX: recibe depositOn para evitar valores viejos
   ───────────────────────────── */
   const normalizeDay = (str) =>
     (str || "")
@@ -261,7 +273,7 @@ export default function Dashboard() {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
-  const calculateOccupation = async (businessId, dateStr, biz) => {
+  const calculateOccupation = async (businessId, dateStr, biz, depositOn) => {
     try {
       const dayName = normalizeDay(
         new Date(dateStr).toLocaleDateString("es-UY", { weekday: "long" })
@@ -309,9 +321,8 @@ export default function Dashboard() {
         return 0;
       }
 
-      // ✅ Cancelado baja ocupación en ambos casos
       const occupied = (used || []).filter((b) => {
-        if (!depositEnabled) return b.status !== "cancelled";
+        if (!depositOn) return b.status !== "cancelled";
         return b.status === "confirmed" || b.status === "pending";
       }).length;
 
@@ -321,7 +332,6 @@ export default function Dashboard() {
       return 0;
     }
   };
-
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -336,19 +346,16 @@ export default function Dashboard() {
     estimatedRevenue || 0
   );
   const occupationLabel = `${occupation || 0}%`;
+
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      - Si NO hay seña: todo se muestra como Confirmado
      - Si hay seña: se respeta status real (pending/confirmed/cancelled)
+     ✅ FIX: cancelled siempre se respeta
   ───────────────────────────── */
   const uiStatus = (booking) => {
-    // ✅ Siempre respetar cancelled
     if (booking?.status === "cancelled") return "cancelled";
-
-    // Si NO hay seña: todo lo demás se muestra como Confirmado
     if (!depositEnabled) return "confirmed";
-
-    // Si hay seña: respetar status real
     return booking?.status || "confirmed";
   };
 
@@ -618,7 +625,6 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
-
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -667,6 +673,7 @@ export default function Dashboard() {
             </div>
           </div>
         </header>
+
         {/* MÉTRICAS */}
         <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           <MetricCard
@@ -801,7 +808,7 @@ export default function Dashboard() {
                                   onClick={() => rejectBooking(item.id)}
                                   className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                                 >
-                                  Rechazar
+                                  Cancelar
                                 </button>
                               </>
                             ) : (
