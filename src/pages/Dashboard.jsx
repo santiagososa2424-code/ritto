@@ -339,10 +339,17 @@ export default function Dashboard() {
      - Si NO hay seña: todo se muestra como Confirmado
      - Si hay seña: se respeta status real (pending/confirmed/cancelled)
   ───────────────────────────── */
-  const uiStatus = (booking) => {
-    if (!depositEnabled) return "confirmed";
-    return booking?.status || "confirmed";
-  };
+const uiStatus = (booking) => {
+  // ✅ Siempre respetar cancelled
+  if (booking?.status === "cancelled") return "cancelled";
+
+  // Si NO hay seña: todo lo demás se muestra como Confirmado
+  if (!depositEnabled) return "confirmed";
+
+  // Si hay seña: respetar status real
+  return booking?.status || "confirmed";
+};
+
 
   const statusBadgeClasses = (status) => {
     return status === "confirmed"
