@@ -163,11 +163,29 @@ export default function Bookings() {
 
       if (error) throw error;
 
-      toast.success("Turno liberado.");
+      toast.success("Turno cancelado.");
       loadReservations(businessId, date);
     } catch (e) {
       console.error("cancelBooking error:", e);
-      toast.error("No se pudo liberar.");
+      toast.error("No se pudo cancelar.");
+    }
+  };
+
+  // ✅ Eliminar definitivo (solo si está cancelado)
+  const deleteBooking = async (bookingId) => {
+    const ok = window.confirm("¿Eliminar este turno definitivamente?");
+    if (!ok) return;
+
+    try {
+      const { error } = await supabase.from("bookings").delete().eq("id", bookingId);
+
+      if (error) throw error;
+
+      toast.success("Turno eliminado.");
+      loadReservations(businessId, date);
+    } catch (e) {
+      console.error("deleteBooking error:", e);
+      toast.error("No se pudo eliminar.");
     }
   };
 
@@ -229,8 +247,20 @@ export default function Bookings() {
                   return (
                     <div
                       key={r.id}
-                      className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex justify-between items-center"
+                      className="relative rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex justify-between items-center"
                     >
+                      {/* ✅ X para eliminar definitivo (solo cancelado) */}
+                      {st === "cancelled" && (
+                        <button
+                          type="button"
+                          onClick={() => deleteBooking(r.id)}
+                          className="absolute top-3 right-3 h-8 w-8 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center text-slate-200"
+                          title="Eliminar"
+                        >
+                          ✕
+                        </button>
+                      )}
+
                       <div>
                         <p className="font-semibold text-lg text-slate-50 tracking-tight">
                           {r.hour?.slice(0, 5)} — {r.service_name}
@@ -262,7 +292,7 @@ export default function Bookings() {
                             </button>
                           )}
 
-                          {/* ✅ Caso CON seña: si está pending, confirmar / rechazar (igual que antes) */}
+                          {/* ✅ Caso CON seña: si está pending, confirmar / rechazar */}
                           {depositEnabled && st === "pending" && (
                             <>
                               <button
@@ -275,7 +305,7 @@ export default function Bookings() {
                                 onClick={() => rejectBooking(r.id)}
                                 className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                               >
-                                Rechazar
+                                Cancelar
                               </button>
                             </>
                           )}
@@ -286,7 +316,7 @@ export default function Bookings() {
                               onClick={() => cancelBooking(r.id)}
                               className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                             >
-                              Liberar turno
+                              Cancelar turno
                             </button>
                           )}
                         </div>
