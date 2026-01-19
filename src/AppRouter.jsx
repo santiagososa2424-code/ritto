@@ -14,6 +14,7 @@ import Services from "./pages/Services.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import ScheduleBlocks from "./pages/ScheduleBlocks.jsx";
 import Bookings from "./pages/Bookings.jsx";
+import Expenses from "./pages/Expenses.jsx"; // ✅ NUEVO
 
 // 💳 Billing (lo hacemos PUBLICO para permitir pagar aunque estés bloqueado por paywall)
 import Billing from "./pages/Billing.jsx";
@@ -104,6 +105,16 @@ export default function AppRouter() {
           element={
             <ProtectedRoute>
               <Bookings />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ NUEVO: GASTOS */}
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute>
+              <Expenses />
             </ProtectedRoute>
           }
         />
