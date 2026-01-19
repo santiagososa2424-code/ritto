@@ -13,43 +13,41 @@ const CATEGORIES = [
   "Otros",
 ];
 
+const monthToMonthStart = (yyyyMm) => {
+  if (!yyyyMm || !/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
+  return `${yyyyMm}-01`;
+};
+
 export default function Expenses() {
   const [business, setBusiness] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [businessId, setBusinessId] = useState(null);
 
-  // mes seleccionado (YYYY-MM)
   const [month, setMonth] = useState(() => {
     const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    return `${yyyy}-${mm}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  // planilla: {Categoria: monto}
-  const [rows, setRows] = useState(() => {
-    const obj = {};
-    CATEGORIES.forEach((c) => (obj[c] = 0));
-    return obj;
-  });
+  const [rows, setRows] = useState(() =>
+    CATEGORIES.reduce((acc, c) => {
+      acc[c] = 0;
+      return acc;
+    }, {})
+  );
 
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  // comparativo
-  const [revenue30, setRevenue30] = useState(0);
 
   const navigate = useNavigate();
 
-  const monthStartStr = useMemo(() => `${month}-01`, [month]);
+  const monthStart = useMemo(() => monthToMonthStart(month), [month]);
 
-  const totalExpenses = useMemo(() => {
-    return CATEGORIES.reduce((acc, c) => acc + Number(rows[c] || 0), 0);
+  const total = useMemo(() => {
+    return CATEGORIES.reduce((sum, c) => sum + (Number(rows[c]) || 0), 0);
   }, [rows]);
 
-  const net = useMemo(() => {
-    return Number(revenue30 || 0) - Number(totalExpenses || 0);
-  }, [revenue30, totalExpenses]);
-
-  const money = (n) => new Intl.NumberFormat("es-UY").format(Number(n || 0));
+  const totalLabel = useMemo(() => {
+    return new Intl.NumberFormat("es-UY").format(total || 0);
+  }, [total]);
 
   useEffect(() => {
     loadBusiness();
@@ -57,12 +55,9 @@ export default function Expenses() {
   }, []);
 
   useEffect(() => {
-    if (business) {
-      loadMonthExpenses();
-      loadRevenueLast30Days();
-    }
+    if (businessId && monthStart) loadMonth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, monthStartStr]);
+  }, [businessId, monthStart]);
 
   const loadBusiness = async () => {
     try {
@@ -77,132 +72,72 @@ export default function Expenses() {
         return;
       }
 
-      const { data: biz, error } = await supabase
+      const { data: biz } = await supabase
         .from("businesses")
         .select("*")
         .eq("owner_id", user.id)
         .single();
 
-      if (error || !biz) {
+      if (!biz) {
         navigate("/setup");
         return;
       }
 
       setBusiness(biz);
+      setBusinessId(biz.id);
     } catch (e) {
-      console.error(e);
-      toast.error("No se pudo cargar el negocio.");
+      console.error("loadBusiness expenses error:", e);
+      toast.error("No se pudo cargar tu negocio.");
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMonthExpenses = async () => {
-    if (!business) return;
-
+  const loadMonth = async () => {
     try {
       const { data, error } = await supabase
         .from("expenses")
         .select("category, amount")
-        .eq("business_id", business.id)
-        .eq("month", monthStartStr);
+        .eq("business_id", businessId)
+        .eq("month", monthStart);
 
       if (error) throw error;
 
-      const next = {};
-      CATEGORIES.forEach((c) => (next[c] = 0));
+      const base = CATEGORIES.reduce((acc, c) => {
+        acc[c] = 0;
+        return acc;
+      }, {});
+
       (data || []).forEach((r) => {
-        if (r?.category && CATEGORIES.includes(r.category)) {
-          next[r.category] = Number(r.amount || 0);
+        if (base.hasOwnProperty(r.category)) {
+          base[r.category] = Number(r.amount) || 0;
         }
       });
 
-      setRows(next);
+      setRows(base);
     } catch (e) {
-      console.error("loadMonthExpenses error:", e);
+      console.error("loadMonth expenses error:", e);
+      // si aún no existe tabla/policy, que no rompa la UI
       toast.error("No se pudieron cargar los gastos.");
     }
   };
 
-  // Misma lógica de ingresos del Dashboard: últimos 30 días
-  const loadRevenueLast30Days = async () => {
-    if (!business) return;
-
-    try {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const date30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-
-      const depositOn = business.deposit_enabled === true;
-
-      const normStatus = (s) => String(s || "").toLowerCase().trim();
-      const isCancelledStatus = (s) => {
-        const st = normStatus(s);
-        return st === "cancelled" || st === "canceled" || st === "rejected";
-      };
-
-      const { data: servicesData, error: servicesError } = await supabase
-        .from("services")
-        .select("id, name, price")
-        .eq("business_id", business.id);
-
-      if (servicesError) console.error("servicesError:", servicesError);
-
-      const servicesMap = new Map();
-      (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
-
-      const { data: recentBookings, error: recentBookingsError } = await supabase
-        .from("bookings")
-        .select("service_id, service_name, status, date")
-        .eq("business_id", business.id)
-        .gte("date", date30)
-        .lte("date", todayStr);
-
-      if (recentBookingsError) console.error("recentBookingsError:", recentBookingsError);
-
-      let totalRev = 0;
-
-      (recentBookings || [])
-        .filter((b) => {
-          const st = normStatus(b?.status);
-
-          if (!depositOn) return !isCancelledStatus(st);
-
-          return st === "confirmed";
-        })
-        .forEach((b) => {
-          const svc =
-            servicesMap.get(b.service_id) ||
-            (servicesData || []).find((s) => String(s.name) === String(b.service_name));
-          totalRev += Number(svc?.price) || 0;
-        });
-
-      setRevenue30(totalRev);
-    } catch (e) {
-      console.error("loadRevenueLast30Days error:", e);
-      setRevenue30(0);
-    }
+  const setValue = (cat, val) => {
+    const num = Number(String(val).replace(",", "."));
+    setRows((prev) => ({ ...prev, [cat]: Number.isFinite(num) ? num : 0 }));
   };
 
-  const onChangeAmount = (cat, value) => {
-    const n = Number(value);
-    setRows((prev) => ({
-      ...prev,
-      [cat]: Number.isFinite(n) && n >= 0 ? n : 0,
-    }));
-  };
-
-  const saveAll = async () => {
-    if (!business) return;
+  const saveMonth = async () => {
+    if (!businessId || !monthStart) return;
 
     try {
       setSaving(true);
 
       const payload = CATEGORIES.map((cat) => ({
-        business_id: business.id,
-        month: monthStartStr,
+        business_id: businessId,
+        month: monthStart,
         category: cat,
-        amount: Number(rows[cat] || 0),
-        created_by: null,
+        amount: Number(rows[cat]) || 0,
       }));
 
       const { error } = await supabase
@@ -213,7 +148,7 @@ export default function Expenses() {
 
       toast.success("Gastos guardados.");
     } catch (e) {
-      console.error("saveAll error:", e);
+      console.error("saveMonth expenses error:", e);
       toast.error("No se pudieron guardar los gastos.");
     } finally {
       setSaving(false);
@@ -222,7 +157,7 @@ export default function Expenses() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50">
         <div className="px-4 py-2 rounded-3xl bg-slate-900/80 border border-white/10 shadow-lg backdrop-blur-xl text-xs flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           Cargando gastos...
@@ -232,38 +167,34 @@ export default function Expenses() {
   }
 
   return (
-    <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
-      <div className="max-w-3xl mx-auto space-y-10">
-        <Header title="Gastos" subtitle="Cargá tus gastos mensuales por categoría y comparalos con tus ingresos." />
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 px-4 py-10">
+      <div className="max-w-3xl mx-auto space-y-8">
+        <Header
+          title="Gastos"
+          subtitle="Cargá tus gastos mensuales por categoría. Se calcula el total automáticamente."
+        />
 
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-          <h2 className="text-xl font-semibold tracking-tight text-emerald-300">
-            Comparativo
-          </h2>
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-[11px] text-slate-400">Negocio</p>
+              <p className="text-sm font-semibold">{business?.name || "Ritto"}</p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MiniCard label="Ingresos" value={`$ ${money(revenue30)}`} sub="Últimos 30 días" />
-            <MiniCard label="Gastos" value={`$ ${money(totalExpenses)}`} sub="Mes seleccionado" />
-            <MiniCard label="Neto" value={`$ ${money(net)}`} sub="Ingresos - Gastos" />
-          </div>
-        </div>
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="text-[11px] text-slate-400">Mes</label>
+                <input
+                  type="month"
+                  className="input-ritto mt-1"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                />
+              </div>
 
-        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-xl font-semibold tracking-tight text-emerald-300">
-              Planilla mensual
-            </h2>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="month"
-                className="input-ritto"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              />
               <button
                 type="button"
-                onClick={saveAll}
+                onClick={saveMonth}
                 disabled={saving}
                 className="button-ritto disabled:opacity-60"
               >
@@ -273,80 +204,58 @@ export default function Expenses() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-            <div className="grid grid-cols-3 text-[11px] border-b border-white/10 bg-slate-900/70">
-              <div className="px-3 py-2 text-slate-400 border-r border-white/10">Categoría</div>
-              <div className="px-3 py-2 text-slate-400 border-r border-white/10">Monto</div>
-              <div className="px-3 py-2 text-slate-400">Nota</div>
+            <div className="grid grid-cols-2 text-[11px] border-b border-white/10 bg-slate-900/70">
+              <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                Categoría
+              </div>
+              <div className="px-3 py-2 text-slate-400 text-right">Monto</div>
             </div>
 
-            <div className="text-[12px]">
+            <div className="divide-y divide-white/10">
               {CATEGORIES.map((cat) => (
-                <div
-                  key={cat}
-                  className="grid grid-cols-3 border-b border-white/10 hover:bg-white/5"
-                >
-                  <div className="px-3 py-2.5 border-r border-white/10 text-slate-200 font-medium">
+                <div key={cat} className="grid grid-cols-2 items-center">
+                  <div className="px-3 py-3 text-[12px] text-slate-200 border-r border-white/10">
                     {cat}
                   </div>
-
-                  <div className="px-3 py-2.5 border-r border-white/10">
+                  <div className="px-3 py-3 flex justify-end">
                     <input
                       type="number"
                       min={0}
-                      className="input-ritto"
+                      className="input-ritto text-right w-[160px]"
                       value={rows[cat]}
-                      onChange={(e) => onChangeAmount(cat, e.target.value)}
+                      onChange={(e) => setValue(cat, e.target.value)}
                     />
-                  </div>
-
-                  <div className="px-3 py-2.5 text-slate-500">
-                    —
                   </div>
                 </div>
               ))}
 
-              <div className="grid grid-cols-3 bg-white/5">
-                <div className="px-3 py-2.5 border-r border-white/10 text-slate-200 font-semibold">
+              {/* TOTAL */}
+              <div className="grid grid-cols-2 items-center bg-white/5">
+                <div className="px-3 py-3 text-[12px] font-semibold text-slate-50 border-r border-white/10">
                   Total
                 </div>
-                <div className="px-3 py-2.5 border-r border-white/10 text-slate-200 font-semibold">
-                  $ {money(totalExpenses)}
+                <div className="px-3 py-3 text-right text-[12px] font-semibold text-emerald-300">
+                  $ {totalLabel}
                 </div>
-                <div className="px-3 py-2.5 text-slate-500">—</div>
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard")}
-            className="text-[12px] px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-          >
-            Volver al panel
-          </button>
+          <p className="text-[10px] text-slate-500">
+            Consejo: cargá números aproximados. Lo importante es ver tu margen real.
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-/* ───────── UI helpers ───────── */
-
+/* UI */
 function Header({ title, subtitle }) {
   return (
     <div className="text-center space-y-1">
       <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
       <p className="text-xs text-slate-400">{subtitle}</p>
-    </div>
-  );
-}
-
-function MiniCard({ label, value, sub }) {
-  return (
-    <div className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5">
-      <p className="text-[11px] text-slate-400 mb-1">{label}</p>
-      <p className="text-2xl font-semibold">{value}</p>
-      <p className="text-[11px] text-slate-500 mt-1">{sub}</p>
     </div>
   );
 }
