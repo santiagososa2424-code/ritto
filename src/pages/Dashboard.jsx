@@ -1,266 +1,325 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
 
-export default function Dashboard() {
-  const [isLoading, setIsLoading] = useState(false);
+        {/* MÉTRICAS */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <MetricCard
+            label="Turnos de la semana"
+            value={activeWeekCount}
+            pill="Agenda"
+            sublabel="Próximos 7 días"
+          />
+          <MetricCard
+            label="Ingresos"
+            value={`$ ${revenueLabel}`}
+            pill="Ingresos"
+            sublabel="Últimos 30 días"
+          />
+          <MetricCard
+            label="Ocupación"
+            value={occupationLabel}
+            pill="Capacidad"
+            sublabel="Hoy"
+          />
+        </section>
 
-  const [appointmentsToday, setAppointmentsToday] = useState([]);
-  const [occupation, setOccupation] = useState(0);
-  const [estimatedRevenue, setEstimatedRevenue] = useState(0);
+        {/* AGENDA + LATERAL */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+          {/* IZQUIERDA */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            {/* AGENDA SEMANAL */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Turnos de la semana</h2>
+                  <p className="text-[11px] text-slate-400">Próximos 7 días</p>
+                </div>
+                <button
+                  onClick={goBookings}
+                  className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10"
+                >
+                  Ver calendario
+                </button>
+              </div>
 
-  const [business, setBusiness] = useState(null);
-  const [copied, setCopied] = useState(false);
+              <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div
+                  className={`grid text-[11px] border-b border-white/10 bg-slate-900/70 ${
+                    depositEnabled
+                      ? "grid-cols-[auto,auto,1fr,auto]"
+                      : "grid-cols-[auto,auto,1fr]"
+                  }`}
+                >
+                  <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                    Fecha
+                  </div>
+                  <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                    Hora
+                  </div>
+                  <div className="px-3 py-2 text-slate-400">
+                    Cliente · Servicio · Estado
+                  </div>
+                  {depositEnabled && (
+                    <div className="px-3 py-2 text-slate-400 border-l border-white/10 text-right">
+                      Seña
+                    </div>
+                  )}
+                </div>
 
-  // ✅ MOBILE SIDEBAR (drawer)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+                <div className="max-h-[320px] overflow-auto text-[12px]">
+                  {appointmentsToday.length === 0 && (
+                    <div className="px-4 py-6 text-slate-500 text-sm">
+                      Todavía no tenés turnos esta semana.
+                    </div>
+                  )}
 
-  useEffect(() => {
-    const onResize = () => {
-      // md breakpoint (Tailwind): 768px
-      if (window.innerWidth >= 768) setMobileSidebarOpen(false);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+                  {appointmentsToday.map((item) => {
+                    const st = uiStatus(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`grid border-b border-white/10 hover:bg-white/5 ${
+                          depositEnabled
+                            ? "grid-cols-[auto,auto,1fr,auto]"
+                            : "grid-cols-[auto,auto,1fr]"
+                        }`}
+                      >
+                        <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                          {item.date || "—"}
+                        </div>
 
-  /* ─────────────────────────────
-     HELPERS DE FECHA (FIJOS)
-  ───────────────────────────── */
-  const todayStr = new Date().toISOString().slice(0, 10);
+                        <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                          {item.hour?.slice(0, 5) || "--:--"}
+                        </div>
 
-  const endWeekStr = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
-  })();
+                        <div className="px-3 py-2.5 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-slate-50">
+                              {item.customer_name}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {item.service_name}
+                            </p>
+                          </div>
 
-  const depositEnabled = business?.deposit_enabled === true;
+                          <span
+                            className={`text-[11px] px-2 py-1 rounded-2xl border whitespace-nowrap ${statusBadgeClasses(
+                              st
+                            )}`}
+                          >
+                            {statusLabel(st)}
+                          </span>
+                        </div>
 
-  /* ─────────────────────────────
-     NORMALIZADORES (FIX)
-  ───────────────────────────── */
-  const normStatus = (s) => String(s || "").toLowerCase().trim();
+                        {depositEnabled && (
+                          <div className="px-3 py-2.5 border-l border-white/10 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openProof(item)}
+                              className="text-[11px] px-2 py-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                            >
+                              Ver PDF
+                            </button>
 
-  const isCancelledStatus = (s) => {
-    const st = normStatus(s);
-    return st === "cancelled" || st === "canceled" || st === "rejected";
-  };
+                            {st === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rejectBooking(item.id)}
+                                  className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
 
-  /* ─────────────────────────────
-     NAVEGACIÓN
-  ───────────────────────────── */
-  const navigate = useNavigate();
+          {/* DERECHA (CARDS) */}
+          <div className="flex flex-col gap-6">
+            {/* PLAN ACTIVO */}
+            {!isLifetime && hasActivePlan && (
+              <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-emerald-300/90 font-semibold">
+                    Plan activo
+                  </p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
+                    {planDaysLeft} días
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mb-2">
+                  Tenés el plan activo por {planDaysLeft} días
+                </p>
+                <p className="text-[11px] text-slate-300 mb-4">
+                  Tu agenda está habilitada y tus clientes pueden reservar sin
+                  límites.
+                </p>
+                <button
+                  onClick={configurePayment}
+                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
+                >
+                  Administrar plan
+                </button>
+                <p className="text-[10px] text-slate-400 mt-3">
+                  • Sin permanencia · Cancelás cuando quieras
+                </p>
+              </div>
+            )}
 
-  const goAgenda = () => navigate("/schedule");
-  const goServices = () => navigate("/services");
-  const goBookings = () => navigate("/bookings");
-  const goSetup = () => navigate("/setup");
-  const goScheduleBlocks = () => navigate("/schedule-blocks");
-  const configurePayment = () => navigate("/billing");
+            {/* TRIAL ACTIVO */}
+            {trialActive && !isLifetime && (
+              <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-emerald-300/90 font-semibold">
+                    Prueba gratuita activa
+                  </p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
+                    {trialDaysLeft} días
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mb-2">
+                  {trialDaysLeft} días para enamorarte de Ritto
+                </p>
+                <p className="text-[11px] text-slate-300 mb-4">
+                  Usá la agenda sin límites. Después solo{" "}
+                  <span className="font-semibold">$690/mes</span>.
+                </p>
+                <button
+                  onClick={configurePayment}
+                  className="w-full text-xs px-3 py-2 rounded-2xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
+                >
+                  Configurar método de pago
+                </button>
+                <p className="text-[10px] text-slate-400 mt-3">
+                  • Sin permanencia · Cancelás cuando quieras
+                </p>
+              </div>
+            )}
 
-  // ✅ wrapper para cerrar drawer y navegar (sin tocar lógica)
-  const nav = (fn) => () => {
-    setMobileSidebarOpen(false);
-    fn();
-  };
+            {/* LINK PÚBLICO */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <p className="text-sm font-semibold mb-1">Link público</p>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Copiá este link y compartilo con tus clientes.
+              </p>
 
-  useEffect(() => {
-    loadDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-slate-200 truncate">
+                  {publicLink || "—"}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyPublicLink}
+                  className="text-[12px] px-4 py-2 rounded-2xl bg-cyan-300 text-slate-950 font-semibold hover:bg-cyan-200 transition"
+                >
+                  {copied ? "Copiado" : "Copiar"}
+                </button>
+              </div>
 
-  /* ─────────────────────────────
-     LINK PÚBLICO
-  ───────────────────────────── */
-  const publicLink = useMemo(() => {
-    if (!business?.slug) return "";
-    const origin =
-      typeof window !== "undefined" && window.location?.origin
-        ? window.location.origin
-        : "";
-    return `${origin}/book/${business.slug}`;
-  }, [business?.slug]);
+              <button
+                type="button"
+                onClick={openPublicLink}
+                className="w-full mt-3 text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+              >
+                Abrir link público
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
 
-  const copyPublicLink = async () => {
-    if (!publicLink) {
-      toast.error("Todavía no hay link público disponible.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(publicLink);
-      setCopied(true);
-      toast.success("Link copiado.");
-      setTimeout(() => setCopied(false), 1200);
-    } catch (e) {
-      console.error("copyPublicLink error:", e);
-      toast.error("No se pudo copiar.");
-    }
-  };
+/* ─────────────────────────────
+   COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
+   - Mantienen estética existente
+──────────────────────────────────────── */
 
-  const openPublicLink = () => {
-    if (!publicLink) {
-      toast.error("Todavía no hay link público disponible.");
-      return;
-    }
-    window.open(publicLink, "_blank", "noopener,noreferrer");
-  };
+function SidebarItem({ label, onClick, active }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2 rounded-2xl transition border ${
+        active
+          ? "bg-white/10 border-white/15"
+          : "bg-transparent border-transparent hover:bg-white/5 hover:border-white/10"
+      }`}
+    >
+      <span className="text-[12px]">{label}</span>
+    </button>
+  );
+}
 
-  /* ─────────────────────────────
-     ACCIONES SEÑA (MINIMAL)
-  ───────────────────────────── */
-  const openProof = (booking) => {
-    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
-    if (!url) {
-      toast.error("Este turno no tiene comprobante.");
-      return;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  const confirmBooking = async (bookingId) => {
-    try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "confirmed" })
-        .eq("id", bookingId);
-
-      if (error) throw error;
-      toast.success("Turno confirmado.");
-      loadDashboard();
-    } catch (e) {
-      console.error("confirmBooking error:", e);
-      toast.error("No se pudo confirmar.");
-    }
-  };
-
-  const rejectBooking = async (bookingId) => {
-    try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "cancelled" })
-        .eq("id", bookingId);
-
-      if (error) throw error;
-      toast.success("Turno cancelado.");
-      loadDashboard();
-    } catch (e) {
-      console.error("rejectBooking error:", e);
-      toast.error("No se pudo cancelar.");
-    }
-  };
-
-  /* ─────────────────────────────
-     LOAD DASHBOARD (ÚNICO ORIGEN)
-     ✅ FIX: usar depositEnabled del biz recién cargado
-     ✅ FIX: normalizar status para ingresos (evita “pegado”)
-  ───────────────────────────── */
-  const loadDashboard = async () => {
-    try {
-      setIsLoading(true);
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        navigate("/login");
-        return;
-      }
-
-      const user = session.user;
-
-      const { data: biz, error: bizError } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("owner_id", user.id)
-        .maybeSingle();
-
-      if (bizError || !biz) {
-        toast.error("No se pudo cargar tu negocio.");
-        return;
-      }
-
-      // ✅ source of truth para cálculos
-      const depositOn = biz.deposit_enabled === true;
-
-      setBusiness(biz);
-
-      /* ───────── TURNOS DE LA SEMANA ───────── */
-      const { data: bookingsWeek, error: bookingsWeekError } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("business_id", biz.id)
-        .gte("date", todayStr)
-        .lte("date", endWeekStr)
-        .order("date", { ascending: true })
-        .order("hour", { ascending: true });
-
-      if (bookingsWeekError) {
-        console.error("Error bookingsWeek:", bookingsWeekError);
-      }
-
-      setAppointmentsToday(bookingsWeek || []);
-
-      /* ───────── SERVICIOS ───────── */
-      const { data: servicesData, error: servicesError } = await supabase
-        .from("services")
-        .select("id, name, price, duration")
-        .eq("business_id", biz.id);
-
-      if (servicesError) {
-        console.error("Error cargando services:", servicesError);
-      }
-
-      const servicesMap = new Map();
-      (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
-
-      /* ───────── ÚLTIMOS 30 DÍAS ───────── */
-      const date30 = new Date(Date.now() - 30 * 86400000)
-        .toISOString()
-        .slice(0, 10);
-
-      const { data: recentBookings, error: recentBookingsError } = await supabase
-        .from("bookings")
-        .select("service_id, service_name, status")
-        .eq("business_id", biz.id)
-        .gte("date", date30)
-        .lte("date", todayStr);
-
-      if (recentBookingsError) {
-        console.error("Error cargando recentBookings:", recentBookingsError);
-      }
-
-      /* ───────── INGRESOS (FIX REAL) ─────────
-         - Sin seña: cuenta todo excepto cancelados (incluye null)
-         - Con seña: solo confirmed
-         ✅ FIX: status normalizado
+function MetricCard({ label, value, pill, sublabel }) {
+  return (
+    <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] text-slate-400">{label}</p>
+        {pill ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-2xl border border-white/10 bg-white/5 text-slate-200">
+            {pill}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-2xl font-semibold">{value}</p>
+      {sublabel ? (
+        <p className="text-[11px] text-slate-500 mt-1">{sublabel}</p>
+      ) : null}
+    </div>
+  );
+}      /* ───────── GASTOS ÚLTIMOS 30 DÍAS (NUEVO) ─────────
+         - Si la tabla no existe todavía, no rompe: deja 0.
       */
-      let totalRev = 0;
+      try {
+        const { data: expRows, error: expErr } = await supabase
+          .from("expenses")
+          .select("amount, category, date")
+          .eq("business_id", biz.id)
+          .gte("date", date30)
+          .lte("date", todayStr);
 
-      (recentBookings || [])
-        .filter((b) => {
-          const st = normStatus(b?.status);
+        if (expErr) {
+          console.error("Error cargando expenses:", expErr);
+          setExpensesTotal30(0);
+          setExpensesByCategory30({});
+        } else {
+          let totalExp = 0;
+          const byCat = {};
 
-          if (!depositOn) {
-            // cuenta todo lo que NO sea cancelado
-            return !isCancelledStatus(st);
-          }
+          (expRows || []).forEach((r) => {
+            const amt = Number(r?.amount) || 0;
+            totalExp += amt;
+            const cat = String(r?.category || "Otros");
+            byCat[cat] = (byCat[cat] || 0) + amt;
+          });
 
-          // con seña: solo confirmados
-          return st === "confirmed";
-        })
-        .forEach((b) => {
-          const svc =
-            servicesMap.get(b.service_id) ||
-            (servicesData || []).find(
-              (s) => String(s.name) === String(b.service_name)
-            );
-          totalRev += Number(svc?.price) || 0;
-        });
-
-      setEstimatedRevenue(totalRev);
+          setExpensesTotal30(totalExp);
+          setExpensesByCategory30(byCat);
+        }
+      } catch (e) {
+        console.error("expenses try/catch:", e);
+        setExpensesTotal30(0);
+        setExpensesByCategory30({});
+      }
 
       /* ───────── OCUPACIÓN HOY ───────── */
       const occupationValue = await calculateOccupation(
@@ -355,6 +414,7 @@ export default function Dashboard() {
       return 0;
     }
   };
+
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -369,6 +429,11 @@ export default function Dashboard() {
     estimatedRevenue || 0
   );
   const occupationLabel = `${occupation || 0}%`;
+
+  // ✅ labels gastos
+  const expensesLabel = new Intl.NumberFormat("es-UY").format(expensesTotal30 || 0);
+  const net30 = (estimatedRevenue || 0) - (expensesTotal30 || 0);
+  const netLabel = new Intl.NumberFormat("es-UY").format(net30 || 0);
 
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
@@ -412,7 +477,6 @@ export default function Dashboard() {
       ? "Cancelado"
       : "—";
   };
-
   // ─────────────────────────────
   // LÓGICA DE PLAN / TRIAL (PRIORIDAD: PLAN > TRIAL)
   // ─────────────────────────────
@@ -465,6 +529,16 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  // ✅ categorías fijas (planilla)
+  const expenseCats = [
+    "Alquiler",
+    "Sueldos",
+    "Insumos",
+    "Marketing",
+    "Servicios",
+    "Otros",
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 flex relative">
@@ -541,6 +615,7 @@ export default function Dashboard() {
               <SidebarItem label="Servicios" onClick={nav(goServices)} />
               <SidebarItem label="Horarios" onClick={nav(goAgenda)} />
               <SidebarItem label="Bloqueos" onClick={nav(goScheduleBlocks)} />
+              <SidebarItem label="Gastos" onClick={nav(goExpenses)} /> {/* ✅ NUEVO */}
               <SidebarItem label="Ajustes" onClick={nav(goSetup)} />
             </nav>
 
@@ -608,6 +683,7 @@ export default function Dashboard() {
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
+          <SidebarItem label="Gastos" onClick={goExpenses} /> {/* ✅ NUEVO */}
           <SidebarItem label="Ajustes" onClick={goSetup} />
         </nav>
 
@@ -651,6 +727,7 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
+
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -854,6 +931,87 @@ export default function Dashboard() {
 
           {/* DERECHA (CARDS) */}
           <div className="flex flex-col gap-6">
+            {/* ✅ GASTOS (NUEVO) */}
+            <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold">Gastos</p>
+                <button
+                  type="button"
+                  onClick={goExpenses}
+                  className="text-[11px] px-3 py-1 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                >
+                  Ver detalle
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-400 mb-4">
+                Últimos 30 días · comparación con ingresos
+              </p>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
+                <div className="grid grid-cols-2 text-[11px] border-b border-white/10 bg-slate-900/70">
+                  <div className="px-3 py-2 text-slate-400 border-r border-white/10">
+                    Categoría
+                  </div>
+                  <div className="px-3 py-2 text-slate-400 text-right">
+                    Monto
+                  </div>
+                </div>
+
+                <div className="text-[12px]">
+                  {expenseCats.map((c) => {
+                    const v = expensesByCategory30?.[c] || 0;
+                    const vLabel = new Intl.NumberFormat("es-UY").format(v);
+                    return (
+                      <div
+                        key={c}
+                        className="grid grid-cols-2 border-b border-white/10"
+                      >
+                        <div className="px-3 py-2.5 border-r border-white/10 text-slate-200">
+                          {c}
+                        </div>
+                        <div className="px-3 py-2.5 text-right text-slate-200">
+                          $ {vLabel}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="grid grid-cols-2 bg-white/5">
+                    <div className="px-3 py-2.5 border-r border-white/10 text-slate-50 font-semibold">
+                      Total
+                    </div>
+                    <div className="px-3 py-2.5 text-right text-slate-50 font-semibold">
+                      $ {expensesLabel}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                  <p className="text-[10px] text-slate-400">Ingresos 30d</p>
+                  <p className="text-sm font-semibold">$ {revenueLabel}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                  <p className="text-[10px] text-slate-400">Gastos 30d</p>
+                  <p className="text-sm font-semibold">$ {expensesLabel}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                  <p className="text-[10px] text-slate-400">Neto 30d</p>
+                  <p
+                    className={`text-sm font-semibold ${
+                      net30 >= 0 ? "text-emerald-300" : "text-rose-200"
+                    }`}
+                  >
+                    $ {netLabel}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* PLAN ACTIVO */}
             {!isLifetime && hasActivePlan && (
               <div className="rounded-3xl bg-slate-900/70 border border-emerald-400/30 backdrop-blur-xl shadow-[0_18px_60px_rgba(16,185,129,0.18)] p-5">
