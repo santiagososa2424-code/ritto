@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -11,6 +11,9 @@ export default function Bookings() {
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
+
+  // ✅ Tabs
+  const [tab, setTab] = useState("confirmed"); // "pending" | "confirmed" | "past" | "cancelled"
 
   const navigate = useNavigate();
 
@@ -68,11 +71,30 @@ export default function Bookings() {
     loadReservations(businessId, date);
   };
 
-  const grouped = reservations.reduce((acc, r) => {
-    if (!acc[r.date]) acc[r.date] = [];
-    acc[r.date].push(r);
-    return acc;
-  }, {});
+  /* ─────────────────────────────
+     HELPERS: fecha/hora → Date (local)
+  ───────────────────────────── */
+  const bookingDateTimeLocal = (r) => {
+    try {
+      const d = String(r?.date || "");
+      const h = String(r?.hour || "").slice(0, 5);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(h)) return null;
+
+      const [yy, mm, dd] = d.split("-").map(Number);
+      const [HH, MM] = h.split(":").map(Number);
+
+      // Local time
+      return new Date(yy, mm - 1, dd, HH, MM, 0);
+    } catch {
+      return null;
+    }
+  };
+
+  const isPast = (r) => {
+    const dt = bookingDateTimeLocal(r);
+    if (!dt) return false;
+    return dt.getTime() < Date.now();
+  };
 
   /* ─────────────────────────────
      ESTADOS (MISMA LÓGICA QUE DASHBOARD)
@@ -108,26 +130,18 @@ export default function Bookings() {
      ACCIONES SEÑA (FIX STORAGE)
   ───────────────────────────── */
   const openProof = (booking) => {
-    // Si ya es URL absoluta (por ej transfer_pdf_url)
-    if (
-      booking?.transfer_pdf_url &&
-      /^https?:\/\//i.test(booking.transfer_pdf_url)
-    ) {
+    if (booking?.transfer_pdf_url && /^https?:\/\//i.test(booking.transfer_pdf_url)) {
       window.open(booking.transfer_pdf_url, "_blank", "noopener,noreferrer");
       return;
     }
 
-    // Path del bucket
     const path = booking?.deposit_receipt_path;
     if (!path) {
       toast.error("Este turno no tiene comprobante.");
       return;
     }
 
-    // Convertir path → URL pública
-    const { data, error } = supabase.storage
-      .from("ritto_receipts")
-      .getPublicUrl(path);
+    const { data, error } = supabase.storage.from("ritto_receipts").getPublicUrl(path);
 
     if (error || !data?.publicUrl) {
       toast.error("No se pudo abrir el comprobante.");
@@ -137,26 +151,18 @@ export default function Bookings() {
     window.open(data.publicUrl, "_blank", "noopener,noreferrer");
   };
 
-  // ✅ Enviar email cuando se confirma (solo aplica para casos con seña)
-  // - No rompe confirmación si falla el email
-  // - Evita duplicar emails: solo manda si realmente cambió pending → confirmed
+  // ✅ Email cuando se confirma (solo se usa para “con seña”)
   const sendConfirmationEmailForBooking = async (bookingId) => {
     try {
-      const { error } = await supabase.functions.invoke(
-        "send-booking-confirmation",
-        {
-          body: { booking_id: bookingId },
-        }
-      );
+      const { error } = await supabase.functions.invoke("send-booking-confirmation", {
+        body: { booking_id: bookingId },
+      });
 
       if (error) {
         console.error("send-booking-confirmation error:", error);
         try {
           const res = error?.context?.response;
-          if (res) {
-            const text = await res.text();
-            console.error("send-booking-confirmation response text:", text);
-          }
+          if (res) console.error("send-booking-confirmation response text:", await res.text());
         } catch {}
         return { ok: false };
       }
@@ -176,12 +182,12 @@ export default function Bookings() {
         .update({ status: "confirmed" })
         .eq("id", bookingId)
         .eq("status", "pending")
-        .select("id")
+        .select("id, deposit_paid")
         .maybeSingle();
 
       if (error) throw error;
 
-      // Si no actualizó nada, probablemente ya no estaba pending
+      // Si no actualizó nada, ya no estaba pending
       if (!updated?.id) {
         toast.success("Turno confirmado.");
         loadReservations(businessId, date);
@@ -199,13 +205,10 @@ export default function Bookings() {
     }
   };
 
-  // ✅ Rechazar (seña) o Liberar turno (sin seña) = cancelar
+  // ✅ Liberar turno / Cancelar SIEMPRE (tenga seña o no), mientras no esté cancelado
   const cancelBooking = async (bookingId) => {
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "cancelled" })
-        .eq("id", bookingId);
+      const { error } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
 
       if (error) throw error;
 
@@ -217,18 +220,26 @@ export default function Bookings() {
     }
   };
 
-  // ✅ Eliminar definitivo (solo si está cancelado)
+  // ✅ Borrar definitivo (X) — cualquier estado (via RPC para evitar RLS)
   const deleteBooking = async (bookingId) => {
-    const ok = window.confirm("¿Eliminar este turno definitivamente?");
+    const ok = window.confirm("¿Eliminar este turno definitivamente? Esta acción no se puede deshacer.");
     if (!ok) return;
 
+    // confirmación fuerte para evitar accidentes
+    const typed = window.prompt('Escribí BORRAR para confirmar:');
+    if (typed !== "BORRAR") return;
+
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", bookingId);
+      const { data, error } = await supabase.rpc("delete_booking_owned", {
+        p_booking_id: bookingId,
+      });
 
       if (error) throw error;
+
+      if (data?.ok !== true) {
+        toast.error("No se pudo eliminar.");
+        return;
+      }
 
       toast.success("Turno eliminado.");
       loadReservations(businessId, date);
@@ -238,8 +249,109 @@ export default function Bookings() {
     }
   };
 
-  // Alias para mantener tu nombre viejo si lo usabas en otros lados
+  // ✅ Limpiar historial — borra canceladas + confirmadas pasadas (via RPC)
+  const cleanHistory = async () => {
+    const ok = window.confirm(
+      "Esto borrará definitivamente: (1) canceladas y (2) confirmadas pasadas. ¿Continuar?"
+    );
+    if (!ok) return;
+
+    try {
+      const { data, error } = await supabase.rpc("cleanup_booking_history", {
+        p_business_id: businessId,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Historial limpiado. Eliminadas: ${data?.deleted ?? 0}`);
+      loadReservations(businessId, date);
+    } catch (e) {
+      console.error("cleanHistory error:", e);
+      toast.error("No se pudo limpiar el historial.");
+    }
+  };
+
+  // Alias viejo
   const rejectBooking = async (bookingId) => cancelBooking(bookingId);
+
+  /* ─────────────────────────────
+     TABS: filtros + contadores
+  ───────────────────────────── */
+  const filtered = useMemo(() => {
+    const now = Date.now();
+
+    return (reservations || []).filter((r) => {
+      const st = uiStatus(r);
+
+      if (tab === "pending") return st === "pending";
+      if (tab === "cancelled") return st === "cancelled";
+
+      if (tab === "past") {
+        // past = confirmed y ya pasó
+        if (st !== "confirmed") return false;
+        const dt = bookingDateTimeLocal(r);
+        if (!dt) return false;
+        return dt.getTime() < now;
+      }
+
+      // confirmed (futuras/actuales)
+      if (tab === "confirmed") {
+        if (st !== "confirmed") return false;
+        const dt = bookingDateTimeLocal(r);
+        if (!dt) return true; // fallback: si no puedo parsear, lo muestro acá
+        return dt.getTime() >= now;
+      }
+
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservations, tab, depositEnabled]);
+
+  const grouped = useMemo(() => {
+    return (filtered || []).reduce((acc, r) => {
+      if (!acc[r.date]) acc[r.date] = [];
+      acc[r.date].push(r);
+      return acc;
+    }, {});
+  }, [filtered]);
+
+  const counts = useMemo(() => {
+    const all = reservations || [];
+    const now = Date.now();
+
+    let pending = 0;
+    let confirmed = 0;
+    let past = 0;
+    let cancelled = 0;
+
+    for (const r of all) {
+      const st = uiStatus(r);
+      if (st === "pending") pending++;
+      else if (st === "cancelled") cancelled++;
+      else if (st === "confirmed") {
+        const dt = bookingDateTimeLocal(r);
+        if (dt && dt.getTime() < now) past++;
+        else confirmed++;
+      }
+    }
+
+    return { pending, confirmed, past, cancelled };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservations, depositEnabled]);
+
+  const tabButton = (key, label, count, active) => (
+    <button
+      type="button"
+      onClick={() => setTab(key)}
+      className={`text-[11px] px-3 py-2 rounded-2xl border transition ${
+        active
+          ? "border-emerald-400 bg-emerald-400 text-slate-950 font-semibold"
+          : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+      }`}
+    >
+      {label} <span className="opacity-80">({count})</span>
+    </button>
+  );
 
   if (loading) {
     return (
@@ -255,10 +367,7 @@ export default function Bookings() {
   return (
     <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-10">
-        <Header
-          title="Reservas"
-          subtitle="Acá podés ver todos los turnos filtrados por fecha."
-        />
+        <Header title="Reservas" subtitle="Acá podés ver todos los turnos filtrados por fecha." />
 
         <Card title="Filtrar reservas">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -276,15 +385,25 @@ export default function Bookings() {
             <button onClick={handleRefresh} className="button-ritto">
               Actualizar
             </button>
+
+            <button onClick={cleanHistory} className="button-ritto">
+              Limpiar historial
+            </button>
+          </div>
+
+          {/* ✅ Tabs */}
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            {depositEnabled && tabButton("pending", "Pendientes", counts.pending, tab === "pending")}
+            {tabButton("confirmed", "Confirmadas", counts.confirmed, tab === "confirmed")}
+            {tabButton("past", "Pasadas", counts.past, tab === "past")}
+            {tabButton("cancelled", "Canceladas", counts.cancelled, tab === "cancelled")}
           </div>
         </Card>
 
         {loadingList ? (
           <div className="text-slate-400 text-sm">Cargando reservas...</div>
-        ) : reservations.length === 0 ? (
-          <div className="text-slate-400 text-sm">
-            No hay reservas para esta fecha.
-          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-slate-400 text-sm">No hay reservas para este filtro.</div>
         ) : (
           Object.keys(grouped).map((day) => (
             <Card key={day} title={day}>
@@ -292,41 +411,34 @@ export default function Bookings() {
                 {grouped[day].map((r) => {
                   const st = uiStatus(r);
                   const hasDeposit = r.deposit_paid === true;
+                  const past = st === "confirmed" && isPast(r);
 
                   return (
                     <div
                       key={r.id}
                       className="relative rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow p-5 flex justify-between items-center"
                     >
-                      {/* ✅ X para eliminar definitivo (solo cancelado) */}
-                      {st === "cancelled" && (
-                        <button
-                          type="button"
-                          onClick={() => deleteBooking(r.id)}
-                          className="absolute top-3 right-3 h-8 w-8 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center text-slate-200"
-                          title="Eliminar"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      {/* ✅ X para eliminar definitivo (cualquier estado) */}
+                      <button
+                        type="button"
+                        onClick={() => deleteBooking(r.id)}
+                        className="absolute top-3 right-3 h-8 w-8 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center text-slate-200"
+                        title="Eliminar"
+                      >
+                        ✕
+                      </button>
 
                       <div>
                         <p className="font-semibold text-lg text-slate-50 tracking-tight">
                           {r.hour?.slice(0, 5)} — {r.service_name}
                         </p>
 
-                        <p className="text-sm font-semibold mt-1 text-slate-200">
-                          {r.customer_name}
-                        </p>
+                        <p className="text-sm font-semibold mt-1 text-slate-200">{r.customer_name}</p>
 
-                        <p className="text-[12px] text-slate-400">
-                          {r.customer_email}
-                        </p>
+                        <p className="text-[12px] text-slate-400">{r.customer_email}</p>
 
                         {r.customer_phone && (
-                          <p className="text-[12px] text-slate-400">
-                            Tel: {r.customer_phone}
-                          </p>
+                          <p className="text-[12px] text-slate-400">Tel: {r.customer_phone}</p>
                         )}
 
                         {/* ✅ Acciones */}
@@ -359,13 +471,13 @@ export default function Bookings() {
                             </>
                           )}
 
-                          {/* ✅ Caso SIN seña: permitir “liberar turno” si no está cancelado */}
-                          {!hasDeposit && st !== "cancelled" && (
+                          {/* ✅ Liberar turno / Cancelar SIEMPRE para cualquier reserva no cancelada */}
+                          {st !== "cancelled" && st !== "pending" && (
                             <button
                               onClick={() => cancelBooking(r.id)}
                               className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                             >
-                              Cancelar turno
+                              {hasDeposit ? "Cancelar turno" : "Liberar turno"}
                             </button>
                           )}
                         </div>
@@ -389,6 +501,12 @@ export default function Bookings() {
                         >
                           {statusLabel(st)}
                         </p>
+
+                        {past && (
+                          <p className="text-[10px] mt-2 text-slate-400">
+                            Turno pasado
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
