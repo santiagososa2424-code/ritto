@@ -137,14 +137,60 @@ export default function Bookings() {
     window.open(data.publicUrl, "_blank", "noopener,noreferrer");
   };
 
+  // ✅ Enviar email cuando se confirma (solo aplica para casos con seña)
+  // - No rompe confirmación si falla el email
+  // - Evita duplicar emails: solo manda si realmente cambió pending → confirmed
+  const sendConfirmationEmailForBooking = async (bookingId) => {
+    try {
+      const { error } = await supabase.functions.invoke(
+        "send-booking-confirmation",
+        {
+          body: { booking_id: bookingId },
+        }
+      );
+
+      if (error) {
+        console.error("send-booking-confirmation error:", error);
+        try {
+          const res = error?.context?.response;
+          if (res) {
+            const text = await res.text();
+            console.error("send-booking-confirmation response text:", text);
+          }
+        } catch {}
+        return { ok: false };
+      }
+
+      return { ok: true };
+    } catch (e) {
+      console.error("sendConfirmationEmailForBooking error:", e);
+      return { ok: false };
+    }
+  };
+
   const confirmBooking = async (bookingId) => {
     try {
-      const { error } = await supabase
+      // ✅ Confirmar SOLO si estaba pending (evita doble click / doble email)
+      const { data: updated, error } = await supabase
         .from("bookings")
         .update({ status: "confirmed" })
-        .eq("id", bookingId);
+        .eq("id", bookingId)
+        .eq("status", "pending")
+        .select("id")
+        .maybeSingle();
 
       if (error) throw error;
+
+      // Si no actualizó nada, probablemente ya no estaba pending
+      if (!updated?.id) {
+        toast.success("Turno confirmado.");
+        loadReservations(businessId, date);
+        return;
+      }
+
+      // ✅ Mandar email post-confirmación (si falla no rompe nada)
+      await sendConfirmationEmailForBooking(bookingId);
+
       toast.success("Turno confirmado.");
       loadReservations(businessId, date);
     } catch (e) {
@@ -177,7 +223,10 @@ export default function Bookings() {
     if (!ok) return;
 
     try {
-      const { error } = await supabase.from("bookings").delete().eq("id", bookingId);
+      const { error } = await supabase
+        .from("bookings")
+        .delete()
+        .eq("id", bookingId);
 
       if (error) throw error;
 
