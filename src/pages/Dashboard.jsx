@@ -1,4 +1,3 @@
-// ✅ DASHBOARD CORREGIDO — PARTE 1/3
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +10,7 @@ export default function Dashboard() {
   const [occupation, setOccupation] = useState(0);
   const [estimatedRevenue, setEstimatedRevenue] = useState(0);
 
-  // ✅ gastos del mes
+  // ✅ NEW: gastos del mes
   const [monthlyExpenses, setMonthlyExpenses] = useState(0);
 
   const [business, setBusiness] = useState(null);
@@ -64,7 +63,7 @@ export default function Dashboard() {
   const goScheduleBlocks = () => navigate("/schedule-blocks");
   const configurePayment = () => navigate("/billing");
 
-  // ✅ gastos
+  // ✅ NEW: gastos
   const goExpenses = () => navigate("/expenses");
 
   // ✅ wrapper para cerrar drawer y navegar (sin tocar lógica)
@@ -116,36 +115,14 @@ export default function Dashboard() {
 
   /* ─────────────────────────────
      ACCIONES SEÑA (MINIMAL)
-     ✅ FIX: misma lógica que Bookings para abrir PDF
   ───────────────────────────── */
   const openProof = (booking) => {
-    // Si ya es URL absoluta (por ej transfer_pdf_url)
-    if (
-      booking?.transfer_pdf_url &&
-      /^https?:\/\//i.test(booking.transfer_pdf_url)
-    ) {
-      window.open(booking.transfer_pdf_url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    // Path del bucket
-    const path = booking?.deposit_receipt_path;
-    if (!path) {
+    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
+    if (!url) {
       toast.error("Este turno no tiene comprobante.");
       return;
     }
-
-    // Convertir path → URL pública (MISMO bucket que Bookings)
-    const { data, error } = supabase.storage
-      .from("ritto_receipts")
-      .getPublicUrl(path);
-
-    if (error || !data?.publicUrl) {
-      toast.error("No se pudo abrir el comprobante.");
-      return;
-    }
-
-    window.open(data.publicUrl, "_blank", "noopener,noreferrer");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const confirmBooking = async (bookingId) => {
@@ -183,8 +160,7 @@ export default function Dashboard() {
   /* ─────────────────────────────
      LOAD DASHBOARD (ÚNICO ORIGEN)
      ✅ FIX: usar depositEnabled del biz recién cargado
-     ✅ FIX: normalizar status para ingresos
-     ✅ FIX: con seña -> sumar SOLO confirmed real (sin fallbacks)
+     ✅ FIX: normalizar status para ingresos (evita “pegado”)
      ✅ NEW: gastos del mes (expenses)
   ───────────────────────────── */
   const loadDashboard = async () => {
@@ -218,7 +194,7 @@ export default function Dashboard() {
 
       setBusiness(biz);
 
-      /* ───────── GASTOS DEL MES ───────── */
+      /* ───────── GASTOS DEL MES (NEW) ───────── */
       try {
         const monthStart = new Date();
         monthStart.setDate(1);
@@ -286,10 +262,9 @@ export default function Dashboard() {
         .toISOString()
         .slice(0, 10);
 
-      // ✅ Traemos también deposit_paid para evitar inconsistencias
       const { data: recentBookings, error: recentBookingsError } = await supabase
         .from("bookings")
-        .select("service_id, service_name, status, deposit_paid")
+        .select("service_id, service_name, status")
         .eq("business_id", biz.id)
         .gte("date", date30)
         .lte("date", todayStr);
@@ -298,11 +273,10 @@ export default function Dashboard() {
         console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      /* ───────── INGRESOS ─────────
+      /* ───────── INGRESOS (FIX REAL) ─────────
          - Sin seña: cuenta todo excepto cancelados (incluye null)
-         - Con seña:
-            ✅ cuenta SOLO confirmed real (status confirmado)
-            ✅ y además exige deposit_paid = true (para blindar)
+         - Con seña: solo confirmed
+         ✅ FIX: status normalizado
       */
       let totalRev = 0;
 
@@ -315,8 +289,8 @@ export default function Dashboard() {
             return !isCancelledStatus(st);
           }
 
-          // con seña: solo confirmados reales + seña pagada
-          return st === "confirmed" && b?.deposit_paid === true;
+          // con seña: solo confirmados
+          return st === "confirmed";
         })
         .forEach((b) => {
           const svc =
@@ -422,7 +396,6 @@ export default function Dashboard() {
       return 0;
     }
   };
-
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -438,10 +411,10 @@ export default function Dashboard() {
   );
   const occupationLabel = `${occupation || 0}%`;
 
+  // ✅ NEW: label gastos
   const expensesLabel = new Intl.NumberFormat("es-UY").format(
     monthlyExpenses || 0
   );
-// ✅ DASHBOARD CORREGIDO — PARTE 2/3
 
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
@@ -614,7 +587,10 @@ export default function Dashboard() {
               <SidebarItem label="Servicios" onClick={nav(goServices)} />
               <SidebarItem label="Horarios" onClick={nav(goAgenda)} />
               <SidebarItem label="Bloqueos" onClick={nav(goScheduleBlocks)} />
+
+              {/* ✅ NEW: GASTOS */}
               <SidebarItem label="Gastos" onClick={nav(goExpenses)} />
+
               <SidebarItem label="Ajustes" onClick={nav(goSetup)} />
             </nav>
 
@@ -682,7 +658,10 @@ export default function Dashboard() {
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
+
+          {/* ✅ NEW: GASTOS */}
           <SidebarItem label="Gastos" onClick={goExpenses} />
+
           <SidebarItem label="Ajustes" onClick={goSetup} />
         </nav>
 
@@ -769,7 +748,6 @@ export default function Dashboard() {
                 ? "Agenda bloqueada"
                 : "Agenda activa"}
             </button>
-
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
               {business?.name?.[0] || "R"}
             </div>
@@ -790,12 +768,15 @@ export default function Dashboard() {
             pill="Ingresos"
             sublabel="Últimos 30 días"
           />
+
+          {/* ✅ NEW: GASTOS */}
           <MetricCard
             label="Gastos"
             value={`$ ${expensesLabel}`}
             pill="Gastos"
             sublabel="Este mes"
           />
+
           <MetricCard
             label="Ocupación"
             value={occupationLabel}
@@ -933,7 +914,6 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-// ✅ DASHBOARD CORREGIDO — PARTE 3/3
 
           {/* DERECHA (CARDS) */}
           <div className="flex flex-col gap-6">
@@ -1034,6 +1014,7 @@ export default function Dashboard() {
 
 /* ─────────────────────────────
    COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
+   - Mantienen estética existente
 ──────────────────────────────────────── */
 
 function SidebarItem({ label, onClick, active }) {
