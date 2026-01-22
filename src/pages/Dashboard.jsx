@@ -10,7 +10,7 @@ export default function Dashboard() {
   const [occupation, setOccupation] = useState(0);
   const [estimatedRevenue, setEstimatedRevenue] = useState(0);
 
-  // ✅ NEW: gastos del mes
+  // ✅ gastos del mes
   const [monthlyExpenses, setMonthlyExpenses] = useState(0);
 
   const [business, setBusiness] = useState(null);
@@ -63,7 +63,7 @@ export default function Dashboard() {
   const goScheduleBlocks = () => navigate("/schedule-blocks");
   const configurePayment = () => navigate("/billing");
 
-  // ✅ NEW: gastos
+  // ✅ gastos
   const goExpenses = () => navigate("/expenses");
 
   // ✅ wrapper para cerrar drawer y navegar (sin tocar lógica)
@@ -115,14 +115,36 @@ export default function Dashboard() {
 
   /* ─────────────────────────────
      ACCIONES SEÑA (MINIMAL)
+     ✅ MISMA LÓGICA QUE Bookings para abrir PDF
   ───────────────────────────── */
   const openProof = (booking) => {
-    const url = booking?.transfer_pdf_url || booking?.deposit_receipt_path;
-    if (!url) {
+    // Si ya es URL absoluta (por ej transfer_pdf_url)
+    if (
+      booking?.transfer_pdf_url &&
+      /^https?:\/\//i.test(booking.transfer_pdf_url)
+    ) {
+      window.open(booking.transfer_pdf_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Path del bucket
+    const path = booking?.deposit_receipt_path;
+    if (!path) {
       toast.error("Este turno no tiene comprobante.");
       return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+
+    // Convertir path → URL pública (MISMO bucket que Bookings)
+    const { data, error } = supabase.storage
+      .from("ritto_receipts")
+      .getPublicUrl(path);
+
+    if (error || !data?.publicUrl) {
+      toast.error("No se pudo abrir el comprobante.");
+      return;
+    }
+
+    window.open(data.publicUrl, "_blank", "noopener,noreferrer");
   };
 
   const confirmBooking = async (bookingId) => {
@@ -160,7 +182,8 @@ export default function Dashboard() {
   /* ─────────────────────────────
      LOAD DASHBOARD (ÚNICO ORIGEN)
      ✅ FIX: usar depositEnabled del biz recién cargado
-     ✅ FIX: normalizar status para ingresos (evita “pegado”)
+     ✅ FIX: normalizar status para ingresos
+     ✅ FIX: con seña -> sumar SOLO confirmed real + deposit_paid
      ✅ NEW: gastos del mes (expenses)
   ───────────────────────────── */
   const loadDashboard = async () => {
@@ -194,7 +217,7 @@ export default function Dashboard() {
 
       setBusiness(biz);
 
-      /* ───────── GASTOS DEL MES (NEW) ───────── */
+      /* ───────── GASTOS DEL MES ───────── */
       try {
         const monthStart = new Date();
         monthStart.setDate(1);
@@ -262,9 +285,10 @@ export default function Dashboard() {
         .toISOString()
         .slice(0, 10);
 
+      // ✅ Traemos también deposit_paid para evitar inconsistencias
       const { data: recentBookings, error: recentBookingsError } = await supabase
         .from("bookings")
-        .select("service_id, service_name, status")
+        .select("service_id, service_name, status, deposit_paid")
         .eq("business_id", biz.id)
         .gte("date", date30)
         .lte("date", todayStr);
@@ -273,10 +297,11 @@ export default function Dashboard() {
         console.error("Error cargando recentBookings:", recentBookingsError);
       }
 
-      /* ───────── INGRESOS (FIX REAL) ─────────
+      /* ───────── INGRESOS ─────────
          - Sin seña: cuenta todo excepto cancelados (incluye null)
-         - Con seña: solo confirmed
-         ✅ FIX: status normalizado
+         - Con seña:
+            ✅ cuenta SOLO confirmed real (status confirmado)
+            ✅ y además exige deposit_paid = true (para blindar)
       */
       let totalRev = 0;
 
@@ -289,8 +314,8 @@ export default function Dashboard() {
             return !isCancelledStatus(st);
           }
 
-          // con seña: solo confirmados
-          return st === "confirmed";
+          // con seña: solo confirmados reales + seña pagada
+          return st === "confirmed" && b?.deposit_paid === true;
         })
         .forEach((b) => {
           const svc =
@@ -396,6 +421,7 @@ export default function Dashboard() {
       return 0;
     }
   };
+
   const addMinutes = (time, mins) => {
     const [h, m] = time.split(":").map(Number);
     const d = new Date();
@@ -411,11 +437,9 @@ export default function Dashboard() {
   );
   const occupationLabel = `${occupation || 0}%`;
 
-  // ✅ NEW: label gastos
   const expensesLabel = new Intl.NumberFormat("es-UY").format(
     monthlyExpenses || 0
   );
-
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      ✅ FIX: cancelled siempre se respeta (con status normalizado)
@@ -587,10 +611,7 @@ export default function Dashboard() {
               <SidebarItem label="Servicios" onClick={nav(goServices)} />
               <SidebarItem label="Horarios" onClick={nav(goAgenda)} />
               <SidebarItem label="Bloqueos" onClick={nav(goScheduleBlocks)} />
-
-              {/* ✅ NEW: GASTOS */}
               <SidebarItem label="Gastos" onClick={nav(goExpenses)} />
-
               <SidebarItem label="Ajustes" onClick={nav(goSetup)} />
             </nav>
 
@@ -658,10 +679,7 @@ export default function Dashboard() {
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
-
-          {/* ✅ NEW: GASTOS */}
           <SidebarItem label="Gastos" onClick={goExpenses} />
-
           <SidebarItem label="Ajustes" onClick={goSetup} />
         </nav>
 
@@ -705,7 +723,6 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
-
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -748,6 +765,7 @@ export default function Dashboard() {
                 ? "Agenda bloqueada"
                 : "Agenda activa"}
             </button>
+
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
               {business?.name?.[0] || "R"}
             </div>
@@ -768,15 +786,12 @@ export default function Dashboard() {
             pill="Ingresos"
             sublabel="Últimos 30 días"
           />
-
-          {/* ✅ NEW: GASTOS */}
           <MetricCard
             label="Gastos"
             value={`$ ${expensesLabel}`}
             pill="Gastos"
             sublabel="Este mes"
           />
-
           <MetricCard
             label="Ocupación"
             value={occupationLabel}
@@ -1014,7 +1029,6 @@ export default function Dashboard() {
 
 /* ─────────────────────────────
    COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
-   - Mantienen estética existente
 ──────────────────────────────────────── */
 
 function SidebarItem({ label, onClick, active }) {
