@@ -2,6 +2,11 @@
 // - NO cambia estética ni lógica de reservas
 // - Mantiene helper sendConfirmationEmail + envío SOLO sin seña
 // - Con seña: NO envía email (se manda al confirmar en el negocio)
+//
+// ✅ PATCH RESEND:
+// - La Edge Function send-booking-confirmation normalmente espera { booking_id }
+// - Por eso: al insertar reserva SIN seña, pedimos el id con .select("id").single()
+// - Y llamamos a sendConfirmationEmail(created.id)
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -335,36 +340,17 @@ export default function PublicBooking() {
   // ────────────────────────────────────────────────
   // EMAIL CONFIRMACIÓN (EDGE FUNCTION)
   // ✅ Se usa SOLO cuando la reserva queda confirmada (sin seña)
+  // ✅ PATCH: enviamos booking_id, que es lo que normalmente espera la función
   // ────────────────────────────────────────────────
-  const sendConfirmationEmail = async ({ to, customer_name, date, hour, service_name }) => {
+  const sendConfirmationEmail = async (booking_id) => {
     try {
-      const map_url =
-        business?.map_url ||
-        business?.google_maps_url ||
-        (business?.address
-          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              business.address
-            )}`
-          : "");
-
-      const payload = {
-        to,
-        customer_name,
-        business_name: business?.name || "Ritto",
-        business_address: business?.address || "",
-        business_slug: slug || business?.slug || "",
-        map_url,
-        date,
-        hour,
-        service_name,
-      };
-
       const { data, error } = await supabase.functions.invoke("send-booking-confirmation", {
-        body: payload,
+        body: { booking_id },
       });
 
       if (error) {
         console.error("send-booking-confirmation invoke error:", error);
+        console.error("context:", error?.context);
         return { ok: false };
       }
 
@@ -410,30 +396,33 @@ export default function PublicBooking() {
       try {
         const hourToSave = `${selectedHour}:00`;
 
-        const { error: insertError } = await supabase.from("bookings").insert({
-          business_id: business.id,
-          service_id: selectedService.id,
-          service_name: selectedService.name,
-          date: selectedDate,
-          hour: hourToSave,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          status: "confirmed",
-          deposit_paid: false,
-          deposit_receipt_path: null,
-        });
+        // ✅ PATCH: pedimos el id creado para pasarlo a la Edge Function
+        const { data: created, error: insertError } = await supabase
+          .from("bookings")
+          .insert({
+            business_id: business.id,
+            service_id: selectedService.id,
+            service_name: selectedService.name,
+            date: selectedDate,
+            hour: hourToSave,
+            customer_name: name,
+            customer_email: email,
+            customer_phone: phone,
+            status: "confirmed",
+            deposit_paid: false,
+            deposit_receipt_path: null,
+          })
+          .select("id")
+          .single();
 
         if (insertError) throw insertError;
 
         // ✅ Enviar email (si falla, no rompe la reserva)
-        await sendConfirmationEmail({
-          to: email,
-          customer_name: name,
-          date: selectedDate,
-          hour: hourToSave,
-          service_name: selectedService.name,
-        });
+        if (created?.id) {
+          await sendConfirmationEmail(created.id);
+        } else {
+          console.warn("Booking creado sin id retornado; no se envía email.");
+        }
 
         setSuccess("Reserva confirmada. Te enviamos un email ✉️");
       } catch (err) {
@@ -689,8 +678,7 @@ export default function PublicBooking() {
               <div>
                 <p className="font-semibold">Esta reserva requiere una seña</p>
                 <p>
-                  Monto:{" "}
-                  <span className="font-bold text-emerald-300">${depositAmount}</span>{" "}
+                  Monto: <span className="font-bold text-emerald-300">${depositAmount}</span>{" "}
                   (transferencia)
                 </p>
               </div>
