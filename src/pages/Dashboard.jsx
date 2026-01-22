@@ -10,6 +10,9 @@ export default function Dashboard() {
   const [occupation, setOccupation] = useState(0);
   const [estimatedRevenue, setEstimatedRevenue] = useState(0);
 
+  // ✅ NEW: gastos del mes
+  const [monthlyExpenses, setMonthlyExpenses] = useState(0);
+
   const [business, setBusiness] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -59,6 +62,9 @@ export default function Dashboard() {
   const goSetup = () => navigate("/setup");
   const goScheduleBlocks = () => navigate("/schedule-blocks");
   const configurePayment = () => navigate("/billing");
+
+  // ✅ NEW: gastos
+  const goExpenses = () => navigate("/expenses");
 
   // ✅ wrapper para cerrar drawer y navegar (sin tocar lógica)
   const nav = (fn) => () => {
@@ -155,6 +161,7 @@ export default function Dashboard() {
      LOAD DASHBOARD (ÚNICO ORIGEN)
      ✅ FIX: usar depositEnabled del biz recién cargado
      ✅ FIX: normalizar status para ingresos (evita “pegado”)
+     ✅ NEW: gastos del mes (expenses)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -186,6 +193,40 @@ export default function Dashboard() {
       const depositOn = biz.deposit_enabled === true;
 
       setBusiness(biz);
+
+      /* ───────── GASTOS DEL MES (NEW) ───────── */
+      try {
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+
+        const monthEnd = new Date(monthStart);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+        const startISO = monthStart.toISOString().slice(0, 10);
+        const endISO = monthEnd.toISOString().slice(0, 10);
+
+        const { data: expRows, error: expErr } = await supabase
+          .from("expenses")
+          .select("amount")
+          .eq("business_id", biz.id)
+          .gte("expense_date", startISO)
+          .lt("expense_date", endISO);
+
+        if (expErr) {
+          console.error("Error cargando expenses:", expErr);
+          setMonthlyExpenses(0);
+        } else {
+          const totalExp = (expRows || []).reduce(
+            (a, r) => a + Number(r.amount || 0),
+            0
+          );
+          setMonthlyExpenses(totalExp);
+        }
+      } catch (e) {
+        console.error("Expenses calc error:", e);
+        setMonthlyExpenses(0);
+      }
 
       /* ───────── TURNOS DE LA SEMANA ───────── */
       const { data: bookingsWeek, error: bookingsWeekError } = await supabase
@@ -370,6 +411,11 @@ export default function Dashboard() {
   );
   const occupationLabel = `${occupation || 0}%`;
 
+  // ✅ NEW: label gastos
+  const expensesLabel = new Intl.NumberFormat("es-UY").format(
+    monthlyExpenses || 0
+  );
+
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      ✅ FIX: cancelled siempre se respeta (con status normalizado)
@@ -541,6 +587,10 @@ export default function Dashboard() {
               <SidebarItem label="Servicios" onClick={nav(goServices)} />
               <SidebarItem label="Horarios" onClick={nav(goAgenda)} />
               <SidebarItem label="Bloqueos" onClick={nav(goScheduleBlocks)} />
+
+              {/* ✅ NEW: GASTOS */}
+              <SidebarItem label="Gastos" onClick={nav(goExpenses)} />
+
               <SidebarItem label="Ajustes" onClick={nav(goSetup)} />
             </nav>
 
@@ -608,6 +658,10 @@ export default function Dashboard() {
           <SidebarItem label="Servicios" onClick={goServices} />
           <SidebarItem label="Horarios" onClick={goAgenda} />
           <SidebarItem label="Bloqueos" onClick={goScheduleBlocks} />
+
+          {/* ✅ NEW: GASTOS */}
+          <SidebarItem label="Gastos" onClick={goExpenses} />
+
           <SidebarItem label="Ajustes" onClick={goSetup} />
         </nav>
 
@@ -651,6 +705,7 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
+
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -693,7 +748,6 @@ export default function Dashboard() {
                 ? "Agenda bloqueada"
                 : "Agenda activa"}
             </button>
-
             <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
               {business?.name?.[0] || "R"}
             </div>
@@ -701,7 +755,7 @@ export default function Dashboard() {
         </header>
 
         {/* MÉTRICAS */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard
             label="Turnos de la semana"
             value={activeWeekCount}
@@ -714,6 +768,15 @@ export default function Dashboard() {
             pill="Ingresos"
             sublabel="Últimos 30 días"
           />
+
+          {/* ✅ NEW: GASTOS */}
+          <MetricCard
+            label="Gastos"
+            value={`$ ${expensesLabel}`}
+            pill="Gastos"
+            sublabel="Este mes"
+          />
+
           <MetricCard
             label="Ocupación"
             value={occupationLabel}
