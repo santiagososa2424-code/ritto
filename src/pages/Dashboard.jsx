@@ -147,14 +147,59 @@ export default function Dashboard() {
     window.open(data.publicUrl, "_blank", "noopener,noreferrer");
   };
 
+  /* ─────────────────────────────
+     ✅ EMAIL AL CONFIRMAR (CON SEÑA)
+     - Invoca Edge Function con booking_id
+     - Si falla, NO rompe la confirmación
+  ───────────────────────────── */
+  const sendConfirmationEmailForBooking = async (bookingId) => {
+    try {
+      const { error } = await supabase.functions.invoke(
+        "send-booking-confirmation",
+        {
+          body: { booking_id: bookingId },
+        }
+      );
+
+      if (error) {
+        console.error("send-booking-confirmation error:", error);
+        try {
+          const res = error?.context?.response;
+          if (res) console.error("send-booking-confirmation response text:", await res.text());
+        } catch {}
+        return { ok: false };
+      }
+
+      return { ok: true };
+    } catch (e) {
+      console.error("sendConfirmationEmailForBooking error:", e);
+      return { ok: false };
+    }
+  };
+
   const confirmBooking = async (bookingId) => {
     try {
-      const { error } = await supabase
+      // ✅ Confirmar SOLO si estaba pending (evita doble click / doble mail)
+      const { data: updated, error } = await supabase
         .from("bookings")
         .update({ status: "confirmed" })
-        .eq("id", bookingId);
+        .eq("id", bookingId)
+        .eq("status", "pending")
+        .select("id, deposit_paid")
+        .maybeSingle();
 
       if (error) throw error;
+
+      // Si no actualizó nada, ya no estaba pending
+      if (!updated?.id) {
+        toast.success("Turno confirmado.");
+        loadDashboard();
+        return;
+      }
+
+      // ✅ Mandar email post-confirmación (si falla no rompe nada)
+      await sendConfirmationEmailForBooking(bookingId);
+
       toast.success("Turno confirmado.");
       loadDashboard();
     } catch (e) {
@@ -456,7 +501,6 @@ export default function Dashboard() {
     // si hay seña: respetar status real, fallback confirmed
     return st || "confirmed";
   };
-
   // ✅ Turnos activos para métrica semanal (no cuenta cancelados)
   const activeWeekCount = useMemo(() => {
     return (appointmentsToday || []).filter((b) => uiStatus(b) !== "cancelled")
@@ -799,7 +843,6 @@ export default function Dashboard() {
             sublabel="Hoy"
           />
         </section>
-
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
