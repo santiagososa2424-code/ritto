@@ -1,6 +1,7 @@
-// PublicBooking.jsx (CORREGIDO: envía email invocando Edge Function)
+// PublicBooking.jsx (CORREGIDO: email solo cuando corresponde)
 // - NO cambia estética ni lógica de reservas
-// - Solo agrega: helper sendConfirmationEmail + llamados post-insert
+// - Mantiene helper sendConfirmationEmail + envío SOLO sin seña
+// - Con seña: NO envía email (se manda al confirmar en el negocio)
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -170,9 +171,7 @@ export default function PublicBooking() {
     const dayName = getDayNameFromDate(dateStr);
     const dayKey = normalizeDay(dayName);
 
-    const todays = schedules.filter(
-      (s) => normalizeDay(s.day_of_week) === dayKey
-    );
+    const todays = schedules.filter((s) => normalizeDay(s.day_of_week) === dayKey);
 
     if (!todays.length) {
       setAvailableHours([]);
@@ -211,8 +210,7 @@ export default function PublicBooking() {
       return `${h}:${m}`;
     };
 
-    const overlaps = (aStart, aEnd, bStart, bEnd) =>
-      aStart < bEnd && aEnd > bStart;
+    const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && aEnd > bStart;
 
     // Normalizar bookings del día a rangos [start,end) en minutos
     const bookingRanges = (bookings || [])
@@ -296,9 +294,10 @@ export default function PublicBooking() {
     const d = new Date();
     d.setHours(h);
     d.setMinutes(m + Number(mins));
-    return `${String(d.getHours()).padStart(2, "0")}:${String(
-      d.getMinutes()
-    ).padStart(2, "0")}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(
+      2,
+      "0"
+    )}`;
   };
 
   // ────────────────────────────────────────────────
@@ -323,13 +322,11 @@ export default function PublicBooking() {
 
     const path = `${bizId}/${Date.now()}-${cleanName}`;
 
-    const { error: upErr } = await supabase.storage
-      .from("ritto_receipts")
-      .upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type || "application/octet-stream",
-      });
+    const { error: upErr } = await supabase.storage.from("ritto_receipts").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    });
 
     if (upErr) throw upErr;
     return path;
@@ -337,15 +334,9 @@ export default function PublicBooking() {
 
   // ────────────────────────────────────────────────
   // EMAIL CONFIRMACIÓN (EDGE FUNCTION)
-  // ✅ FIX: invoca send-booking-confirmation después de crear la reserva
+  // ✅ Se usa SOLO cuando la reserva queda confirmada (sin seña)
   // ────────────────────────────────────────────────
-  const sendConfirmationEmail = async ({
-    to,
-    customer_name,
-    date,
-    hour,
-    service_name,
-  }) => {
+  const sendConfirmationEmail = async ({ to, customer_name, date, hour, service_name }) => {
     try {
       const map_url =
         business?.map_url ||
@@ -368,10 +359,9 @@ export default function PublicBooking() {
         service_name,
       };
 
-      const { data, error } = await supabase.functions.invoke(
-        "send-booking-confirmation",
-        { body: payload }
-      );
+      const { data, error } = await supabase.functions.invoke("send-booking-confirmation", {
+        body: payload,
+      });
 
       if (error) {
         console.error("send-booking-confirmation invoke error:", error);
@@ -414,7 +404,7 @@ export default function PublicBooking() {
 
     if (!validateBaseFields()) return;
 
-    // SIN SEÑA: mismo flujo que hoy
+    // SIN SEÑA: mismo flujo que hoy (confirmado + email)
     if (!usesDeposit) {
       setIsProcessing(true);
       try {
@@ -488,35 +478,25 @@ export default function PublicBooking() {
 
       const hourToSave = `${selectedHour}:00`;
 
-      const { error: insertPendingError } = await supabase.from("bookings").insert(
-        {
-          business_id: business.id,
-          service_id: selectedService.id,
-          service_name: selectedService.name,
-          date: selectedDate,
-          hour: hourToSave,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          status: "pending",
-          deposit_paid: true, // hay comprobante adjunto
-          deposit_receipt_path: receiptPath,
-        }
-      );
+      const { error: insertPendingError } = await supabase.from("bookings").insert({
+        business_id: business.id,
+        service_id: selectedService.id,
+        service_name: selectedService.name,
+        date: selectedDate,
+        hour: hourToSave,
+        customer_name: name,
+        customer_email: email,
+        customer_phone: phone,
+        status: "pending",
+        deposit_paid: true, // hay comprobante adjunto
+        deposit_receipt_path: receiptPath,
+      });
 
       if (insertPendingError) throw insertPendingError;
 
-      // ✅ Enviar email (si falla, no rompe la reserva)
-      await sendConfirmationEmail({
-        to: email,
-        customer_name: name,
-        date: selectedDate,
-        hour: hourToSave,
-        service_name: selectedService.name,
-      });
-
+      // ✅ CON SEÑA: NO se manda email todavía (se manda cuando el negocio confirma)
       setSuccess(
-        `Reserva enviada. El negocio confirmará la seña de $${depositAmount}.`
+        "Reserva enviada. El negocio confirmará tu reserva y te llegará un email cuando esté confirmada."
       );
       setShowDepositStep(false);
       setReceiptFile(null);
@@ -565,27 +545,19 @@ export default function PublicBooking() {
   const bank = business.deposit_bank || "—";
   const accountName = business.deposit_account_name || "—";
   const transferNumber = business.deposit_transfer_alias || "—";
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 px-4 py-10">
       <div className="max-w-lg mx-auto space-y-8 animate-fadeIn">
         {/* HEADER NEGOCIO */}
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {business.name}
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight">{business.name}</h1>
 
-          {business.address && (
-            <p className="text-xs text-slate-400">{business.address}</p>
-          )}
+          {business.address && <p className="text-xs text-slate-400">{business.address}</p>}
 
           {business.phone && (
             <button
               onClick={() =>
-                window.open(
-                  `https://wa.me/${business.phone.replace(/\D/g, "")}`,
-                  "_blank"
-                )
+                window.open(`https://wa.me/${business.phone.replace(/\D/g, "")}`, "_blank")
               }
               className="text-xs text-emerald-300 hover:text-emerald-200 transition mt-1"
             >
@@ -624,9 +596,7 @@ export default function PublicBooking() {
                           : "border-blue-400/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20"
                       }`}
                     >
-                      <div className="font-medium leading-tight">
-                        {s.name || "Servicio"}
-                      </div>
+                      <div className="font-medium leading-tight">{s.name || "Servicio"}</div>
                       <div className="text-[10px] opacity-80">
                         ${s.price} · {s.duration} min
                       </div>
@@ -658,9 +628,7 @@ export default function PublicBooking() {
                 Elegí un servicio y una fecha para ver los horarios.
               </p>
             ) : slotsUI.length === 0 ? (
-              <p className="text-[12px] text-slate-400">
-                No hay horarios disponibles para ese día.
-              </p>
+              <p className="text-[12px] text-slate-400">No hay horarios disponibles para ese día.</p>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
                 {slotsUI.map((s) => {
@@ -722,17 +690,13 @@ export default function PublicBooking() {
                 <p className="font-semibold">Esta reserva requiere una seña</p>
                 <p>
                   Monto:{" "}
-                  <span className="font-bold text-emerald-300">
-                    ${depositAmount}
-                  </span>{" "}
+                  <span className="font-bold text-emerald-300">${depositAmount}</span>{" "}
                   (transferencia)
                 </p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-[12px] text-slate-200">
-                <p className="text-[11px] text-slate-300 mb-2">
-                  Datos para transferir:
-                </p>
+                <p className="text-[11px] text-slate-300 mb-2">Datos para transferir:</p>
                 <div className="space-y-1">
                   <p className="text-[12px]">
                     <span className="text-slate-400">Banco:</span> {bank}
@@ -741,9 +705,7 @@ export default function PublicBooking() {
                     <span className="text-slate-400">Nombre:</span> {accountName}
                   </p>
                   <p className="text-[12px]">
-                    <span className="text-slate-400">
-                      Número de transferencia:
-                    </span>{" "}
+                    <span className="text-slate-400">Número de transferencia:</span>{" "}
                     {transferNumber}
                   </p>
                 </div>
@@ -751,8 +713,7 @@ export default function PublicBooking() {
 
               <div className="space-y-2">
                 <p className="text-[11px] text-emerald-200/80">
-                  Subí tu captura del comprobante y el negocio confirmará tu
-                  turno.
+                  Subí tu captura del comprobante y el negocio confirmará tu turno.
                 </p>
 
                 {/* Sin “bloque feo”: input oculto + botón estilado */}
@@ -773,13 +734,9 @@ export default function PublicBooking() {
                   </label>
 
                   {receiptFile ? (
-                    <span className="text-[11px] text-slate-300 truncate">
-                      {receiptFile.name}
-                    </span>
+                    <span className="text-[11px] text-slate-300 truncate">{receiptFile.name}</span>
                   ) : (
-                    <span className="text-[11px] text-slate-400">
-                      Ningún archivo seleccionado
-                    </span>
+                    <span className="text-[11px] text-slate-400">Ningún archivo seleccionado</span>
                   )}
                 </div>
               </div>
@@ -814,8 +771,11 @@ export default function PublicBooking() {
               : "Confirmar reserva"}
           </button>
 
+          {/* ✅ Texto coherente con seña */}
           <p className="text-[10px] text-slate-500">
-            Vas a recibir un email de confirmación con los detalles de tu turno.
+            {usesDeposit
+              ? "Cuando el negocio confirme tu reserva, te llegará un email con los detalles."
+              : "Vas a recibir un email de confirmación con los detalles de tu turno."}
           </p>
         </form>
       </div>
