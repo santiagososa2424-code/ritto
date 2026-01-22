@@ -24,7 +24,13 @@ export default function Bookings() {
   const loadBusiness = async () => {
     const {
       data: { user },
+      error: userErr,
     } = await supabase.auth.getUser();
+
+    if (userErr || !user) {
+      navigate("/login");
+      return;
+    }
 
     const { data: biz } = await supabase
       .from("businesses")
@@ -76,12 +82,26 @@ export default function Bookings() {
 
   /* ─────────────────────────────
      ESTADOS (MISMA LÓGICA QUE DASHBOARD)
-     ✅ FIX: cancelled siempre se respeta aunque no haya seña
+     ✅ FIX: normaliza status + cancelled siempre se respeta
   ───────────────────────────── */
+  const normStatus = (s) => String(s || "").toLowerCase().trim();
+
+  const isCancelledStatus = (s) => {
+    const st = normStatus(s);
+    return st === "cancelled" || st === "canceled" || st === "rejected";
+  };
+
   const uiStatus = (booking) => {
-    if (booking?.status === "cancelled") return "cancelled";
+    const st = normStatus(booking?.status);
+
+    // siempre respetar cancelado (incluye variantes)
+    if (isCancelledStatus(st)) return "cancelled";
+
+    // si NO hay seña: todo lo demás es confirmado
     if (!depositEnabled) return "confirmed";
-    return booking?.status || "confirmed";
+
+    // si hay seña: respetar status real, fallback confirmed
+    return st || "confirmed";
   };
 
   const statusLabel = (status) => {
@@ -177,7 +197,10 @@ export default function Bookings() {
     if (!ok) return;
 
     try {
-      const { error } = await supabase.from("bookings").delete().eq("id", bookingId);
+      const { error } = await supabase
+        .from("bookings")
+        .delete()
+        .eq("id", bookingId);
 
       if (error) throw error;
 
@@ -310,8 +333,8 @@ export default function Bookings() {
                             </>
                           )}
 
-                          {/* ✅ Caso SIN seña: permitir “liberar turno” si no está cancelado */}
-                          {!hasDeposit && st !== "cancelled" && (
+                          {/* ✅ Caso SIN seña (negocio sin seña): permitir cancelar si no está cancelado */}
+                          {!depositEnabled && st !== "cancelled" && (
                             <button
                               onClick={() => cancelBooking(r.id)}
                               className="text-[11px] px-3 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
