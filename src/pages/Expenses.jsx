@@ -1,330 +1,316 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
-const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const monthStartDate = (d) => {
+  const x = new Date(d);
+  x.setDate(1);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+const monthISO = (d) => monthStartDate(d).toISOString().slice(0, 10);
+
+const monthLabel = (isoDate) => {
+  // isoDate: "YYYY-MM-01"
+  const d = new Date(isoDate);
+  return d.toLocaleDateString("es-UY", { month: "long", year: "numeric" });
+};
+
+const parseNum = (v) => {
+  const s = String(v ?? "").trim().replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
 
 export default function Expenses() {
-  const [session, setSession] = useState(null);
-  const [business, setBusiness] = useState(null);
-
-  const [month, setMonth] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState(null);
 
-  const [items, setItems] = useState([]);
+  const [business, setBusiness] = useState(null);
 
-  // form
-  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState("Alquiler");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
+  // columnas (dinámicas) — se derivan de items, pero también se puede agregar manualmente
+  const [columns, setColumns] = useState(["Sueldos", "Alquiler", "Insumos"]);
 
-  const startEnd = useMemo(() => {
-    const start = new Date(month);
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
+  // filas: [{ id, month, items }]
+  const [rows, setRows] = useState([]);
 
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + 1);
+  const totalsByRow = useMemo(() => {
+    const map = new Map();
+    rows.forEach((r) => {
+      const items = r.items || {};
+      const total = Object.values(items).reduce((a, v) => a + Number(v || 0), 0);
+      map.set(r.month, total);
+    });
+    return map;
+  }, [rows]);
 
-    return {
-      startISO: start.toISOString().slice(0, 10),
-      endISO: end.toISOString().slice(0, 10),
-      label: start.toLocaleDateString("es-UY", { month: "long", year: "numeric" }),
-    };
-  }, [month]);
-
-  const total = useMemo(() => {
-    return items.reduce((acc, it) => acc + Number(it.amount || 0), 0);
-  }, [items]);
-
-  const totalLabel = useMemo(() => {
-    return new Intl.NumberFormat("es-UY").format(total || 0);
-  }, [total]);
+  // columns reales: unión de columnas base + keys encontradas en rows
+  const effectiveColumns = useMemo(() => {
+    const set = new Set(columns);
+    rows.forEach((r) => {
+      Object.keys(r.items || {}).forEach((k) => set.add(k));
+    });
+    // orden: primero las que ya tenías, luego el resto al final
+    const base = columns.filter((c) => set.has(c));
+    const extra = [...set].filter((c) => !base.includes(c));
+    return [...base, ...extra];
+  }, [columns, rows]);
 
   useEffect(() => {
     const run = async () => {
       setLoading(true);
 
       const { data: s } = await supabase.auth.getSession();
-      setSession(s?.session || null);
-
       if (!s?.session) {
+        navigate("/login");
+        return;
+      }
+
+      const userId = s.session.user.id;
+
+      const { data: biz, error: bizErr } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("owner_id", userId)
+        .maybeSingle();
+
+      if (bizErr || !biz) {
+        console.error(bizErr);
+        toast.error("No se pudo cargar tu negocio.");
         setLoading(false);
         return;
       }
 
-      // 1) buscar business del owner
-      const { data: b, error: be } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("owner_id", s.session.user.id)
-        .maybeSingle();
+      setBusiness(biz);
 
-      if (be) console.error(be);
-      setBusiness(b || null);
+      // Traer últimos 12 meses (si no existen, los “upsert” los vamos creando al editar)
+      const start = monthStartDate(new Date());
+      start.setMonth(start.getMonth() - 11);
 
+      const end = monthStartDate(new Date());
+      end.setMonth(end.getMonth() + 1);
+
+      const startISO = start.toISOString().slice(0, 10);
+      const endISO = end.toISOString().slice(0, 10);
+
+      const { data: dataRows, error: rowsErr } = await supabase
+        .from("monthly_expenses")
+        .select("id, month, items")
+        .eq("business_id", biz.id)
+        .gte("month", startISO)
+        .lt("month", endISO)
+        .order("month", { ascending: false });
+
+      if (rowsErr) {
+        console.error(rowsErr);
+        toast.error("No se pudieron cargar los gastos mensuales.");
+        setLoading(false);
+        return;
+      }
+
+      // Queremos mostrar 12 meses aunque falten filas: generamos el esqueleto
+      const wanted = [];
+      for (let i = 0; i < 12; i++) {
+        const d = monthStartDate(new Date());
+        d.setMonth(d.getMonth() - i);
+        wanted.push(monthISO(d));
+      }
+
+      const byMonth = new Map((dataRows || []).map((r) => [r.month, r]));
+      const merged = wanted.map((m) => {
+        const found = byMonth.get(m);
+        return found
+          ? { id: found.id, month: found.month, items: found.items || {} }
+          : { id: null, month: m, items: {} };
+      });
+
+      setRows(merged);
       setLoading(false);
     };
 
     run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadMonth = async () => {
+  const addColumn = () => {
+    const name = prompt("Nombre de la columna (ej: Marketing)");
+    const col = String(name || "").trim();
+    if (!col) return;
+    if (col.toLowerCase() === "total") {
+      toast.error("“Total” es automático.");
+      return;
+    }
+    setColumns((prev) => (prev.includes(col) ? prev : [...prev, col]));
+  };
+
+  const saveRow = async (month, nextItems) => {
     if (!business?.id) return;
-    const { data, error } = await supabase
-      .from("expenses")
-      .select("id, expense_date, category, amount, note, created_at")
-      .eq("business_id", business.id)
-      .gte("expense_date", startEnd.startISO)
-      .lt("expense_date", startEnd.endISO)
-      .order("expense_date", { ascending: false })
-      .order("created_at", { ascending: false });
+    setSavingKey(month);
 
-    if (error) {
-      console.error(error);
-      return;
+    const { data: s } = await supabase.auth.getSession();
+    const userId = s?.session?.user?.id;
+
+    try {
+      const payload = {
+        business_id: business.id,
+        created_by: userId,
+        month, // "YYYY-MM-01"
+        items: nextItems,
+      };
+
+      const { data, error } = await supabase
+        .from("monthly_expenses")
+        .upsert(payload, { onConflict: "business_id,month" })
+        .select("id, month, items")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      setRows((prev) =>
+        prev.map((r) =>
+          r.month === month ? { id: data?.id || r.id, month, items: data?.items || nextItems } : r
+        )
+      );
+    } catch (e) {
+      console.error("saveRow error:", e);
+      toast.error("No se pudo guardar.");
+    } finally {
+      setSavingKey(null);
     }
-    setItems(data || []);
   };
 
-  useEffect(() => {
-    if (!business?.id) return;
-    loadMonth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, startEnd.startISO, startEnd.endISO]);
+  const setCell = async (month, col, rawValue) => {
+    // actualiza local
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.month !== month) return r;
+        const next = { ...(r.items || {}) };
+        const n = parseNum(rawValue);
+        // si queda 0 y el input está vacío, limpiamos
+        if (String(rawValue).trim() === "") {
+          delete next[col];
+        } else {
+          next[col] = n;
+        }
+        return { ...r, items: next };
+      })
+    );
 
-  const prevMonth = () => {
-    const d = new Date(month);
-    d.setMonth(d.getMonth() - 1);
-    d.setDate(1);
-    setMonth(d);
-  };
+    // guardado “instantáneo” (simple)
+    const r = rows.find((x) => x.month === month);
+    const current = r?.items || {};
+    const nextItems = { ...current };
 
-  const nextMonth = () => {
-    const d = new Date(month);
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(1);
-    setMonth(d);
-  };
+    if (String(rawValue).trim() === "") delete nextItems[col];
+    else nextItems[col] = parseNum(rawValue);
 
-  const addExpense = async (e) => {
-    e.preventDefault();
-    if (!business?.id || !session?.user?.id) return;
-
-    const num = Number(String(amount).replace(",", "."));
-    if (!Number.isFinite(num) || num <= 0) return;
-
-    setSaving(true);
-    const { error } = await supabase.from("expenses").insert({
-      business_id: business.id,
-      created_by: session.user.id,
-      expense_date: expenseDate,
-      category: category.trim(),
-      amount: num,
-      note: note.trim() || null,
-    });
-    setSaving(false);
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    // reset form
-    setAmount("");
-    setNote("");
-    setCategory("Alquiler");
-
-    await loadMonth();
-  };
-
-  const deleteExpense = async (id) => {
-    if (!id) return;
-    const { error } = await supabase.from("expenses").delete().eq("id", id);
-    if (error) {
-      console.error(error);
-      return;
-    }
-    setItems((prev) => prev.filter((x) => x.id !== id));
+    await saveRow(month, nextItems);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-white p-6">
         <div className="text-slate-400">Cargando…</div>
       </div>
     );
   }
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white p-6">
-        <div className="text-slate-300">Necesitás iniciar sesión.</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-black to-blue-900 text-slate-50 p-5 md:p-8">
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
-        {/* HEADER */}
-        <div className="flex items-center justify-between gap-3">
+        <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">Gastos</h1>
-            <div className="text-slate-400 text-sm">Control mensual de gastos del negocio</div>
+            <p className="text-xs text-slate-400 uppercase tracking-[0.18em]">
+              Gastos mensuales
+            </p>
+            <h1 className="text-xl font-semibold">
+              {business?.name || "Ritto"}
+            </h1>
+            <p className="text-[11px] text-slate-400 mt-1">
+              1 fila por mes · columnas libres · total automático
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={prevMonth}
-              className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-            >
-              ←
-            </button>
-            <div className="text-sm text-slate-200 capitalize">{startEnd.label}</div>
-            <button
-              type="button"
-              onClick={nextMonth}
-              className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-            >
-              →
-            </button>
+          <button
+            type="button"
+            onClick={addColumn}
+            className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+          >
+            + Agregar columna
+          </button>
+        </header>
+
+        <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] overflow-hidden">
+          <div className="overflow-auto">
+            <table className="min-w-[900px] w-full text-[12px]">
+              <thead className="bg-slate-900/70 border-b border-white/10">
+                <tr>
+                  <th className="text-left px-4 py-3 text-slate-400 font-medium">
+                    Mes
+                  </th>
+                  {effectiveColumns.map((c) => (
+                    <th key={c} className="text-left px-4 py-3 text-slate-400 font-medium">
+                      {c}
+                    </th>
+                  ))}
+                  <th className="text-left px-4 py-3 text-slate-400 font-medium">
+                    Total
+                  </th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-white/10">
+                {rows.map((r) => {
+                  const total = totalsByRow.get(r.month) || 0;
+                  const totalLabel = new Intl.NumberFormat("es-UY").format(total);
+
+                  return (
+                    <tr key={r.month} className="hover:bg-white/5">
+                      <td className="px-4 py-3 text-slate-200 capitalize whitespace-nowrap">
+                        {monthLabel(r.month)}
+                      </td>
+
+                      {effectiveColumns.map((c) => {
+                        const v = r.items?.[c];
+                        return (
+                          <td key={`${r.month}-${c}`} className="px-4 py-3">
+                            <input
+                              defaultValue={v ?? ""}
+                              onBlur={(e) => setCell(r.month, c, e.target.value)}
+                              placeholder="0"
+                              className="w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] outline-none"
+                            />
+                          </td>
+                        );
+                      })}
+
+                      <td className="px-4 py-3 font-semibold whitespace-nowrap">
+                        $ {totalLabel}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {savingKey === r.month ? (
+                          <span className="text-[11px] text-slate-400">Guardando…</span>
+                        ) : (
+                          <span className="text-[11px] text-slate-500">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-5 py-4 border-t border-white/10 text-[11px] text-slate-400">
+            El “Total” se calcula como suma de todas las columnas numéricas del mes. Las columnas son libres por negocio.
           </div>
         </div>
-
-        {/* MÉTRICAS */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-            <div className="text-slate-400 text-xs">Total del mes</div>
-            <div className="text-2xl font-semibold mt-1">$ {totalLabel}</div>
-            <div className="text-slate-400 text-xs mt-1">UYU</div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-            <div className="text-slate-400 text-xs">Registros</div>
-            <div className="text-2xl font-semibold mt-1">{items.length}</div>
-            <div className="text-slate-400 text-xs mt-1">en {monthKey(month)}</div>
-          </div>
-        </section>
-
-        {/* FORM + LIST */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* FORM */}
-          <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-            <div className="text-sm font-semibold mb-3">Agregar gasto</div>
-
-            <form onSubmit={addExpense} className="flex flex-col gap-3">
-              <label className="text-xs text-slate-400">
-                Fecha
-                <input
-                  value={expenseDate}
-                  onChange={(e) => setExpenseDate(e.target.value)}
-                  type="date"
-                  className="mt-1 w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none"
-                />
-              </label>
-
-              <label className="text-xs text-slate-400">
-                Categoría
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="mt-1 w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none"
-                >
-                  {[
-                    "Alquiler",
-                    "Sueldos",
-                    "Servicios (UTE/agua/internet)",
-                    "Insumos",
-                    "Marketing",
-                    "Impuestos",
-                    "Mantenimiento",
-                    "Otros",
-                  ].map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-xs text-slate-400">
-                Monto (UYU)
-                <input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="Ej: 1600"
-                  className="mt-1 w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none"
-                />
-              </label>
-
-              <label className="text-xs text-slate-400">
-                Nota (opcional)
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Ej: cambio de lámparas"
-                  className="mt-1 w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none"
-                />
-              </label>
-
-              <button
-                disabled={saving}
-                className="mt-2 text-[12px] px-3 py-2 rounded-2xl bg-white/10 border border-white/10 hover:bg-white/15 transition disabled:opacity-50"
-              >
-                {saving ? "Guardando…" : "Guardar gasto"}
-              </button>
-            </form>
-          </div>
-
-          {/* LIST */}
-          <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-              <div className="text-sm font-semibold">Gastos del mes</div>
-              <div className="text-xs text-slate-400">{items.length} items</div>
-            </div>
-
-            <div className="divide-y divide-white/10">
-              {items.length === 0 ? (
-                <div className="p-4 text-sm text-slate-400">No hay gastos cargados en este mes.</div>
-              ) : (
-                items.map((it) => (
-                  <div key={it.id} className="p-4 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-sm text-slate-200">
-                        <span className="font-semibold">{it.category}</span>
-                        <span className="text-slate-500"> · </span>
-                        <span className="text-slate-400">{it.expense_date}</span>
-                      </div>
-                      {it.note ? <div className="text-xs text-slate-400 mt-1">{it.note}</div> : null}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm font-semibold whitespace-nowrap">
-                        $ {new Intl.NumberFormat("es-UY").format(Number(it.amount || 0))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => deleteExpense(it.id)}
-                        className="text-[12px] px-3 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-                      >
-                        Borrar
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   );
