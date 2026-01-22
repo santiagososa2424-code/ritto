@@ -1,3 +1,7 @@
+// PublicBooking.jsx (CORREGIDO: envía email invocando Edge Function)
+// - NO cambia estética ni lógica de reservas
+// - Solo agrega: helper sendConfirmationEmail + llamados post-insert
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
@@ -332,6 +336,56 @@ export default function PublicBooking() {
   };
 
   // ────────────────────────────────────────────────
+  // EMAIL CONFIRMACIÓN (EDGE FUNCTION)
+  // ✅ FIX: invoca send-booking-confirmation después de crear la reserva
+  // ────────────────────────────────────────────────
+  const sendConfirmationEmail = async ({
+    to,
+    customer_name,
+    date,
+    hour,
+    service_name,
+  }) => {
+    try {
+      const map_url =
+        business?.map_url ||
+        business?.google_maps_url ||
+        (business?.address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+              business.address
+            )}`
+          : "");
+
+      const payload = {
+        to,
+        customer_name,
+        business_name: business?.name || "Ritto",
+        business_address: business?.address || "",
+        business_slug: slug || business?.slug || "",
+        map_url,
+        date,
+        hour,
+        service_name,
+      };
+
+      const { data, error } = await supabase.functions.invoke(
+        "send-booking-confirmation",
+        { body: payload }
+      );
+
+      if (error) {
+        console.error("send-booking-confirmation invoke error:", error);
+        return { ok: false };
+      }
+
+      return { ok: true, data };
+    } catch (e) {
+      console.error("sendConfirmationEmail error:", e);
+      return { ok: false };
+    }
+  };
+
+  // ────────────────────────────────────────────────
   // SUBMIT (2 PASOS SI HAY SEÑA)
   // ────────────────────────────────────────────────
   const validateBaseFields = () => {
@@ -364,12 +418,14 @@ export default function PublicBooking() {
     if (!usesDeposit) {
       setIsProcessing(true);
       try {
+        const hourToSave = `${selectedHour}:00`;
+
         const { error: insertError } = await supabase.from("bookings").insert({
           business_id: business.id,
           service_id: selectedService.id,
           service_name: selectedService.name,
           date: selectedDate,
-          hour: `${selectedHour}:00`,
+          hour: hourToSave,
           customer_name: name,
           customer_email: email,
           customer_phone: phone,
@@ -379,6 +435,15 @@ export default function PublicBooking() {
         });
 
         if (insertError) throw insertError;
+
+        // ✅ Enviar email (si falla, no rompe la reserva)
+        await sendConfirmationEmail({
+          to: email,
+          customer_name: name,
+          date: selectedDate,
+          hour: hourToSave,
+          service_name: selectedService.name,
+        });
 
         setSuccess("Reserva confirmada. Te enviamos un email ✉️");
       } catch (err) {
@@ -421,23 +486,34 @@ export default function PublicBooking() {
 
       receiptPath = await uploadReceipt(business.id, receiptFile);
 
-      const { error: insertPendingError } = await supabase
-        .from("bookings")
-        .insert({
+      const hourToSave = `${selectedHour}:00`;
+
+      const { error: insertPendingError } = await supabase.from("bookings").insert(
+        {
           business_id: business.id,
           service_id: selectedService.id,
           service_name: selectedService.name,
           date: selectedDate,
-          hour: `${selectedHour}:00`,
+          hour: hourToSave,
           customer_name: name,
           customer_email: email,
           customer_phone: phone,
           status: "pending",
           deposit_paid: true, // hay comprobante adjunto
           deposit_receipt_path: receiptPath,
-        });
+        }
+      );
 
       if (insertPendingError) throw insertPendingError;
+
+      // ✅ Enviar email (si falla, no rompe la reserva)
+      await sendConfirmationEmail({
+        to: email,
+        customer_name: name,
+        date: selectedDate,
+        hour: hourToSave,
+        service_name: selectedService.name,
+      });
 
       setSuccess(
         `Reserva enviada. El negocio confirmará la seña de $${depositAmount}.`
@@ -665,7 +741,9 @@ export default function PublicBooking() {
                     <span className="text-slate-400">Nombre:</span> {accountName}
                   </p>
                   <p className="text-[12px]">
-                    <span className="text-slate-400">Número de transferencia:</span>{" "}
+                    <span className="text-slate-400">
+                      Número de transferencia:
+                    </span>{" "}
                     {transferNumber}
                   </p>
                 </div>
@@ -673,7 +751,8 @@ export default function PublicBooking() {
 
               <div className="space-y-2">
                 <p className="text-[11px] text-emerald-200/80">
-                  Subí tu captura del comprobante y el negocio confirmará tu turno.
+                  Subí tu captura del comprobante y el negocio confirmará tu
+                  turno.
                 </p>
 
                 {/* Sin “bloque feo”: input oculto + botón estilado */}
