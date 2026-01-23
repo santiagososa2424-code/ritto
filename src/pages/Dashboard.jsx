@@ -860,7 +860,6 @@ export default function Dashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-// Dashboard.jsx (PARTE 3/3)
             {/* AGENDA SEMANAL */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-4">
