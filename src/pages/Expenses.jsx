@@ -104,16 +104,15 @@ export default function Expenses() {
 
       setBusiness(biz);
 
-      // Traer últimos 12 meses (si no existen, los “upsert” los vamos creando al editar)
-      const start = monthStartDate(new Date());
-      start.setMonth(start.getMonth() - 11);
+      // ✅ Mostrar SOLO meses del año actual (2026)
+      const currentYear = new Date().getFullYear(); // hoy: 2026
 
-      const end = monthStartDate(new Date());
-      end.setMonth(end.getMonth() + 1);
+      // Rango [YYYY-01-01, (YYYY+1)-01-01)
+      const start = new Date(currentYear, 0, 1, 12, 0, 0);
+      const end = new Date(currentYear + 1, 0, 1, 12, 0, 0);
 
-      // ✅ rango en local (UY), evitando UTC
-      const startISO = monthISO(start);
-      const endISO = monthISO(end);
+      const startISO = `${currentYear}-01-01`;
+      const endISO = `${currentYear + 1}-01-01`;
 
       const { data: dataRows, error: rowsErr } = await supabase
         .from("monthly_expenses")
@@ -130,12 +129,12 @@ export default function Expenses() {
         return;
       }
 
-      // Queremos mostrar 12 meses aunque falten filas: generamos el esqueleto
+      // ✅ Queremos mostrar los 12 meses del año (2026) aunque falten filas
+      // Orden: de diciembre → enero (como venías mostrando más reciente arriba)
       const wanted = [];
-      for (let i = 0; i < 12; i++) {
-        const d = monthStartDate(new Date());
-        d.setMonth(d.getMonth() - i);
-        wanted.push(monthISO(d));
+      for (let mi = 11; mi >= 0; mi--) {
+        const m = String(mi + 1).padStart(2, "0");
+        wanted.push(`${currentYear}-${m}-01`);
       }
 
       const byMonth = new Map((dataRows || []).map((r) => [r.month, r]));
