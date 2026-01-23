@@ -1,3 +1,4 @@
+// Dashboard.jsx (PARTE 1/3)
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -165,7 +166,11 @@ export default function Dashboard() {
         console.error("send-booking-confirmation error:", error);
         try {
           const res = error?.context?.response;
-          if (res) console.error("send-booking-confirmation response text:", await res.text());
+          if (res)
+            console.error(
+              "send-booking-confirmation response text:",
+              await res.text()
+            );
         } catch {}
         return { ok: false };
       }
@@ -230,6 +235,7 @@ export default function Dashboard() {
      ✅ FIX: normalizar status para ingresos
      ✅ FIX: con seña -> sumar SOLO confirmed real + deposit_paid
      ✅ NEW: gastos del mes (expenses)
+     ✅ PATCH: ingresos por MES CALENDARIO (reinicia cada mes)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -325,21 +331,27 @@ export default function Dashboard() {
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
 
-      /* ───────── ÚLTIMOS 30 DÍAS ───────── */
-      const date30 = new Date(Date.now() - 30 * 86400000)
-        .toISOString()
-        .slice(0, 10);
+      /* ───────── INGRESOS DEL MES CALENDARIO (PATCH) ───────── */
+      const revMonthStart = new Date();
+      revMonthStart.setDate(1);
+      revMonthStart.setHours(0, 0, 0, 0);
+
+      const revMonthEnd = new Date(revMonthStart);
+      revMonthEnd.setMonth(revMonthEnd.getMonth() + 1);
+
+      const revStartISO = revMonthStart.toISOString().slice(0, 10);
+      const revEndISO = revMonthEnd.toISOString().slice(0, 10);
 
       // ✅ Traemos también deposit_paid para evitar inconsistencias
-      const { data: recentBookings, error: recentBookingsError } = await supabase
+      const { data: monthBookings, error: monthBookingsError } = await supabase
         .from("bookings")
         .select("service_id, service_name, status, deposit_paid")
         .eq("business_id", biz.id)
-        .gte("date", date30)
-        .lte("date", todayStr);
+        .gte("date", revStartISO)
+        .lt("date", revEndISO);
 
-      if (recentBookingsError) {
-        console.error("Error cargando recentBookings:", recentBookingsError);
+      if (monthBookingsError) {
+        console.error("Error cargando monthBookings:", monthBookingsError);
       }
 
       /* ───────── INGRESOS ─────────
@@ -350,7 +362,7 @@ export default function Dashboard() {
       */
       let totalRev = 0;
 
-      (recentBookings || [])
+      (monthBookings || [])
         .filter((b) => {
           const st = normStatus(b?.status);
 
@@ -485,6 +497,7 @@ export default function Dashboard() {
   const expensesLabel = new Intl.NumberFormat("es-UY").format(
     monthlyExpenses || 0
   );
+// Dashboard.jsx (PARTE 2/3)
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      ✅ FIX: cancelled siempre se respeta (con status normalizado)
@@ -828,7 +841,7 @@ export default function Dashboard() {
             label="Ingresos"
             value={`$ ${revenueLabel}`}
             pill="Ingresos"
-            sublabel="Últimos 30 días"
+            sublabel="Este mes"
           />
           <MetricCard
             label="Gastos"
@@ -847,6 +860,7 @@ export default function Dashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
           <div className="lg:col-span-2 flex flex-col gap-6">
+// Dashboard.jsx (PARTE 3/3)
             {/* AGENDA SEMANAL */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-4">
