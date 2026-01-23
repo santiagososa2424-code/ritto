@@ -10,11 +10,28 @@ const monthStartDate = (d) => {
   return x;
 };
 
-const monthISO = (d) => monthStartDate(d).toISOString().slice(0, 10);
+// ✅ YYYY-MM-DD en horario Uruguay (-03) sin usar toISOString (UTC)
+const dateISO_UY = (d) => {
+  const x = new Date(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// ✅ month ISO: siempre "YYYY-MM-01" en local (UY)
+const monthISO = (d) => {
+  const x = monthStartDate(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
+};
 
 const monthLabel = (isoDate) => {
   // isoDate: "YYYY-MM-01"
-  const d = new Date(isoDate);
+  const [y, m] = String(isoDate || "").split("-").map(Number);
+  // ✅ construir fecha local (evita interpretación UTC)
+  const d = new Date(y, (m || 1) - 1, 1, 12, 0, 0);
   return d.toLocaleDateString("es-UY", { month: "long", year: "numeric" });
 };
 
@@ -94,8 +111,9 @@ export default function Expenses() {
       const end = monthStartDate(new Date());
       end.setMonth(end.getMonth() + 1);
 
-      const startISO = start.toISOString().slice(0, 10);
-      const endISO = end.toISOString().slice(0, 10);
+      // ✅ rango en local (UY), evitando UTC
+      const startISO = monthISO(start);
+      const endISO = monthISO(end);
 
       const { data: dataRows, error: rowsErr } = await supabase
         .from("monthly_expenses")
@@ -172,7 +190,9 @@ export default function Expenses() {
 
       setRows((prev) =>
         prev.map((r) =>
-          r.month === month ? { id: data?.id || r.id, month, items: data?.items || nextItems } : r
+          r.month === month
+            ? { id: data?.id || r.id, month, items: data?.items || nextItems }
+            : r
         )
       );
     } catch (e) {
@@ -253,7 +273,10 @@ export default function Expenses() {
                     Mes
                   </th>
                   {effectiveColumns.map((c) => (
-                    <th key={c} className="text-left px-4 py-3 text-slate-400 font-medium">
+                    <th
+                      key={c}
+                      className="text-left px-4 py-3 text-slate-400 font-medium"
+                    >
                       {c}
                     </th>
                   ))}
@@ -295,7 +318,9 @@ export default function Expenses() {
 
                       <td className="px-4 py-3 text-right">
                         {savingKey === r.month ? (
-                          <span className="text-[11px] text-slate-400">Guardando…</span>
+                          <span className="text-[11px] text-slate-400">
+                            Guardando…
+                          </span>
                         ) : (
                           <span className="text-[11px] text-slate-500">—</span>
                         )}
@@ -308,7 +333,8 @@ export default function Expenses() {
           </div>
 
           <div className="px-5 py-4 border-t border-white/10 text-[11px] text-slate-400">
-            El “Total” se calcula como suma de todas las columnas numéricas del mes. Las columnas son libres por negocio.
+            El “Total” se calcula como suma de todas las columnas numéricas del
+            mes. Las columnas son libres por negocio.
           </div>
         </div>
       </div>
