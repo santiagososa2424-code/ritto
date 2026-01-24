@@ -148,6 +148,7 @@ export default function PublicBooking() {
   // ────────────────────────────────────────────────
   // HORARIOS DISPONIBLES (LOGICA PRESERVADA)
   // ✅ FIX: bloquea por DURACIÓN REAL del servicio (no solo 1 slot)
+  // ✅ PATCH: soporta bloqueos por franja y recurrentes (daily/weekly)
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (selectedDate && selectedService && business) {
@@ -165,17 +166,66 @@ export default function PublicBooking() {
 
     const dateStr = selectedDate;
 
-    const isBlocked = blocks.some((b) => b.date === dateStr);
-    if (isBlocked) {
+    // Intervalo base SIEMPRE = slot_interval_minutes
+    const interval = Number(business.slot_interval_minutes) || 30;
+    const serviceDuration = Number(selectedService.duration) || interval;
+
+    const toMins = (hhmmOrHHMMSS) => {
+      const s = String(hhmmOrHHMMSS || "").slice(0, 5);
+      const [h, m] = s.split(":").map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      return h * 60 + m;
+    };
+
+    const toHHMM = (mins) => {
+      const h = String(Math.floor(mins / 60)).padStart(2, "0");
+      const m = String(mins % 60).padStart(2, "0");
+      return `${h}:${m}`;
+    };
+
+    const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && aEnd > bStart;
+
+    // ────────────────────────────────────────────────
+    // ✅ PATCH BLOQUEOS: fecha completa + franjas + recurrentes
+    // ────────────────────────────────────────────────
+    const dayName = getDayNameFromDate(dateStr);
+    const dayKey = normalizeDay(dayName);
+
+    // Construir rangos de bloqueo aplicables a este dateStr
+    const blockRanges = (blocks || [])
+      .filter((b) => {
+        // Bloqueo por fecha específica
+        if (b?.date && b.date === dateStr) return true;
+
+        // Recurrente diario
+        if (b?.is_recurring && b?.recurring_type === "daily") return true;
+
+        // Recurrente semanal
+        if (b?.is_recurring && b?.recurring_type === "weekly") {
+          return normalizeDay(b.day_of_week) === dayKey;
+        }
+
+        return false;
+      })
+      .map((b) => {
+        const start = toMins(b?.start_time || "00:00");
+        const end = toMins(b?.end_time || "23:59");
+        if (start === null || end === null) return { start: 0, end: 24 * 60 };
+        return { start, end };
+      });
+
+    // Si algún bloqueo cubre todo el día, salir
+    const isDayFullyBlocked = blockRanges.some((r) => r.start <= 0 && r.end >= 24 * 60);
+    if (isDayFullyBlocked) {
       setAvailableHours([]);
       setSlotsUI([]);
       setSelectedHour("");
       return;
     }
 
-    const dayName = getDayNameFromDate(dateStr);
-    const dayKey = normalizeDay(dayName);
-
+    // ────────────────────────────────────────────────
+    // Horarios (schedules) para el día
+    // ────────────────────────────────────────────────
     const todays = schedules.filter((s) => normalizeDay(s.day_of_week) === dayKey);
 
     if (!todays.length) {
@@ -192,30 +242,10 @@ export default function PublicBooking() {
       .eq("business_id", business.id)
       .eq("date", dateStr);
 
-    // Intervalo base SIEMPRE = slot_interval_minutes (no usar duración del servicio como step)
-    const interval = Number(business.slot_interval_minutes) || 30;
-
-    const serviceDuration = Number(selectedService.duration) || interval;
-
     // Duración por servicio (ya tenés services cargados)
     const durationByServiceId = new Map(
       (services || []).map((s) => [s.id, Number(s.duration) || interval])
     );
-
-    const toMins = (hhmmOrHHMMSS) => {
-      const s = String(hhmmOrHHMMSS || "").slice(0, 5);
-      const [h, m] = s.split(":").map(Number);
-      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-      return h * 60 + m;
-    };
-
-    const toHHMM = (mins) => {
-      const h = String(Math.floor(mins / 60)).padStart(2, "0");
-      const m = String(mins % 60).padStart(2, "0");
-      return `${h}:${m}`;
-    };
-
-    const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && aEnd > bStart;
 
     // Normalizar bookings del día a rangos [start,end) en minutos
     const bookingRanges = (bookings || [])
@@ -256,6 +286,19 @@ export default function PublicBooking() {
       // Generamos posibles starts por intervalos base,
       // y exigimos que la duración completa entre dentro del horario del negocio
       for (let t = dayStart; t + serviceDuration <= dayEnd; t += interval) {
+        // ✅ PATCH: si el turno candidato se solapa con un bloqueo, no se ofrece
+        const candidateStart = t;
+        const candidateEnd = t + serviceDuration;
+
+        const blocked = blockRanges.some((r) =>
+          overlaps(candidateStart, candidateEnd, r.start, r.end)
+        );
+
+        if (blocked) {
+          slots.push({ hour: toHHMM(t), available: false, remaining: 0, capacity });
+          continue;
+        }
+
         let maxUsed = 0;
         let ok = true;
 
@@ -321,7 +364,7 @@ export default function PublicBooking() {
     setSlotsUI(uniqueSlots);
     setAvailableHours(finalHours);
 
-    // Si el usuario tenía seleccionado un horario que quedó fuera (porque pasó), limpiarlo
+    // Si el usuario tenía seleccionado un horario que quedó fuera, limpiarlo
     if (selectedHour) {
       const stillExists = uniqueSlots.some((s) => s.hour === selectedHour && s.available);
       if (!stillExists) setSelectedHour("");
