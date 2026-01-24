@@ -286,12 +286,46 @@ export default function PublicBooking() {
       if (!prev || s.remaining > prev.remaining) map.set(s.hour, s);
     });
 
-    const uniqueSlots = Array.from(map.values()).sort((a, b) =>
+    let uniqueSlots = Array.from(map.values()).sort((a, b) =>
       a.hour.localeCompare(b.hour)
     );
 
+    // ────────────────────────────────────────────────
+    // ✅ PATCH: Si la fecha seleccionada es HOY, ocultar horarios que ya pasaron
+    // - No toca estética
+    // - No altera lógica de capacidad/duración: solo filtra lo ya pasado
+    // - Usa hora local del navegador
+    // ────────────────────────────────────────────────
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const isToday = dateStr === todayStr;
+
+    if (isToday) {
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      uniqueSlots = uniqueSlots.filter((s) => {
+        const mins = toMins(s.hour);
+        if (mins === null) return false;
+        // <= ahora no tiene sentido ofrecerlo (ya pasó o es exactamente ahora)
+        return mins > nowMinutes;
+      });
+    }
+
+    // Recalcular availableHours desde lo que queda (solo slots disponibles y no pasados)
+    const finalHours = uniqueSlots
+      .filter((s) => s.available)
+      .map((s) => s.hour)
+      .sort((a, b) => a.localeCompare(b));
+
     setSlotsUI(uniqueSlots);
-    setAvailableHours(Array.from(hoursSet).sort());
+    setAvailableHours(finalHours);
+
+    // Si el usuario tenía seleccionado un horario que quedó fuera (porque pasó), limpiarlo
+    if (selectedHour) {
+      const stillExists = uniqueSlots.some((s) => s.hour === selectedHour && s.available);
+      if (!stillExists) setSelectedHour("");
+    }
   };
 
   const addMinutes = (time, mins) => {
