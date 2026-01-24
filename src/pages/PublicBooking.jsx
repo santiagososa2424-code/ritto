@@ -166,7 +166,7 @@ export default function PublicBooking() {
 
     const dateStr = selectedDate;
 
-    // Intervalo base SIEMPRE = slot_interval_minutes
+    // Intervalo base SIEMPRE = slot_interval_minutes (no usar duración del servicio como step)
     const interval = Number(business.slot_interval_minutes) || 30;
     const serviceDuration = Number(selectedService.duration) || interval;
 
@@ -187,11 +187,13 @@ export default function PublicBooking() {
 
     // ────────────────────────────────────────────────
     // ✅ PATCH BLOQUEOS: fecha completa + franjas + recurrentes
+    // - date específica: b.date === dateStr
+    // - daily: b.is_recurring && recurring_type === "daily"
+    // - weekly: b.is_recurring && recurring_type === "weekly" && day_of_week coincide
     // ────────────────────────────────────────────────
     const dayName = getDayNameFromDate(dateStr);
     const dayKey = normalizeDay(dayName);
 
-    // Construir rangos de bloqueo aplicables a este dateStr
     const blockRanges = (blocks || [])
       .filter((b) => {
         // Bloqueo por fecha específica
@@ -329,9 +331,7 @@ export default function PublicBooking() {
       if (!prev || s.remaining > prev.remaining) map.set(s.hour, s);
     });
 
-    let uniqueSlots = Array.from(map.values()).sort((a, b) =>
-      a.hour.localeCompare(b.hour)
-    );
+    let uniqueSlots = Array.from(map.values()).sort((a, b) => a.hour.localeCompare(b.hour));
 
     // ────────────────────────────────────────────────
     // ✅ PATCH: Si la fecha seleccionada es HOY, ocultar horarios que ya pasaron
@@ -376,17 +376,13 @@ export default function PublicBooking() {
     const d = new Date();
     d.setHours(h);
     d.setMinutes(m + Number(mins));
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(
-      2,
-      "0"
-    )}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
   // ────────────────────────────────────────────────
   // SEÑA (TRANSFERENCIA) — SOLO MONTO FIJO
   // ────────────────────────────────────────────────
-  const usesDeposit =
-    business?.deposit_enabled === true && Number(business.deposit_value) > 0;
+  const usesDeposit = business?.deposit_enabled === true && Number(business.deposit_value) > 0;
 
   const depositAmount = useMemo(() => {
     if (!usesDeposit || !selectedService) return 0;
@@ -442,14 +438,7 @@ export default function PublicBooking() {
   // SUBMIT (2 PASOS SI HAY SEÑA)
   // ────────────────────────────────────────────────
   const validateBaseFields = () => {
-    if (
-      !selectedService ||
-      !selectedDate ||
-      !selectedHour ||
-      !name.trim() ||
-      !email.trim() ||
-      !phone.trim()
-    ) {
+    if (!selectedService || !selectedDate || !selectedHour || !name.trim() || !email.trim() || !phone.trim()) {
       setError("Completá todos los campos.");
       return false;
     }
@@ -531,8 +520,7 @@ export default function PublicBooking() {
 
       // Aceptamos captura (imagen) o PDF (por si alguien igual sube PDF)
       const okType =
-        String(receiptFile.type || "").startsWith("image/") ||
-        receiptFile.type === "application/pdf";
+        String(receiptFile.type || "").startsWith("image/") || receiptFile.type === "application/pdf";
 
       if (!okType) {
         setError("El comprobante debe ser una imagen o un PDF.");
