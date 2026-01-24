@@ -230,11 +230,16 @@ export default function ScheduleBlocks() {
       return `${b.day_of_week || "día"} · ${hours}`;
     }
     if (b.date) {
-      // si es día completo lo mostrás igual, pero acá queda franja
       return `${b.date} · ${hours}`;
     }
     return hours;
   };
+
+  // ✅ PATCH UI: select oscuro + dropdown oscuro (Windows/Chrome)
+  const darkSelect =
+    "w-full rounded-2xl px-3 py-2 text-[13px] border border-white/10 " +
+    "bg-slate-950/60 text-slate-100 outline-none " +
+    "focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/15 transition";
 
   // ----------------------------------------------------
   // 🖥️ UI
@@ -256,7 +261,8 @@ export default function ScheduleBlocks() {
         <Card title="Agregar bloqueo">
           <Field label="Tipo">
             <select
-              className="input-ritto"
+              className={darkSelect}
+              style={{ colorScheme: "dark" }}
               value={blockType}
               onChange={(e) => setBlockType(e.target.value)}
             >
@@ -272,6 +278,7 @@ export default function ScheduleBlocks() {
               <input
                 type="date"
                 className="input-ritto"
+                style={{ colorScheme: "dark" }}
                 value={singleDate}
                 onChange={(e) => setSingleDate(e.target.value)}
               />
@@ -284,6 +291,7 @@ export default function ScheduleBlocks() {
                 <input
                   type="date"
                   className="input-ritto"
+                  style={{ colorScheme: "dark" }}
                   value={rangeStart}
                   onChange={(e) => setRangeStart(e.target.value)}
                 />
@@ -293,6 +301,7 @@ export default function ScheduleBlocks() {
                 <input
                   type="date"
                   className="input-ritto"
+                  style={{ colorScheme: "dark" }}
                   value={rangeEnd}
                   onChange={(e) => setRangeEnd(e.target.value)}
                 />
@@ -303,7 +312,8 @@ export default function ScheduleBlocks() {
           {blockType === "weekly" && (
             <Field label="Día de semana">
               <select
-                className="input-ritto"
+                className={darkSelect}
+                style={{ colorScheme: "dark" }}
                 value={weekDay}
                 onChange={(e) => setWeekDay(e.target.value)}
               >
@@ -323,6 +333,7 @@ export default function ScheduleBlocks() {
               <input
                 type="time"
                 className="input-ritto"
+                style={{ colorScheme: "dark" }}
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
               />
@@ -332,6 +343,7 @@ export default function ScheduleBlocks() {
               <input
                 type="time"
                 className="input-ritto"
+                style={{ colorScheme: "dark" }}
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
               />
@@ -400,9 +412,7 @@ function Header({ title, subtitle }) {
 function Card({ title, children }) {
   return (
     <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-xl p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">
-        {title}
-      </h2>
+      <h2 className="text-lg font-semibold text-emerald-300 tracking-tight">{title}</h2>
       {children}
     </div>
   );
