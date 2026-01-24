@@ -52,19 +52,11 @@ export default function Dashboard() {
     return st === "cancelled" || st === "canceled" || st === "rejected";
   };
 
-  /* ─────────────────────────────
-     ✅ HELPERS MES (LOCAL, evita UTC)
-     - sincroniza rango Ingresos/Gastos
-  ───────────────────────────── */
-  const monthStartDate = (d) => {
+  // ✅ month key "YYYY-MM-01" en LOCAL (evita desfasaje por UTC)
+  const monthKeyLocal = (d = new Date()) => {
     const x = new Date(d);
     x.setDate(1);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
-
-  const monthISO = (d) => {
-    const x = monthStartDate(d);
+    x.setHours(12, 0, 0, 0);
     const y = x.getFullYear();
     const m = String(x.getMonth() + 1).padStart(2, "0");
     return `${y}-${m}-01`;
@@ -226,7 +218,7 @@ export default function Dashboard() {
       toast.success("Turno confirmado.");
       loadDashboard();
     } catch (e) {
-      console.error("confirmBooking error:", e);
+      console.error("confirmBooking error", e);
       toast.error("No se pudo confirmar.");
     }
   };
@@ -242,7 +234,7 @@ export default function Dashboard() {
       toast.success("Turno cancelado.");
       loadDashboard();
     } catch (e) {
-      console.error("rejectBooking error:", e);
+      console.error("rejectBooking error", e);
       toast.error("No se pudo cancelar.");
     }
   };
@@ -253,7 +245,8 @@ export default function Dashboard() {
      ✅ FIX: normalizar status para ingresos
      ✅ FIX: con seña -> sumar SOLO confirmed real + deposit_paid
      ✅ PATCH: ingresos por MES CALENDARIO (reinicia cada mes)
-     ✅ PATCH: gastos por MES CALENDARIO desde monthly_expenses (sincroniza)
+     ✅ PATCH: gastos por MES CALENDARIO (mismo mes que ingresos)
+        - Conecta con monthly_expenses (misma fuente que /expenses)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -286,28 +279,23 @@ export default function Dashboard() {
 
       setBusiness(biz);
 
-      /* ───────── RANGO MES (LOCAL) ───────── */
-      const monthStart = monthStartDate(new Date());
-      const monthEnd = monthStartDate(new Date());
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
-
-      const monthStartISO = monthISO(monthStart); // "YYYY-MM-01"
-      const monthEndISO = monthISO(monthEnd); // "YYYY-MM-01" del mes siguiente
+      // ✅ Mes calendario actual (misma base para ingresos + gastos)
+      const currentMonthKey = monthKeyLocal(new Date()); // "YYYY-MM-01"
 
       /* ───────── GASTOS DEL MES (PATCH: monthly_expenses) ───────── */
       try {
-        const { data: mRow, error: mErr } = await supabase
+        const { data: mExp, error: mExpErr } = await supabase
           .from("monthly_expenses")
           .select("items")
           .eq("business_id", biz.id)
-          .eq("month", monthStartISO)
+          .eq("month", currentMonthKey)
           .maybeSingle();
 
-        if (mErr) {
-          console.error("Error cargando monthly_expenses:", mErr);
+        if (mExpErr) {
+          console.error("Error cargando monthly_expenses:", mExpErr);
           setMonthlyExpenses(0);
         } else {
-          const items = mRow?.items || {};
+          const items = mExp?.items || {};
           const totalExp = Object.values(items).reduce(
             (a, v) => a + Number(v || 0),
             0
@@ -348,7 +336,7 @@ export default function Dashboard() {
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
 
-      /* ───────── INGRESOS DEL MES CALENDARIO (ya con reinicio) ───────── */
+      /* ───────── INGRESOS DEL MES CALENDARIO (PATCH) ───────── */
       const revMonthStart = new Date();
       revMonthStart.setDate(1);
       revMonthStart.setHours(0, 0, 0, 0);
@@ -359,6 +347,7 @@ export default function Dashboard() {
       const revStartISO = revMonthStart.toISOString().slice(0, 10);
       const revEndISO = revMonthEnd.toISOString().slice(0, 10);
 
+      // ✅ Traemos también deposit_paid para evitar inconsistencias
       const { data: monthBookings, error: monthBookingsError } = await supabase
         .from("bookings")
         .select("service_id, service_name, status, deposit_paid")
@@ -370,6 +359,12 @@ export default function Dashboard() {
         console.error("Error cargando monthBookings:", monthBookingsError);
       }
 
+      /* ───────── INGRESOS ─────────
+         - Sin seña: cuenta todo excepto cancelados (incluye null)
+         - Con seña:
+            ✅ cuenta SOLO confirmed real (status confirmado)
+            ✅ y además exige deposit_paid = true (para blindar)
+      */
       let totalRev = 0;
 
       (monthBookings || [])
@@ -377,9 +372,11 @@ export default function Dashboard() {
           const st = normStatus(b?.status);
 
           if (!depositOn) {
+            // cuenta todo lo que NO sea cancelado
             return !isCancelledStatus(st);
           }
 
+          // con seña: solo confirmados reales + seña pagada
           return st === "confirmed" && b?.deposit_paid === true;
         })
         .forEach((b) => {
@@ -471,6 +468,7 @@ export default function Dashboard() {
         console.error("Error cargando used slots:", usedError);
         return 0;
       }
+// Dashboard.jsx (PARTE 2/3)
       const occupied = (used || []).filter((b) => {
         const st = normStatus(b?.status);
 
@@ -721,7 +719,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
       {/* SIDEBAR (desktop igual que antes) */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
         <div className="flex items-center gap-3 mb-10">
@@ -733,6 +730,7 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-400">Agenda inteligente</p>
           </div>
         </div>
+
         <nav className="space-y-1 text-sm flex-1">
           <SidebarItem
             label="Resumen"
@@ -786,6 +784,7 @@ export default function Dashboard() {
           )}
         </div>
       </aside>
+
       {/* MAIN */}
       <main className="flex-1 p-5 md:p-8 flex flex-col gap-6">
         {/* HEADER */}
@@ -862,6 +861,7 @@ export default function Dashboard() {
             sublabel="Hoy"
           />
         </section>
+
         {/* AGENDA + LATERAL */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
