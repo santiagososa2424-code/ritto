@@ -9,6 +9,16 @@ export default function ScheduleBlocks() {
   const [singleDate, setSingleDate] = useState("");
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+
+  // ✅ NUEVO: franja horaria
+  const [startTime, setStartTime] = useState("14:00");
+  const [endTime, setEndTime] = useState("15:00");
+
+  // ✅ NUEVO: tipo de bloqueo
+  // "day" | "range" | "daily" | "weekly"
+  const [blockType, setBlockType] = useState("day");
+  const [weekDay, setWeekDay] = useState("lunes");
+
   const [reason, setReason] = useState("");
 
   const [error, setError] = useState("");
@@ -44,98 +54,162 @@ export default function ScheduleBlocks() {
 
     setBusinessId(biz.id);
 
+    // ✅ Ordena por date pero deja recurrentes (date=null) al final
     const { data: blk } = await supabase
       .from("schedule_blocks")
       .select("*")
       .eq("business_id", biz.id)
-      .order("date", { ascending: true });
+      .order("date", { ascending: true, nullsFirst: false });
 
     setBlocks(blk || []);
   };
 
-  // ----------------------------------------------------
-  // ➕ Bloquear 1 día
-  // ----------------------------------------------------
-  const addSingleDay = async () => {
-    setError("");
-    setSuccess("");
+  const isValidHHMM = (t) => /^\d{2}:\d{2}$/.test(String(t || "").slice(0, 5));
 
-    if (!businessId) return;
-
-    if (!singleDate) {
-      setError("Elegí una fecha.");
-      return;
+  const validateTimeRange = () => {
+    if (!isValidHHMM(startTime) || !isValidHHMM(endTime)) {
+      setError("Elegí un horario válido (HH:MM).");
+      return false;
     }
-
-    const { error: insertError } = await supabase.from("schedule_blocks").insert({
-      business_id: businessId,
-      date: singleDate,
-      // FIX: la tabla exige NOT NULL
-      start_time: "00:00",
-      end_time: "23:59",
-      reason,
-    });
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
+    if (startTime >= endTime) {
+      setError("La franja horaria es inválida (inicio debe ser menor que fin).");
+      return false;
     }
-
-    setSuccess("Día bloqueado.");
-    setSingleDate("");
-    setReason("");
-    loadData();
+    return true;
   };
 
   // ----------------------------------------------------
-  // ➕ Bloquear rango
+  // ➕ Crear bloqueo (según tipo)
   // ----------------------------------------------------
-  const addRange = async () => {
+  const addBlock = async () => {
     setError("");
     setSuccess("");
 
     if (!businessId) return;
 
-    if (!rangeStart || !rangeEnd) {
+    // Bloqueo por día / rango exige fecha
+    if (blockType === "day" && !singleDate) {
+      setError("Elegí una fecha.");
+      return;
+    }
+    if (blockType === "range" && (!rangeStart || !rangeEnd)) {
       setError("Elegí las fechas del rango.");
       return;
     }
 
-    const start = new Date(rangeStart);
-    const end = new Date(rangeEnd);
-    if (start > end) {
-      setError("El rango es inválido.");
+    // Bloqueos con franja (si no querés franja, podés poner 00:00–23:59)
+    if (!validateTimeRange()) return;
+
+    if (blockType === "day") {
+      const { error: insertError } = await supabase.from("schedule_blocks").insert({
+        business_id: businessId,
+        date: singleDate,
+        start_time: startTime,
+        end_time: endTime,
+        reason,
+        is_recurring: false,
+        recurring_type: null,
+        day_of_week: null,
+      });
+
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+
+      setSuccess("Bloqueo agregado.");
+      setSingleDate("");
+      setReason("");
+      loadData();
       return;
     }
 
-    const days = [];
-    let current = new Date(start);
-    while (current <= end) {
-      days.push(current.toISOString().slice(0, 10));
-      current.setDate(current.getDate() + 1);
-    }
+    if (blockType === "range") {
+      const start = new Date(rangeStart);
+      const end = new Date(rangeEnd);
+      if (start > end) {
+        setError("El rango es inválido.");
+        return;
+      }
 
-    const inserts = days.map((d) => ({
-      business_id: businessId,
-      date: d,
-      // FIX: la tabla exige NOT NULL
-      start_time: "00:00",
-      end_time: "23:59",
-      reason,
-    }));
+      const days = [];
+      let current = new Date(start);
+      while (current <= end) {
+        days.push(current.toISOString().slice(0, 10));
+        current.setDate(current.getDate() + 1);
+      }
 
-    const { error: insertError } = await supabase.from("schedule_blocks").insert(inserts);
+      const inserts = days.map((d) => ({
+        business_id: businessId,
+        date: d,
+        start_time: startTime,
+        end_time: endTime,
+        reason,
+        is_recurring: false,
+        recurring_type: null,
+        day_of_week: null,
+      }));
 
-    if (insertError) {
-      setError(insertError.message);
+      const { error: insertError } = await supabase.from("schedule_blocks").insert(inserts);
+
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+
+      setSuccess("Rango bloqueado correctamente.");
+      setRangeStart("");
+      setRangeEnd("");
+      setReason("");
+      loadData();
       return;
     }
 
-    setSuccess("Rango bloqueado correctamente.");
-    setRangeStart("");
-    setRangeEnd("");
-    setReason("");
-    loadData();
+    if (blockType === "daily") {
+      const { error: insertError } = await supabase.from("schedule_blocks").insert({
+        business_id: businessId,
+        date: null,
+        start_time: startTime,
+        end_time: endTime,
+        reason,
+        is_recurring: true,
+        recurring_type: "daily",
+        day_of_week: null,
+      });
+
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+
+      setSuccess("Pausa diaria agregada.");
+      setReason("");
+      loadData();
+      return;
+    }
+
+    if (blockType === "weekly") {
+      const { error: insertError } = await supabase.from("schedule_blocks").insert({
+        business_id: businessId,
+        date: null,
+        start_time: startTime,
+        end_time: endTime,
+        reason,
+        is_recurring: true,
+        recurring_type: "weekly",
+        day_of_week: weekDay,
+      });
+
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+
+      setSuccess("Pausa semanal agregada.");
+      setReason("");
+      loadData();
+      return;
+    }
   };
 
   // ----------------------------------------------------
@@ -146,33 +220,123 @@ export default function ScheduleBlocks() {
     loadData();
   };
 
+  const describeBlock = (b) => {
+    const hours = `${String(b.start_time || "").slice(0, 5)}–${String(b.end_time || "").slice(0, 5)}`;
+
+    if (b.is_recurring && b.recurring_type === "daily") {
+      return `Todos los días · ${hours}`;
+    }
+    if (b.is_recurring && b.recurring_type === "weekly") {
+      return `${b.day_of_week || "día"} · ${hours}`;
+    }
+    if (b.date) {
+      // si es día completo lo mostrás igual, pero acá queda franja
+      return `${b.date} · ${hours}`;
+    }
+    return hours;
+  };
+
   // ----------------------------------------------------
   // 🖥️ UI
   // ----------------------------------------------------
   return (
     <div className="min-h-screen text-slate-50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-10">
       <div className="max-w-xl mx-auto space-y-10">
-
         {/* Header */}
         <Header
-          title="Bloquear días y licencias"
-          subtitle="Usá esta sección para bloquear días en los que no vas a trabajar."
+          title="Bloqueos y pausas"
+          subtitle="Bloqueá días completos, franjas horarias y pausas recurrentes."
         />
 
         {/* Alertas */}
         {error && <Alert type="error" text={error} />}
         {success && <Alert type="success" text={success} />}
 
-        {/* CARD — Bloquear día */}
-        <Card title="Bloquear un día">
-          <Field>
-            <input
-              type="date"
+        {/* CARD — Nuevo bloqueo */}
+        <Card title="Agregar bloqueo">
+          <Field label="Tipo">
+            <select
               className="input-ritto"
-              value={singleDate}
-              onChange={(e) => setSingleDate(e.target.value)}
-            />
+              value={blockType}
+              onChange={(e) => setBlockType(e.target.value)}
+            >
+              <option value="day">Fecha específica</option>
+              <option value="range">Rango de fechas</option>
+              <option value="daily">Todos los días (recurrente)</option>
+              <option value="weekly">Día de semana (recurrente)</option>
+            </select>
           </Field>
+
+          {blockType === "day" && (
+            <Field label="Fecha">
+              <input
+                type="date"
+                className="input-ritto"
+                value={singleDate}
+                onChange={(e) => setSingleDate(e.target.value)}
+              />
+            </Field>
+          )}
+
+          {blockType === "range" && (
+            <>
+              <Field label="Desde">
+                <input
+                  type="date"
+                  className="input-ritto"
+                  value={rangeStart}
+                  onChange={(e) => setRangeStart(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Hasta">
+                <input
+                  type="date"
+                  className="input-ritto"
+                  value={rangeEnd}
+                  onChange={(e) => setRangeEnd(e.target.value)}
+                />
+              </Field>
+            </>
+          )}
+
+          {blockType === "weekly" && (
+            <Field label="Día de semana">
+              <select
+                className="input-ritto"
+                value={weekDay}
+                onChange={(e) => setWeekDay(e.target.value)}
+              >
+                <option value="lunes">Lunes</option>
+                <option value="martes">Martes</option>
+                <option value="miercoles">Miércoles</option>
+                <option value="jueves">Jueves</option>
+                <option value="viernes">Viernes</option>
+                <option value="sabado">Sábado</option>
+                <option value="domingo">Domingo</option>
+              </select>
+            </Field>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Desde (hora)">
+              <input
+                type="time"
+                className="input-ritto"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </Field>
+
+            <Field label="Hasta (hora)">
+              <input
+                type="time"
+                className="input-ritto"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </Field>
+          </div>
 
           <Field>
             <input
@@ -184,50 +348,15 @@ export default function ScheduleBlocks() {
             />
           </Field>
 
-          <button onClick={addSingleDay} className="button-ritto w-full">
-            Bloquear día
-          </button>
-        </Card>
-
-        {/* CARD — Bloquear rango */}
-        <Card title="Bloquear un rango">
-          <Field label="Desde">
-            <input
-              type="date"
-              className="input-ritto"
-              value={rangeStart}
-              onChange={(e) => setRangeStart(e.target.value)}
-            />
-          </Field>
-
-          <Field label="Hasta">
-            <input
-              type="date"
-              className="input-ritto"
-              value={rangeEnd}
-              onChange={(e) => setRangeEnd(e.target.value)}
-            />
-          </Field>
-
-          <Field>
-            <input
-              type="text"
-              placeholder="Motivo (opcional)"
-              className="input-ritto"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </Field>
-
-          <button onClick={addRange} className="button-ritto w-full">
-            Bloquear rango
+          <button onClick={addBlock} className="button-ritto w-full">
+            Guardar bloqueo
           </button>
         </Card>
 
         {/* CARD — Lista de bloqueos */}
-        <Card title="Días bloqueados">
+        <Card title="Bloqueos activos">
           {blocks.length === 0 ? (
-            <p className="text-sm text-slate-400">No hay días bloqueados.</p>
+            <p className="text-sm text-slate-400">No hay bloqueos.</p>
           ) : (
             <ul className="space-y-3 mt-3">
               {blocks.map((b) => (
@@ -236,10 +365,8 @@ export default function ScheduleBlocks() {
                   className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl shadow flex justify-between items-center px-5 py-4"
                 >
                   <div>
-                    <p className="text-sm text-slate-50">{b.date}</p>
-                    {b.reason && (
-                      <p className="text-[12px] text-slate-400">{b.reason}</p>
-                    )}
+                    <p className="text-sm text-slate-50">{describeBlock(b)}</p>
+                    {b.reason && <p className="text-[12px] text-slate-400">{b.reason}</p>}
                   </div>
 
                   <button
@@ -261,7 +388,6 @@ export default function ScheduleBlocks() {
 // ----------------------------------------------------
 // 🎨 Subcomponentes
 // ----------------------------------------------------
-
 function Header({ title, subtitle }) {
   return (
     <div className="text-center">
