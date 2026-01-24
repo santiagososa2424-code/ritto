@@ -53,6 +53,24 @@ export default function Dashboard() {
   };
 
   /* ─────────────────────────────
+     ✅ HELPERS MES (LOCAL, evita UTC)
+     - sincroniza rango Ingresos/Gastos
+  ───────────────────────────── */
+  const monthStartDate = (d) => {
+    const x = new Date(d);
+    x.setDate(1);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+
+  const monthISO = (d) => {
+    const x = monthStartDate(d);
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}-01`;
+  };
+
+  /* ─────────────────────────────
      NAVEGACIÓN
   ───────────────────────────── */
   const navigate = useNavigate();
@@ -234,8 +252,8 @@ export default function Dashboard() {
      ✅ FIX: usar depositEnabled del biz recién cargado
      ✅ FIX: normalizar status para ingresos
      ✅ FIX: con seña -> sumar SOLO confirmed real + deposit_paid
-     ✅ NEW: gastos del mes (expenses)
      ✅ PATCH: ingresos por MES CALENDARIO (reinicia cada mes)
+     ✅ PATCH: gastos por MES CALENDARIO desde monthly_expenses (sincroniza)
   ───────────────────────────── */
   const loadDashboard = async () => {
     try {
@@ -268,37 +286,36 @@ export default function Dashboard() {
 
       setBusiness(biz);
 
-      /* ───────── GASTOS DEL MES ───────── */
+      /* ───────── RANGO MES (LOCAL) ───────── */
+      const monthStart = monthStartDate(new Date());
+      const monthEnd = monthStartDate(new Date());
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+      const monthStartISO = monthISO(monthStart); // "YYYY-MM-01"
+      const monthEndISO = monthISO(monthEnd); // "YYYY-MM-01" del mes siguiente
+
+      /* ───────── GASTOS DEL MES (PATCH: monthly_expenses) ───────── */
       try {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        monthStart.setHours(0, 0, 0, 0);
-
-        const monthEnd = new Date(monthStart);
-        monthEnd.setMonth(monthEnd.getMonth() + 1);
-
-        const startISO = monthStart.toISOString().slice(0, 10);
-        const endISO = monthEnd.toISOString().slice(0, 10);
-
-        const { data: expRows, error: expErr } = await supabase
-          .from("expenses")
-          .select("amount")
+        const { data: mRow, error: mErr } = await supabase
+          .from("monthly_expenses")
+          .select("items")
           .eq("business_id", biz.id)
-          .gte("expense_date", startISO)
-          .lt("expense_date", endISO);
+          .eq("month", monthStartISO)
+          .maybeSingle();
 
-        if (expErr) {
-          console.error("Error cargando expenses:", expErr);
+        if (mErr) {
+          console.error("Error cargando monthly_expenses:", mErr);
           setMonthlyExpenses(0);
         } else {
-          const totalExp = (expRows || []).reduce(
-            (a, r) => a + Number(r.amount || 0),
+          const items = mRow?.items || {};
+          const totalExp = Object.values(items).reduce(
+            (a, v) => a + Number(v || 0),
             0
           );
           setMonthlyExpenses(totalExp);
         }
       } catch (e) {
-        console.error("Expenses calc error:", e);
+        console.error("Monthly expenses calc error:", e);
         setMonthlyExpenses(0);
       }
 
@@ -331,7 +348,7 @@ export default function Dashboard() {
       const servicesMap = new Map();
       (servicesData || []).forEach((s) => servicesMap.set(s.id, s));
 
-      /* ───────── INGRESOS DEL MES CALENDARIO (PATCH) ───────── */
+      /* ───────── INGRESOS DEL MES CALENDARIO (ya con reinicio) ───────── */
       const revMonthStart = new Date();
       revMonthStart.setDate(1);
       revMonthStart.setHours(0, 0, 0, 0);
@@ -342,7 +359,6 @@ export default function Dashboard() {
       const revStartISO = revMonthStart.toISOString().slice(0, 10);
       const revEndISO = revMonthEnd.toISOString().slice(0, 10);
 
-      // ✅ Traemos también deposit_paid para evitar inconsistencias
       const { data: monthBookings, error: monthBookingsError } = await supabase
         .from("bookings")
         .select("service_id, service_name, status, deposit_paid")
@@ -354,12 +370,6 @@ export default function Dashboard() {
         console.error("Error cargando monthBookings:", monthBookingsError);
       }
 
-      /* ───────── INGRESOS ─────────
-         - Sin seña: cuenta todo excepto cancelados (incluye null)
-         - Con seña:
-            ✅ cuenta SOLO confirmed real (status confirmado)
-            ✅ y además exige deposit_paid = true (para blindar)
-      */
       let totalRev = 0;
 
       (monthBookings || [])
@@ -367,11 +377,9 @@ export default function Dashboard() {
           const st = normStatus(b?.status);
 
           if (!depositOn) {
-            // cuenta todo lo que NO sea cancelado
             return !isCancelledStatus(st);
           }
 
-          // con seña: solo confirmados reales + seña pagada
           return st === "confirmed" && b?.deposit_paid === true;
         })
         .forEach((b) => {
@@ -463,7 +471,6 @@ export default function Dashboard() {
         console.error("Error cargando used slots:", usedError);
         return 0;
       }
-
       const occupied = (used || []).filter((b) => {
         const st = normStatus(b?.status);
 
@@ -497,7 +504,7 @@ export default function Dashboard() {
   const expensesLabel = new Intl.NumberFormat("es-UY").format(
     monthlyExpenses || 0
   );
-// Dashboard.jsx (PARTE 2/3)
+
   /* ─────────────────────────────
      ESTADOS (LÓGICA SEÑA)
      ✅ FIX: cancelled siempre se respeta (con status normalizado)
@@ -726,7 +733,6 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-400">Agenda inteligente</p>
           </div>
         </div>
-
         <nav className="space-y-1 text-sm flex-1">
           <SidebarItem
             label="Resumen"
