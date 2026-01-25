@@ -772,7 +772,6 @@ export default function Dashboard() {
          - Sidebar desktop
          - Main completo
          - Componentes auxiliares */}
-// Dashboard.jsx (PARTE 3/3)
 
       {/* SIDEBAR (desktop) */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
