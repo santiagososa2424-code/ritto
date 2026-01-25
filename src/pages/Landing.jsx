@@ -15,7 +15,7 @@ export default function Landing() {
   const bubbles = [
     {
       title: "Link único para reservas",
-      desc: "Compartís un link y tus clientes reservan solos.",
+      desc: "Link unico de empresa.",
     },
     {
       title: "Control de señas",
@@ -23,15 +23,15 @@ export default function Landing() {
     },
     {
       title: "Ingresos y gastos",
-      desc: "Ves cómo va tu mes en segundos.",
+      desc: "Control total en ingresos y gastos de la empresa.",
     },
     {
       title: "Emails automáticos",
-      desc: "Confirmación y recordatorio para bajar faltas.",
+      desc: "Confirmación y recordatorio para evitar faltas del cliente.",
     },
     {
       title: "30 días gratis",
-      desc: "Probalo creando tu cuenta. Sin vueltas.",
+      desc: "Probalo gratis simplemente creando tu cuenta.",
     },
   ];
 
