@@ -1,30 +1,35 @@
 // /pages/Landing.jsx
-import React from "react";
+import React, { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 export default function Landing() {
+  // ✅ FIX: si el navegador vuelve con back/forward cache, forzar reload
+  useEffect(() => {
+    const onPageShow = (e) => {
+      if (e.persisted) window.location.reload();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const bubbles = [
     {
-      n: "01",
       title: "Link único para reservas",
       desc: "Compartís un link y tus clientes reservan solos.",
     },
     {
-      n: "02",
       title: "Control de señas",
       desc: "Gestioná señas y comprobantes dentro de la app.",
     },
     {
-      n: "03",
       title: "Ingresos y gastos",
       desc: "Ves cómo va tu mes en segundos.",
     },
     {
-      n: "04",
       title: "Emails automáticos",
       desc: "Confirmación y recordatorio para bajar faltas.",
     },
     {
-      n: "05",
       title: "30 días gratis",
       desc: "Probalo creando tu cuenta. Sin vueltas.",
     },
@@ -52,20 +57,21 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* SOLO 2 botones */}
+          {/* ✅ SOLO 2 botones + Link (React Router) */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <a
-              href="/login"
+            <Link
+              to="/login"
               className="text-[12px] sm:text-sm px-3 sm:px-4 py-2 rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 transition"
             >
               Iniciar sesión
-            </a>
-            <a
-              href="/register"
+            </Link>
+
+            <Link
+              to="/register"
               className="text-[12px] sm:text-sm px-3 sm:px-4 py-2 rounded-2xl bg-white text-[#070A16] font-semibold hover:bg-white/90 transition"
             >
               Registrarse
-            </a>
+            </Link>
           </div>
         </header>
 
@@ -87,17 +93,14 @@ export default function Landing() {
               Simple, serio y rápido. Para que lo uses todos los días sin pensar.
             </p>
 
-            {/* Burbujas */}
+            {/* ✅ Burbujas SIN numeritos */}
             <div className="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {bubbles.slice(0, 4).map((b) => (
                 <div
-                  key={b.n}
+                  key={b.title}
                   className="rounded-3xl border border-white/10 bg-white/5 hover:bg-white/7 transition p-4"
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-semibold">{b.title}</p>
-                    <span className="text-[10px] text-white/50">{b.n}</span>
-                  </div>
+                  <p className="text-[12px] font-semibold">{b.title}</p>
                   <p className="mt-1 text-[11px] text-white/60">{b.desc}</p>
                 </div>
               ))}
@@ -105,10 +108,7 @@ export default function Landing() {
 
             {/* 5ta burbuja */}
             <div className="mt-3 rounded-3xl border border-white/10 bg-white/5 p-4 max-w-xl">
-              <div className="flex items-center justify-between">
-                <p className="text-[12px] font-semibold">{bubbles[4].title}</p>
-                <span className="text-[10px] text-white/50">{bubbles[4].n}</span>
-              </div>
+              <p className="text-[12px] font-semibold">{bubbles[4].title}</p>
               <p className="mt-1 text-[11px] text-white/60">{bubbles[4].desc}</p>
             </div>
           </div>
