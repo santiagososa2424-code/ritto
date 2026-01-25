@@ -1,5 +1,5 @@
 // Dashboard.jsx (PARTE 1/3)
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -19,6 +19,10 @@ export default function Dashboard() {
 
   // ✅ MOBILE SIDEBAR (drawer)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // ✅ Auto-refresh: evitar solapado + limpiar interval
+  const refreshTimerRef = useRef(null);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     const onResize = () => {
@@ -247,9 +251,14 @@ export default function Dashboard() {
      ✅ PATCH: ingresos por MES CALENDARIO (reinicia cada mes)
      ✅ PATCH: gastos por MES CALENDARIO (mismo mes que ingresos)
         - Conecta con monthly_expenses (misma fuente que /expenses)
+     ✅ AUTO-REFRESH: guard para no solapar loads
   ───────────────────────────── */
   const loadDashboard = async () => {
+    // ✅ Evitar solape de cargas (interval/focus/acciones)
+    if (loadingRef.current) return;
+
     try {
+      loadingRef.current = true;
       setIsLoading(true);
 
       const {
@@ -400,11 +409,46 @@ export default function Dashboard() {
       setOccupation(occupationValue);
     } catch (err) {
       console.error("Dashboard error", err);
-      toast.error("Hubo un problema cargando el panel.");
+      // ⚠️ Con auto-refresh, evitamos spamear toasts por microcortes
+      // toast.error("Hubo un problema cargando el panel.");
+      console.warn("No se pudo refrescar el panel.");
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
     }
   };
+
+  // ✅ Wrapper estable para auto refresh (no toca estética)
+  const refreshDashboard = useCallback(async () => {
+    try {
+      await loadDashboard();
+    } catch (e) {
+      console.error("refreshDashboard error:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ Auto-refresh: cada 60s + al volver a la pestaña + al volver online
+  useEffect(() => {
+    const refresh = () => refreshDashboard();
+
+    refreshTimerRef.current = setInterval(refresh, 60_000);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    const onOnline = () => refresh();
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
+
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [refreshDashboard]);
 
   /* ─────────────────────────────
      OCUPACIÓN (FIX)
@@ -446,6 +490,9 @@ export default function Dashboard() {
       const interval = biz.slot_interval_minutes || 30;
       let totalSlots = 0;
 
+      // (continúa en PARTE 2/3)
+// Dashboard.jsx (PARTE 2/3)
+
       todays.forEach((s) => {
         let curr = s.start_time.slice(0, 5);
         const end = s.end_time.slice(0, 5);
@@ -468,7 +515,7 @@ export default function Dashboard() {
         console.error("Error cargando used slots:", usedError);
         return 0;
       }
-// Dashboard.jsx (PARTE 2/3)
+
       const occupied = (used || []).filter((b) => {
         const st = normStatus(b?.status);
 
@@ -519,6 +566,7 @@ export default function Dashboard() {
     // si hay seña: respetar status real, fallback confirmed
     return st || "confirmed";
   };
+
   // ✅ Turnos activos para métrica semanal (no cuenta cancelados)
   const activeWeekCount = useMemo(() => {
     return (appointmentsToday || []).filter((b) => uiStatus(b) !== "cancelled")
@@ -719,7 +767,14 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* SIDEBAR (desktop igual que antes) */}
+
+      {/* (continúa en PARTE 3/3)
+         - Sidebar desktop
+         - Main completo
+         - Componentes auxiliares */}
+// Dashboard.jsx (PARTE 3/3)
+
+      {/* SIDEBAR (desktop) */}
       <aside className="hidden md:flex flex-col w-64 px-5 py-6 bg-slate-900/70 border-r border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
         <div className="flex items-center gap-3 mb-10">
           <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-300 text-slate-950 font-semibold flex items-center justify-center">
@@ -790,7 +845,6 @@ export default function Dashboard() {
         {/* HEADER */}
         <header className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* ✅ HAMBURGER (solo mobile) */}
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
@@ -822,7 +876,7 @@ export default function Dashboard() {
               }
               className="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-2xl bg-white/5 border border-white/10"
             >
-              <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+              <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" />
               {trialExpired && !isLifetime && !hasActivePlan
                 ? "Agenda bloqueada"
                 : "Agenda activa"}
@@ -866,12 +920,13 @@ export default function Dashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           {/* IZQUIERDA */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-            {/* AGENDA SEMANAL */}
             <div className="rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.6)] p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold">Turnos de la semana</h2>
-                  <p className="text-[11px] text-slate-400">Próximos 7 días</p>
+                  <p className="text-[11px] text-slate-400">
+                    Próximos 7 días
+                  </p>
                 </div>
                 <button
                   onClick={goBookings}
@@ -964,14 +1019,18 @@ export default function Dashboard() {
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => confirmBooking(item.id)}
+                                  onClick={() =>
+                                    confirmBooking(item.id)
+                                  }
                                   className="text-[11px] px-2 py-1 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition"
                                 >
                                   Confirmar
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => rejectBooking(item.id)}
+                                  onClick={() =>
+                                    rejectBooking(item.id)
+                                  }
                                   className="text-[11px] px-2 py-1 rounded-2xl border border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition"
                                 >
                                   Cancelar
@@ -1090,8 +1149,8 @@ export default function Dashboard() {
 }
 
 /* ─────────────────────────────
-   COMPONENTES AUXILIARES (EN ESTE ARCHIVO)
-──────────────────────────────────────── */
+   COMPONENTES AUXILIARES
+──────────────────────────────── */
 
 function SidebarItem({ label, onClick, active }) {
   return (
