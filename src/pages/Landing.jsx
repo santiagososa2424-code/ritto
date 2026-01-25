@@ -90,7 +90,7 @@ export default function Landing() {
             </h1>
 
             <p className="mt-4 text-sm sm:text-base text-white/70 max-w-xl">
-              Simple, serio y rápido. Para que lo uses todos los días sin pensar.
+              Hecha para simplificar tu negocio.
             </p>
 
             {/* ✅ Burbujas SIN numeritos */}
