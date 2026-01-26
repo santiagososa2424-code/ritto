@@ -2,8 +2,8 @@ name: Send 24h booking reminders
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # cada 15 minutos
-  workflow_dispatch: {}
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
 
 jobs:
   call-reminder-function:
@@ -13,26 +13,15 @@ jobs:
         env:
           FUNCTION_URL: ${{ secrets.SUPABASE_REMINDER_FUNCTION_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$FUNCTION_URL" ]; then
-            echo "Missing secret: SUPABASE_REMINDER_FUNCTION_URL"
-            exit 1
-          fi
+          echo "Calling function..."
 
-          if [ -z "$CRON_SECRET" ]; then
-            echo "Missing secret: CRON_SECRET"
-            exit 1
-          fi
+          curl -sS -X GET "$FUNCTION_URL" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -o /tmp/body.txt \
+            -w "\nHTTP_CODE=%{http_code}\n" || true
 
-          echo "Calling: $FUNCTION_URL"
-
-    curl -sS -X GET "$FUNCTION_URL" \
-  -H "x-cron-secret: $CRON_SECRET" \
-  -H "Content-Type: application/json" \
-  -o /tmp/body.txt \
-  -w "\nHTTP_CODE=%{http_code}\n" || true
-
-echo "---- BODY ----"
-cat /tmp/body.txt
-echo "-------------"
+          echo "---- BODY ----"
+          cat /tmp/body.txt
+          echo "-------------"
