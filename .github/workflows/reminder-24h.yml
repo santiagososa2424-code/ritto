@@ -2,8 +2,7 @@ name: Send 24h booking reminders
 
 on:
   schedule:
-    # Cada 15 minutos (recomendado por tu ventana 23h–25h)
-    - cron: "*/15 * * * *"
+    - cron: "*/15 * * * *" # cada 15 minutos
   workflow_dispatch: {}
 
 jobs:
@@ -13,28 +12,23 @@ jobs:
       - name: Call Supabase Edge Function (send-booking-reminder-24h)
         env:
           FUNCTION_URL: ${{ secrets.SUPABASE_REMINDER_FUNCTION_URL }}
-          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
           ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$FUNCTION_URL" ]; then
             echo "Missing secret: SUPABASE_REMINDER_FUNCTION_URL"
             exit 1
           fi
-          if [ -z "$SERVICE_ROLE_KEY" ]; then
-            echo "Missing secret: SUPABASE_SERVICE_ROLE_KEY"
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing secret: CRON_SECRET"
             exit 1
           fi
 
           echo "Calling: $FUNCTION_URL"
 
-          # Intentamos con GET (función ya parcheada para permitirlo)
-          # Mandamos Authorization con Service Role y apikey (anon) por compatibilidad
-          curl -sS -X GET "$FUNCTION_URL" \
-            -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
-            -H "apikey: ${ANON_KEY:-$SERVICE_ROLE_KEY}" \
+          curl -i -sS -X GET "$FUNCTION_URL" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "apikey: ${ANON_KEY:-}" \
             -H "Content-Type: application/json" \
-            --fail \
-            | tee /tmp/reminder_result.json
-
-          echo ""
-          echo "Response saved to /tmp/reminder_result.json"
+            --fail
