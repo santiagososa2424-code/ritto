@@ -27,8 +27,12 @@ jobs:
 
           echo "Calling: $FUNCTION_URL"
 
-          curl -i -sS -X GET "$FUNCTION_URL" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            -H "apikey: ${ANON_KEY:-}" \
-            -H "Content-Type: application/json" \
-            --fail
+    curl -sS -X GET "$FUNCTION_URL" \
+  -H "x-cron-secret: $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -o /tmp/body.txt \
+  -w "\nHTTP_CODE=%{http_code}\n" || true
+
+echo "---- BODY ----"
+cat /tmp/body.txt
+echo "-------------"
