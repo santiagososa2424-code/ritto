@@ -20,9 +20,12 @@ jobs:
             exit 1
           fi
 
-          echo "FUNCTION_URL=[$FUNCTION_URL]"
+          # 🔧 LIMPIAR espacios / newlines invisibles del secret
+          FUNCTION_URL_CLEAN="$(echo -n "$FUNCTION_URL" | tr -d '\r\n' | xargs)"
 
-          curl -sS -X GET "$FUNCTION_URL" \
+          echo "FUNCTION_URL_CLEAN=[$FUNCTION_URL_CLEAN]"
+
+          curl -sS -X GET "$FUNCTION_URL_CLEAN" \
             -H "x-cron-secret: $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -o /tmp/body.txt \
