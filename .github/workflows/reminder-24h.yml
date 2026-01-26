@@ -1,25 +1,21 @@
-name: Send 24h booking reminders
+- name: Call Supabase Edge Function
+  env:
+    FUNCTION_URL: ${{ secrets.SUPABASE_REMINDER_FUNCTION_URL }}
+    CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  run: |
+    if [ -z "$FUNCTION_URL" ]; then
+      echo "Missing secret: SUPABASE_REMINDER_FUNCTION_URL"
+      exit 1
+    fi
 
-on:
-  schedule:
-    - cron: "*/15 * * * *"
-  workflow_dispatch:
+    echo "FUNCTION_URL=[$FUNCTION_URL]"
 
-jobs:
-  call-reminder-function:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call Supabase Edge Function
-        env:
-          FUNCTION_URL: ${{ secrets.SUPABASE_REMINDER_FUNCTION_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          curl -sS -X GET "$FUNCTION_URL" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            -H "Content-Type: application/json" \
-            -o /tmp/body.txt \
-            -w "\nHTTP_CODE=%{http_code}\n" || true
+    curl -sS -X GET "$FUNCTION_URL" \
+      -H "x-cron-secret: $CRON_SECRET" \
+      -H "Content-Type: application/json" \
+      -o /tmp/body.txt \
+      -w "\nHTTP_CODE=%{http_code}\n" || true
 
-          echo "---- BODY ----"
-          cat /tmp/body.txt
-          echo "-------------"
+    echo "---- BODY ----"
+    cat /tmp/body.txt || true
+    echo "-------------"
