@@ -9,13 +9,11 @@ jobs:
   call-reminder-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Supabase Edge Function (send-booking-reminder-24h)
+      - name: Call Supabase Edge Function
         env:
           FUNCTION_URL: ${{ secrets.SUPABASE_REMINDER_FUNCTION_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Calling function..."
-
           curl -sS -X GET "$FUNCTION_URL" \
             -H "x-cron-secret: $CRON_SECRET" \
             -H "Content-Type: application/json" \
