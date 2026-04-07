@@ -1,12 +1,7 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Ritto · Procesá tus facturas en segundos",
-  description:
-    "Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.",
-};
+import { useRouter } from 'next/router';
 
 export default function LandingPage() {
+  const router = useRouter();
   return (
     <>
       <style>{`
@@ -25,7 +20,9 @@ export default function LandingPage() {
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); line-height: 1.6; }
 
         .nav { background: rgba(245,245,247,0.88); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 62px; position: sticky; top: 0; z-index: 100; }
-        .logo { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--green); letter-spacing: -0.3px; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--green); letter-spacing: -0.3px; cursor: pointer; }
+        .nav-btns { display: flex; align-items: center; gap: 8px; }
+        .btn-login { background: transparent; color: var(--dark); border: 1.5px solid var(--border); padding: 8px 20px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; }
         .nav-cta { background: var(--green); color: #fff; border: none; padding: 9px 22px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
 
         .hero { max-width: 880px; margin: 0 auto; padding: 96px 2rem 72px; text-align: center; }
@@ -84,44 +81,42 @@ export default function LandingPage() {
 
         footer { max-width: 880px; margin: 0 auto; padding: 32px 2rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px; }
         footer p { font-size: 13px; color: var(--gray); }
+
+        @media (max-width: 480px) {
+          .btn-login { display: none; }
+          .nav { padding: 0 1.25rem; }
+        }
       `}</style>
 
       <nav className="nav">
-        <div className="logo">Ritto</div>
-        <button className="nav-cta" onClick={() => window.location.href = '/login'}>Empezar gratis</button>
+        <div className="logo" onClick={() => router.push('/')}>Ritto</div>
+        <div className="nav-btns">
+          <button className="btn-login" onClick={() => router.push('/login')}>Iniciar sesión</button>
+          <button className="nav-cta" onClick={() => router.push('/login')}>Empezar gratis</button>
+        </div>
       </nav>
 
       <section className="hero">
-        <div className="badge">
-          <span className="badge-dot" />
-          Hecho para empresas uruguayas
-        </div>
-        <h1>
-          Tus facturas,<br />
-          procesadas en <em>segundos</em>
-        </h1>
-        <p className="hero-sub">
-          Subí tus facturas y Ritto extrae automáticamente todos los datos
-          fiscales — RUT, IVA, totales — listos para exportar a Excel.
-        </p>
+        <div className="badge"><span className="badge-dot" />Hecho para empresas uruguayas</div>
+        <h1>Tus facturas,<br />procesadas en <em>segundos</em></h1>
+        <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.</p>
         <div className="hero-btns">
-          <button className="btn-primary" onClick={() => window.location.href = '/login'}>Probar gratis 14 días</button>
-          <button className="btn-ghost" onClick={() => window.location.href = '/app'}>Ver cómo funciona</button>
+          <button className="btn-primary" onClick={() => router.push('/login')}>Probar gratis 14 días</button>
+          <button className="btn-ghost" onClick={() => router.push('/login')}>Iniciar sesión</button>
         </div>
       </section>
 
       <div className="demo-wrap">
         <div className="demo-window">
           <div className="demo-bar">
-            <div className="demo-dot" style={{ background: "#ff5f57" }} />
-            <div className="demo-dot" style={{ background: "#ffbd2e" }} />
-            <div className="demo-dot" style={{ background: "#28c840" }} />
+            <div className="demo-dot" style={{ background: '#ff5f57' }} />
+            <div className="demo-dot" style={{ background: '#ffbd2e' }} />
+            <div className="demo-dot" style={{ background: '#28c840' }} />
           </div>
           <div className="demo-body">
             <div className="upload-zone">
               <div className="upload-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                  stroke="#0a7c59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
@@ -131,9 +126,7 @@ export default function LandingPage() {
               <p style={{ marginTop: 4, fontSize: 12 }}>PDF, JPG, PNG · hasta 32 por vez</p>
             </div>
             <table className="result-table">
-              <thead>
-                <tr><th>Proveedor</th><th>RUT</th><th>Neto</th><th>IVA</th><th>Total</th><th /></tr>
-              </thead>
+              <thead><tr><th>Proveedor</th><th>RUT</th><th>Neto</th><th>IVA</th><th>Total</th><th /></tr></thead>
               <tbody>
                 <tr><td>Coca-Cola ANCAP</td><td>21.456.789-0</td><td>$12.400</td><td>$2.728</td><td>$15.128</td><td><span className="pill">Listo</span></td></tr>
                 <tr><td>Frigorífico Las Piedras</td><td>30.112.440-3</td><td>$8.900</td><td>$890</td><td>$9.790</td><td><span className="pill">Listo</span></td></tr>
@@ -150,10 +143,10 @@ export default function LandingPage() {
           <div className="section-title">Todo lo que necesitás,<br />sin complicaciones</div>
           <div className="features">
             {[
-              { icon: "📄", title: "100% de precisión", desc: "Ritto extrae RUT, IVA, líneas de producto y totales sin errores manuales." },
-              { icon: "📊", title: "Exportá a Excel", desc: "Un clic y tenés tu resumen en formato DGI listo para contabilidad." },
-              { icon: "🔗", title: "Compatible con tu sistema contable", desc: "Funciona con GNS, Siigo y Zetasoftware. Exportá y pegá directo, sin retoques." },
-              { icon: "⚡", title: "Hasta 32 facturas", desc: "Procesá lotes grandes de una sola vez, sin perder tiempo uno por uno." },
+              { icon: '📄', title: '100% de precisión', desc: 'Ritto extrae RUT, IVA, líneas de producto y totales sin errores manuales.' },
+              { icon: '📊', title: 'Exportá a Excel', desc: 'Un clic y tenés tu resumen en formato DGI listo para contabilidad.' },
+              { icon: '🔗', title: 'Compatible con tu sistema contable', desc: 'Funciona con GNS, Siigo y Zetasoftware. Exportá y pegá directo, sin retoques.' },
+              { icon: '⚡', title: 'Hasta 32 facturas', desc: 'Procesá lotes grandes de una sola vez, sin perder tiempo uno por uno.' },
             ].map((f) => (
               <div className="feat-card" key={f.title}>
                 <div className="feat-icon">{f.icon}</div>
@@ -165,7 +158,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="section" style={{ background: "#fff", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+      <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div className="section-inner">
           <div className="section-label">Planes</div>
           <div className="section-title">Elegí el plan<br />que se adapta a tu empresa</div>
@@ -180,7 +173,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Exportación a Excel</li>
                 <li><span className="check">✓</span>1 empresa</li>
               </ul>
-              <button className="btn-ghost" style={{ width: "100%" }} onClick={() => window.location.href = '/login'}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
             </div>
             <div className="price-card featured">
               <div className="popular-badge">Más popular</div>
@@ -194,7 +187,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Multi-empresa</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
-              <button className="btn-primary" style={{ width: "100%" }} onClick={() => window.location.href = '/login'}>Empezar gratis</button>
+              <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
             </div>
             <div className="price-card">
               <div className="price-name">Empresa</div>
@@ -208,7 +201,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Soporte prioritario</li>
                 <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
-              <button className="btn-ghost" style={{ width: "100%" }} onClick={() => window.location.href = '/login'}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
             </div>
           </div>
         </div>
@@ -218,7 +211,7 @@ export default function LandingPage() {
         <div className="cta-section">
           <h2>Empezá hoy</h2>
           <p>14 días gratis, sin tarjeta de crédito. Cancelás cuando quieras.</p>
-          <button className="btn-white" onClick={() => window.location.href = '/login'}>Crear cuenta gratis</button>
+          <button className="btn-white" onClick={() => router.push('/login')}>Crear cuenta gratis</button>
         </div>
       </div>
 
