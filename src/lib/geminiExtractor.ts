@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
 import fs from 'fs';
 import type { ExtractedInvoice } from './types';
 
@@ -40,18 +40,20 @@ export async function extractFromImage(
   mimeType: string
 ): Promise<Partial<ExtractedInvoice>> {
   const data = fs.readFileSync(filePath).toString('base64');
-  const result = await model.generateContent([
+  const parts: Part[] = [
     { inlineData: { mimeType, data } },
-    PROMPT,
-  ]);
+    { text: PROMPT },
+  ];
+  const result = await model.generateContent(parts);
   return parseResponse(result.response.text());
 }
 
 export async function extractFromPDF(filePath: string): Promise<Partial<ExtractedInvoice>> {
   const data = fs.readFileSync(filePath).toString('base64');
-  const result = await model.generateContent([
+  const parts: Part[] = [
     { inlineData: { mimeType: 'application/pdf', data } },
-    PROMPT,
-  ]);
+    { text: PROMPT },
+  ];
+  const result = await model.generateContent(parts);
   return parseResponse(result.response.text());
 }

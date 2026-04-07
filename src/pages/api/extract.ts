@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
+import formidable, { Fields, Files } from 'formidable';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { parseCFE } from '../../lib/cfeParser';
@@ -13,8 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const form = formidable({ maxFileSize: 20 * 1024 * 1024 });
 
-  let fields: formidable.Fields;
-  let files: formidable.Files;
+  let fields: Fields;
+  let files: Files;
   try {
     [fields, files] = await form.parse(req);
   } catch {
