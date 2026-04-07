@@ -14,18 +14,16 @@ const TIPO_CFE: Record<string, string> = {
 
 function formatRUT(raw: string | number): string {
   const digits = String(raw).replace(/\D/g, '');
-  // RUCEmisor en CFE tiene 12 dígitos (país + RUT). Tomamos los últimos 9.
   const rut = digits.length > 9 ? digits.slice(-9) : digits.padStart(9, '0');
   return `${rut.slice(0, 2)}.${rut.slice(2, 5)}.${rut.slice(5, 8)}-${rut.slice(8)}`;
 }
 
-function getDeep(obj: Record<string, unknown>, ...keys: string[]): unknown {
-  let cur: unknown = obj;
-  for (const k of keys) {
-    if (cur == null || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[k];
-  }
-  return cur;
+type DeepRecord = Record<string, unknown>;
+
+function getObj(val: unknown): DeepRecord | undefined {
+  if (val != null && typeof val === 'object' && !Array.isArray(val))
+    return val as DeepRecord;
+  return undefined;
 }
 
 export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
@@ -36,25 +34,26 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
     parseAttributeValue: true,
   });
 
-  const doc = parser.parse(xmlContent) as Record<string, unknown>;
+  const doc = parser.parse(xmlContent) as DeepRecord;
 
-  // El root puede ser <CFE>, <eCFE>, <FCFE> según versión DGI
-  const root =
-    (doc['CFE'] ?? doc['eCFE'] ?? doc['FCFE'] ?? Object.values(doc)[0]) as Record<string, unknown>;
+  const root = getObj(
+    doc['CFE'] ?? doc['eCFE'] ?? doc['FCFE'] ?? Object.values(doc)[0]
+  );
+  if (!root) return {};
 
-  const enc = (root?.['Encabezado'] ?? root?.['encabezado']) as Record<string, unknown> | undefined;
+  const enc = getObj(root['Encabezado'] ?? root['encabezado']);
   if (!enc) return {};
 
-  const idDoc = (enc['IdDoc'] ?? enc['idDoc']) as Record<string, unknown> | undefined;
-  const emisor = (enc['Emisor'] ?? enc['emisor']) as Record<string, unknown> | undefined;
-  const totales = (enc['Totales'] ?? enc['totales']) as Record<string, unknown> | undefined;
+  const idDoc = getObj(enc['IdDoc'] ?? enc['idDoc']);
+  const emisor = getObj(enc['Emisor'] ?? enc['emisor']);
+  const totales = getObj(enc['Totales'] ?? enc['totales']);
 
   const tipoCFE = String(idDoc?.['TipoCFE'] ?? idDoc?.['tipoCFE'] ?? '');
   const nro = String(idDoc?.['Nro'] ?? idDoc?.['nro'] ?? '');
   const serie = String(idDoc?.['Serie'] ?? idDoc?.['serie'] ?? '');
   const fecha = String(idDoc?.['FchEmis'] ?? idDoc?.['fchEmis'] ?? '');
 
-  const rucRaw = emisor?.['RUCEmisor'] ?? emisor?.['RucEmisor'] ?? emisor?.['rucEmisor'] ?? '';
+  const rucRaw = emisor?.['RUCEmisor'] ?? emisor?.['RucEmisor'] ?? emisor?.['rucEmisor'];
   const rznSoc = String(emisor?.['RznSoc'] ?? emisor?.['rznSoc'] ?? '');
 
   const neto = Number(totales?.['MntNeto'] ?? totales?.['mntNeto'] ?? 0) || undefined;
@@ -70,7 +69,7 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
 
   return {
     proveedor: rznSoc || undefined,
-    rut: rucRaw ? formatRUT(rucRaw) : undefined,
+    rut: rucRaw != null ? formatRUT(String(rucRaw)) : undefined,
     fecha: fecha || undefined,
     nroDocumento: serie ? `${serie}-${nro}` : nro || undefined,
     tipoDocumento: TIPO_CFE[tipoCFE] ?? `Tipo ${tipoCFE}`,
