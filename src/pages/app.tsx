@@ -47,6 +47,14 @@ export default function AppPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
       setUser(data.user);
+      // Check trial
+      supabase.from('profiles').select('subscription_status, trial_ends_at').eq('id', data.user.id).single()
+        .then(({ data: p }) => {
+          if (!p) return;
+          const isBlocked = p.subscription_status === 'blocked';
+          const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
+          if (isBlocked || trialExpired) router.replace('/blocked');
+        });
     });
   }, [router]);
 
