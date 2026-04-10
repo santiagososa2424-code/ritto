@@ -76,7 +76,7 @@ export default function AppPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('subscription_status, trial_ends_at, plan, sistema_contable')
+        .select('*')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
