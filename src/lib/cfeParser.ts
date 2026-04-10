@@ -70,7 +70,7 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
 
   return {
     proveedor: rznSoc || undefined,
-    rut: rucRaw ? formatRUT(rucRaw) : undefined,
+    rut: rucRaw ? formatRUT(String(rucRaw)) : undefined,
     fecha: fecha || undefined,
     nroDocumento: serie ? `${serie}-${nro}` : nro || undefined,
     tipoDocumento: TIPO_CFE[tipoCFE] ?? `Tipo ${tipoCFE}`,
