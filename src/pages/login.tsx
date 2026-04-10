@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'signup';
 type Plan = 'pro' | 'pyme' | 'empresa';
+type Sistema = 'gns' | 'zeta' | 'siigo';
 
 const PLANS: { id: Plan; name: string; price: string; desc: string; features: string[] }[] = [
   {
@@ -29,10 +30,16 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
   },
 ];
 
+const SISTEMAS: { id: Sistema; name: string; desc: string }[] = [
+  { id: 'gns', name: 'GNS Contable', desc: 'Gestión de Importaciones' },
+  { id: 'zeta', name: 'ZetaSoftware', desc: 'Importación de comprobantes XLS' },
+  { id: 'siigo', name: 'Siigo', desc: 'Importación de comprobantes contables' },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('login');
-  const [step, setStep] = useState<1 | 2>(1); // step 2 = plan selection
+  const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
@@ -40,6 +47,7 @@ export default function LoginPage() {
   const [rut, setRut] = useState('');
   const [telefono, setTelefono] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<Plan>('pyme');
+  const [selectedSistema, setSelectedSistema] = useState<Sistema>('gns');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -73,6 +81,7 @@ export default function LoginPage() {
         rut: rut || null,
         telefono: telefono || null,
         plan: selectedPlan,
+        sistema_contable: selectedSistema,
         subscription_status: 'trial',
         trial_ends_at: trialEndsAt.toISOString(),
       });
@@ -106,8 +115,6 @@ export default function LoginPage() {
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
         .page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; }
         .logo { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--green); margin-bottom: 28px; cursor: pointer; }
-
-        /* Step 1 card */
         .card { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 420px; }
         .card-title { font-family: 'DM Serif Display', serif; font-size: 22px; margin-bottom: 4px; }
         .card-sub { font-size: 14px; color: var(--gray); margin-bottom: 24px; }
@@ -129,60 +136,49 @@ export default function LoginPage() {
         .success-msg { background: var(--green-light); border: 1px solid rgba(10,124,89,0.25); color: var(--green); border-radius: 8px; padding: 10px 13px; font-size: 13px; margin-bottom: 14px; }
         .toggle { text-align: center; margin-top: 18px; font-size: 13px; color: var(--gray); }
         .toggle button { background: none; border: none; color: var(--green); font-weight: 600; cursor: pointer; font-family: 'Figtree', sans-serif; font-size: 13px; }
-        .section-label { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; margin-top: 4px; }
-
-        /* Step 2 - plan selection */
-        .plan-wrap { width: 100%; max-width: 780px; }
-        .plan-title { font-family: 'DM Serif Display', serif; font-size: 26px; text-align: center; margin-bottom: 6px; }
-        .plan-sub { text-align: center; color: var(--gray); font-size: 14px; margin-bottom: 28px; }
-        .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+        .section-label { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .step2-wrap { width: 100%; max-width: 820px; }
+        .step2-title { font-family: 'DM Serif Display', serif; font-size: 26px; text-align: center; margin-bottom: 6px; }
+        .step2-sub { text-align: center; color: var(--gray); font-size: 14px; margin-bottom: 28px; }
+        .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
         .plan-card {
-          background: var(--white);
-          border: 2px solid var(--border);
-          border-radius: 14px;
-          padding: 22px 18px;
-          cursor: pointer;
-          transition: border-color 0.15s;
-          position: relative;
+          background: var(--white); border: 2px solid var(--border);
+          border-radius: 14px; padding: 22px 18px;
+          cursor: pointer; transition: border-color 0.15s; position: relative;
         }
         .plan-card.selected { border-color: var(--green); }
         .plan-card.popular::before {
-          content: 'Más popular';
-          position: absolute;
-          top: -11px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: var(--green);
-          color: #fff;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 3px 12px;
-          border-radius: 20px;
-          white-space: nowrap;
+          content: 'Más popular'; position: absolute; top: -11px; left: 50%;
+          transform: translateX(-50%); background: var(--green); color: #fff;
+          font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 20px; white-space: nowrap;
         }
         .plan-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
-        .plan-price { font-family: 'DM Serif Display', serif; font-size: 32px; line-height: 1; margin: 8px 0 2px; }
+        .plan-price { font-family: 'DM Serif Display', serif; font-size: 30px; line-height: 1; margin: 8px 0 2px; }
         .plan-period { font-size: 12px; color: var(--gray); margin-bottom: 14px; }
         .plan-features { list-style: none; }
-        .plan-features li { font-size: 13px; color: var(--gray); padding: 4px 0; display: flex; gap: 6px; }
+        .plan-features li { font-size: 13px; color: var(--gray); padding: 3px 0; display: flex; gap: 6px; }
         .plan-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-        .trial-badge {
-          background: var(--green-light);
-          color: var(--green);
-          border-radius: 8px;
-          padding: 10px 14px;
-          font-size: 13px;
-          font-weight: 500;
-          text-align: center;
-          margin-bottom: 16px;
+        .sistema-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+        .sistema-card {
+          background: var(--white); border: 2px solid var(--border);
+          border-radius: 12px; padding: 18px 14px; cursor: pointer;
+          transition: border-color 0.15s, background 0.15s; text-align: center;
         }
-        .plan-actions { display: flex; gap: 10px; }
+        .sistema-card.selected { border-color: var(--green); background: var(--green-light); }
+        .s-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+        .s-desc { font-size: 11px; color: var(--gray); line-height: 1.3; }
+        .sistema-card.selected .s-desc { color: var(--green); }
+        .trial-badge {
+          background: var(--green-light); color: var(--green);
+          border-radius: 8px; padding: 10px 14px; font-size: 13px;
+          font-weight: 500; text-align: center; margin-bottom: 16px;
+        }
+        .step2-actions { display: flex; gap: 10px; }
         .btn-back { background: none; border: 1.5px solid var(--border); color: var(--dark); padding: 12px 20px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; }
         .btn-start { flex: 1; background: var(--green); color: #fff; border: none; padding: 13px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; }
         .btn-start:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        @media (max-width: 640px) {
-          .plan-grid { grid-template-columns: 1fr; }
+        @media (max-width: 680px) {
+          .plan-grid, .sistema-grid { grid-template-columns: 1fr; }
           .card { padding: 24px 18px; }
           .field-row { grid-template-columns: 1fr; gap: 0; }
         }
@@ -191,15 +187,12 @@ export default function LoginPage() {
       <div className="page">
         <div className="logo" onClick={() => router.push('/')}>Ritto</div>
 
-        {/* STEP 1: datos personales / login */}
         {step === 1 && (
           <div className="card">
             <h1 className="card-title">{mode === 'login' ? 'Iniciá sesión' : 'Crear cuenta'}</h1>
             <p className="card-sub">{mode === 'login' ? 'Bienvenido de vuelta' : '14 días gratis, sin tarjeta de crédito'}</p>
-
             {error && <div className="error">{error}</div>}
             {success && <div className="success-msg">{success}</div>}
-
             <form onSubmit={handleStep1}>
               {mode === 'signup' && (
                 <>
@@ -238,7 +231,6 @@ export default function LoginPage() {
                 {loading ? 'Cargando…' : mode === 'login' ? 'Ingresar' : 'Elegir plan →'}
               </button>
             </form>
-
             <div className="toggle">
               {mode === 'login'
                 ? <>¿No tenés cuenta? <button onClick={() => switchMode('signup')}>Registrate gratis</button></>
@@ -247,14 +239,13 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* STEP 2: elegir plan */}
         {step === 2 && (
-          <div className="plan-wrap">
-            <h1 className="plan-title">Elegí tu plan</h1>
-            <p className="plan-sub">14 días gratis · Sin tarjeta de crédito · Cancelás cuando quieras</p>
-
+          <div className="step2-wrap">
+            <h1 className="step2-title">Configurá tu cuenta</h1>
+            <p className="step2-sub">14 días gratis · Sin tarjeta de crédito · Cancelás cuando quieras</p>
             {error && <div className="error" style={{ maxWidth: 420, margin: '0 auto 16px' }}>{error}</div>}
 
+            <div className="section-label">Elegí tu plan</div>
             <div className="plan-grid">
               {PLANS.map((plan) => (
                 <div
@@ -272,11 +263,24 @@ export default function LoginPage() {
               ))}
             </div>
 
-            <div className="trial-badge">
-              Tu trial de 14 días arranca hoy con el plan <strong>{PLANS.find(p => p.id === selectedPlan)?.name}</strong> — después podés cambiar o cancelar.
+            <div className="section-label">¿Qué sistema contable usás?</div>
+            <div className="sistema-grid">
+              {SISTEMAS.map((s) => (
+                <div
+                  key={s.id}
+                  className={`sistema-card${selectedSistema === s.id ? ' selected' : ''}`}
+                  onClick={() => setSelectedSistema(s.id)}
+                >
+                  <div className="s-name">{s.name}</div>
+                  <div className="s-desc">{s.desc}</div>
+                </div>
+              ))}
             </div>
 
-            <div className="plan-actions">
+            <div className="trial-badge">
+              Plan <strong>{PLANS.find(p => p.id === selectedPlan)?.name}</strong> · Excel listo para <strong>{SISTEMAS.find(s => s.id === selectedSistema)?.name}</strong> · 14 días gratis
+            </div>
+            <div className="step2-actions">
               <button className="btn-back" onClick={() => setStep(1)}>← Atrás</button>
               <button className="btn-start" onClick={handleSignup} disabled={loading}>
                 {loading ? 'Creando cuenta…' : 'Empezar trial gratis'}

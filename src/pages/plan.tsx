@@ -198,6 +198,34 @@ export default function PlanPage() {
         .active-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
         .active-sub { font-size: 13px; color: var(--gray); }
 
+        /* Other plans */
+        .other-plans-title { font-size: 15px; font-weight: 700; margin: 28px 0 14px; }
+        .other-plan-card {
+          background: var(--white); border: 1px solid var(--border);
+          border-radius: 14px; padding: 20px; margin-bottom: 12px;
+          display: flex; align-items: center; justify-content: space-between; gap: 16px;
+        }
+        .op-left { flex: 1; min-width: 0; }
+        .op-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .op-badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .op-price { font-size: 18px; font-weight: 700; }
+        .op-price span { font-size: 12px; font-weight: 400; color: var(--gray); }
+        .op-features { display: flex; flex-direction: column; gap: 4px; }
+        .op-feat { font-size: 12px; color: var(--gray); display: flex; align-items: center; gap: 6px; }
+        .op-feat-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+        .btn-upgrade {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: #009ee3; color: #fff; text-decoration: none;
+          padding: 10px 18px; border-radius: 8px; white-space: nowrap;
+          font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 700;
+          transition: background 0.15s; flex-shrink: 0;
+        }
+        .btn-upgrade:hover { background: #0080c0; }
+        @media (max-width: 480px) {
+          .other-plan-card { flex-direction: column; align-items: flex-start; }
+          .btn-upgrade { width: 100%; justify-content: center; }
+        }
+
         @media (max-width: 768px) {
           .page-wrap { padding: 18px 16px 80px; }
           .page-title { font-size: 22px; }
@@ -312,6 +340,51 @@ export default function PlanPage() {
                 <div className="active-sub">Tu suscripción está al día.</div>
               </div>
             </div>
+          )}
+
+          {/* Other plans */}
+          {Object.entries(PLANS).filter(([key]) => key !== planKey).length > 0 && (
+            <>
+              <div className="other-plans-title">
+                {isActive ? 'Cambiar de plan' : 'Otros planes disponibles'}
+              </div>
+              {Object.entries(PLANS)
+                .filter(([key]) => key !== planKey)
+                .map(([key, p]) => (
+                  <div key={key} className="other-plan-card">
+                    <div className="op-left">
+                      <div className="op-top">
+                        <span className="op-badge" style={{ background: p.bg, color: p.color }}>{p.name}</span>
+                        <span className="op-price">{p.price} <span>{p.period}</span></span>
+                      </div>
+                      <div className="op-features">
+                        {p.features.slice(0, 3).map((f, i) => (
+                          <div key={i} className="op-feat">
+                            <span className="op-feat-dot" />
+                            {f}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <a
+                      href={p.mpLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-upgrade"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                        <polyline points="17 6 23 6 23 12"/>
+                      </svg>
+                      {isActive ? 'Cambiar' : 'Activar'}
+                    </a>
+                  </div>
+                ))}
+              <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', marginTop: 10 }}>
+                Para cambiar de plan contactá a{' '}
+                <a href="mailto:soporte@ritto.app" style={{ color: 'var(--green)' }}>soporte@ritto.app</a>
+              </div>
+            </>
           )}
         </div>
       </div>

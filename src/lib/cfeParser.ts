@@ -1,5 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { ExtractedInvoice } from './types';
+import type { ExtractedInvoice, InvoiceItem } from './types';
 
 const TIPO_CFE: Record<string, string> = {
   '101': 'e-Factura',
@@ -14,18 +14,8 @@ const TIPO_CFE: Record<string, string> = {
 
 function formatRUT(raw: string | number): string {
   const digits = String(raw).replace(/\D/g, '');
-  // RUCEmisor en CFE tiene 12 dígitos (país + RUT). Tomamos los últimos 9.
   const rut = digits.length > 9 ? digits.slice(-9) : digits.padStart(9, '0');
   return `${rut.slice(0, 2)}.${rut.slice(2, 5)}.${rut.slice(5, 8)}-${rut.slice(8)}`;
-}
-
-function getDeep(obj: Record<string, unknown>, ...keys: string[]): unknown {
-  let cur: unknown = obj;
-  for (const k of keys) {
-    if (cur == null || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[k];
-  }
-  return cur;
 }
 
 export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
@@ -38,7 +28,6 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
 
   const doc = parser.parse(xmlContent) as Record<string, unknown>;
 
-  // El root puede ser <CFE>, <eCFE>, <FCFE> según versión DGI
   const root =
     (doc['CFE'] ?? doc['eCFE'] ?? doc['FCFE'] ?? Object.values(doc)[0]) as Record<string, unknown>;
 
@@ -68,6 +57,33 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
     totales?.['TpoMoneda'] ?? totales?.['tpoMoneda'] ?? idDoc?.['TipoMoneda'] ?? 'UYU'
   );
 
+  // Extraer líneas de detalle
+  const detalle = root?.['Detalle'] ?? root?.['detalle'];
+  const items: InvoiceItem[] = [];
+  if (detalle) {
+    const raw = (detalle as Record<string, unknown>)['Item'] ?? (detalle as Record<string, unknown>)['item'];
+    const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    for (const it of arr as Record<string, unknown>[]) {
+      const codIVA = Number(it['CodIVA'] ?? it['codIVA'] ?? 0);
+      const impuesto = codIVA === 1 ? 22 : codIVA === 2 ? 10 : 0;
+      const cantidad = Number(it['Cantidad'] ?? it['cantidad'] ?? 1);
+      const precioUnitario = Number(it['PrecioUnitario'] ?? it['precioUnitario'] ?? 0);
+      const descPct = Number(it['DescuentoPct'] ?? it['descuentoPct'] ?? 0);
+      const subtotal = Number(it['MntBruto'] ?? it['mntBruto'] ?? cantidad * precioUnitario * (1 - descPct / 100));
+      const totalItem = Number(it['MontoItem'] ?? it['montoItem'] ?? subtotal * (1 + impuesto / 100));
+      items.push({
+        codigo: String(it['CodItem'] ?? it['codItem'] ?? ''),
+        descripcion: String(it['NomItem'] ?? it['nomItem'] ?? ''),
+        cantidad,
+        precioUnitario,
+        descuento: descPct,
+        impuesto,
+        subtotal,
+        totalItem,
+      });
+    }
+  }
+
   return {
     proveedor: rznSoc || undefined,
     rut: rucRaw ? formatRUT(String(rucRaw)) : undefined,
@@ -80,5 +96,6 @@ export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {
     iva22,
     ivaTotal,
     total,
+    items: items.length > 0 ? items : undefined,
   };
 }
