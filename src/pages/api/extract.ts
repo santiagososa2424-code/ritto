@@ -6,7 +6,7 @@ import { parseCFE } from '../../lib/cfeParser';
 import { extractFromImage, extractFromPDF } from '../../lib/geminiExtractor';
 import type { ExtractedInvoice } from '../../lib/types';
 
-export const config = { api: { bodyParser: false } };
+export const config = { api: { bodyParser: false }, maxDuration: 60 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -64,7 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(400).json({ ...base, status: 'error', error: 'Tipo de archivo no soportado' });
   } catch (err) {
-    console.error('Error extrayendo:', err);
-    return res.status(500).json({ ...base, status: 'error', error: 'Error al procesar el archivo' });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Error extrayendo:', msg);
+    return res.status(500).json({ ...base, status: 'error', error: msg });
   }
 }

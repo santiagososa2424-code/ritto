@@ -51,6 +51,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [registered, setRegistered] = useState(false);
 
   async function handleStep1(e: React.FormEvent) {
     e.preventDefault();
@@ -85,11 +86,17 @@ export default function LoginPage() {
         subscription_status: 'trial',
         trial_ends_at: trialEndsAt.toISOString(),
       });
+      // send welcome email (fire and forget)
+      fetch('/api/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, nombre, plan: selectedPlan, sistema: selectedSistema }),
+      }).catch(() => {});
+
       if (data.session) {
         router.push('/app');
       } else {
-        setSuccess('¡Cuenta creada! Revisá tu email para confirmar y después iniciá sesión.');
-        setStep(1);
+        setRegistered(true);
       }
     }
     setLoading(false);
@@ -185,9 +192,31 @@ export default function LoginPage() {
       `}</style>
 
       <div className="page">
-        <div className="logo" onClick={() => router.push('/')}>Ritto</div>
+        <div className="logo" onClick={() => router.push('/')}>ritto</div>
 
-        {step === 1 && (
+        {registered && (
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, background: 'var(--green-light)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </div>
+            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, marginBottom: 8 }}>Revisá tu email</h2>
+            <p style={{ fontSize: 14, color: 'var(--gray)', lineHeight: 1.6, marginBottom: 24 }}>
+              Te mandamos un link de confirmación a <strong style={{ color: 'var(--dark)' }}>{email}</strong>.<br />
+              Hacé click en el link y después iniciá sesión.
+            </p>
+            <button
+              className="btn-primary"
+              onClick={() => { setRegistered(false); setMode('login'); setStep(1); }}
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        )}
+
+        {!registered && step === 1 && (
           <div className="card">
             <h1 className="card-title">{mode === 'login' ? 'Iniciá sesión' : 'Crear cuenta'}</h1>
             <p className="card-sub">{mode === 'login' ? 'Bienvenido de vuelta' : '14 días gratis, sin tarjeta de crédito'}</p>
@@ -239,7 +268,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {step === 2 && (
+        {!registered && step === 2 && (
           <div className="step2-wrap">
             <h1 className="step2-title">Configurá tu cuenta</h1>
             <p className="step2-sub">14 días gratis · Sin tarjeta de crédito · Cancelás cuando quieras</p>

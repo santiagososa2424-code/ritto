@@ -167,7 +167,7 @@ export default function Sidebar({ active, userEmail, trialDaysLeft, planName }: 
 
       <aside className="sb-root">
         <div className="sb-header">
-          <div className="sb-logo">Ritto</div>
+          <div className="sb-logo">ritto</div>
           <div className="sb-tagline">Gestión de facturas</div>
         </div>
 

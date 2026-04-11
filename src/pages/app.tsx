@@ -197,7 +197,9 @@ export default function AppPage() {
           --white: #ffffff; --red: #dc2626; --red-light: #fef2f2;
         }
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
-        .page-wrap { padding: 28px 28px 80px; max-width: 1060px; }
+        .page-wrap { padding: 28px 28px 80px; max-width: 1340px; }
+        .main-layout { display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: start; }
+        .right-col { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 28px; }
         .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--dark); line-height: 1.1; }
         .page-sub { font-size: 13px; color: var(--gray); margin-top: 3px; }
@@ -283,6 +285,36 @@ export default function AppPage() {
         .btn-dl:disabled { opacity: 0.4; cursor: not-allowed; }
         .empty-state { padding: 44px 20px; text-align: center; color: var(--gray); font-size: 14px; line-height: 1.7; }
 
+        /* Right panel */
+        .rp-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+        .rp-title { font-size: 13px; font-weight: 700; color: var(--dark); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+        .rp-title-icon { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .news-item { padding: 10px 0; border-bottom: 1px solid var(--bg); }
+        .news-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .news-item:first-child { padding-top: 0; }
+        .news-badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .badge-new { background: #dcfce7; color: #166534; }
+        .badge-tip { background: #eff6ff; color: #1d4ed8; }
+        .badge-soon { background: #f3e8ff; color: #6b21a8; }
+        .news-text { font-size: 13px; color: var(--dark); line-height: 1.45; }
+        .news-date { font-size: 11px; color: var(--gray); margin-top: 2px; }
+        .tip-item { display: flex; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--bg); align-items: flex-start; }
+        .tip-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .tip-item:first-child { padding-top: 0; }
+        .tip-dot { width: 18px; height: 18px; background: var(--green-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+        .tip-text { font-size: 13px; color: var(--gray); line-height: 1.45; }
+        .tip-text strong { color: var(--dark); }
+        .trial-card { background: linear-gradient(135deg, #0a7c59, #0d9b71); border-radius: 14px; padding: 18px 20px; color: #fff; }
+        .trial-card-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+        .trial-card-sub { font-size: 12px; opacity: 0.8; margin-bottom: 14px; }
+        .trial-bar { background: rgba(255,255,255,0.25); border-radius: 99px; height: 5px; margin-bottom: 12px; overflow: hidden; }
+        .trial-bar-fill { height: 100%; background: #fff; border-radius: 99px; }
+        .btn-upgrade-sm { display: block; background: #fff; color: var(--green); text-align: center; padding: 9px; border-radius: 8px; font-size: 13px; font-weight: 700; text-decoration: none; }
+
+        @media (max-width: 1100px) {
+          .main-layout { grid-template-columns: 1fr; }
+          .right-col { display: none; }
+        }
         @media (max-width: 768px) {
           .page-wrap { padding: 18px 16px 80px; }
           .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -327,6 +359,8 @@ export default function AppPage() {
             </div>
           </div>
 
+          <div className="main-layout">
+          <div className="main-col">
           <div className="stats-row">
             <div className="stat-card">
               <div className="stat-label">Total procesadas</div>
@@ -481,6 +515,84 @@ export default function AppPage() {
               </div>
             )}
           </div>
+          </div>{/* end main-col */}
+
+          {/* Right panel */}
+          <div className="right-col">
+            {trialDaysLeft !== null && (
+              <div className="trial-card">
+                <div className="trial-card-title">Trial activo</div>
+                <div className="trial-card-sub">{trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} restante{trialDaysLeft !== 1 ? 's' : ''}</div>
+                <div className="trial-bar">
+                  <div className="trial-bar-fill" style={{ width: `${Math.max(5, ((14 - trialDaysLeft) / 14) * 100)}%` }} />
+                </div>
+                <a href="/plan" className="btn-upgrade-sm">Activar plan →</a>
+              </div>
+            )}
+
+            <div className="rp-card">
+              <div className="rp-title">
+                <div className="rp-title-icon" style={{ background: '#dcfce7' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                </div>
+                Novedades
+              </div>
+              <div className="news-item">
+                <span className="news-badge badge-new">Nuevo</span>
+                <div className="news-text">Descarga individual por factura en formato Excel</div>
+                <div className="news-date">Abr 2025</div>
+              </div>
+              <div className="news-item">
+                <span className="news-badge badge-new">Nuevo</span>
+                <div className="news-text">Filtro por mes en el historial de facturas</div>
+                <div className="news-date">Abr 2025</div>
+              </div>
+              <div className="news-item">
+                <span className="news-badge badge-new">Nuevo</span>
+                <div className="news-text">Soporte para GNS Contable, ZetaSoftware y Siigo</div>
+                <div className="news-date">Abr 2025</div>
+              </div>
+              <div className="news-item">
+                <span className="news-badge badge-soon">Próximamente</span>
+                <div className="news-text">Integración directa con portal DGI Uruguay</div>
+              </div>
+            </div>
+
+            <div className="rp-card">
+              <div className="rp-title">
+                <div className="rp-title-icon" style={{ background: 'var(--green-light)' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </div>
+                Consejos
+              </div>
+              <div className="tip-item">
+                <div className="tip-dot">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div className="tip-text"><strong>Usá XMLs de CFE</strong> para extracción instantánea sin consumir créditos de IA</div>
+              </div>
+              <div className="tip-item">
+                <div className="tip-dot">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div className="tip-text"><strong>Subí varias facturas</strong> a la vez — se procesan en paralelo</div>
+              </div>
+              <div className="tip-item">
+                <div className="tip-dot">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div className="tip-text">Cambiá tu <strong>sistema contable</strong> en Configuración en cualquier momento</div>
+              </div>
+            </div>
+          </div>
+
+          </div>{/* end main-layout */}
         </div>
       </div>
     </>
