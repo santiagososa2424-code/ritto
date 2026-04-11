@@ -180,7 +180,7 @@ export default function LandingPage() {
           <div className="section-title">Todo lo que necesitás,<br />sin complicaciones</div>
           <div className="features">
             {[
-              { icon: '🔍', title: 'Alta precisión con IA', desc: 'Gemini extrae RUT, IVA, líneas de producto y totales. Los XMLs de CFE se leen con 100% de exactitud.' },
+              { icon: '🔍', title: 'Extracción automática', desc: 'Gemini extrae RUT, IVA, líneas de detalle y totales de cada factura sin intervención manual.' },
               { icon: '📊', title: 'Excel listo para importar', desc: 'Columnas exactas de GNS Contable. Un clic y pegás directo en tu sistema sin retoques.' },
               { icon: '⚡', title: 'Hasta 10 a la vez', desc: 'Subí múltiples facturas simultáneamente y se procesan todas en paralelo.' },
               { icon: '📁', title: 'PDF, imagen y XML', desc: 'Fotos de celular, PDFs escaneados o CFE digitales de DGI — todos funcionan.' },
@@ -207,7 +207,7 @@ export default function LandingPage() {
               <ul className="price-list">
                 <li><span className="check">✓</span>100 facturas por mes</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel GNS</li>
+                <li><span className="check">✓</span>Exportación a Excel</li>
                 <li><span className="check">✓</span>Soporte por email</li>
               </ul>
               <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -220,7 +220,7 @@ export default function LandingPage() {
               <ul className="price-list">
                 <li><span className="check">✓</span>500 facturas por mes</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel GNS</li>
+                <li><span className="check">✓</span>Exportación a Excel</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
               <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -232,7 +232,7 @@ export default function LandingPage() {
               <ul className="price-list">
                 <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel GNS</li>
+                <li><span className="check">✓</span>Exportación a Excel</li>
                 <li><span className="check">✓</span>Soporte dedicado</li>
                 <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
@@ -248,9 +248,8 @@ export default function LandingPage() {
           <div className="section-title" style={{ marginBottom: 32 }}>FAQ</div>
           <div className="faq">
             {[
-              { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos imágenes (foto de celular o escáner), PDFs y XMLs de CFE digital emitidos por DGI. Los CFE XML tienen la mayor precisión porque son datos estructurados directamente de DGI.' },
-              { q: '¿Qué tan precisa es la extracción con IA?', a: 'Los XMLs de CFE se leen con 100% de precisión. Para imágenes y PDFs la precisión depende de la calidad del archivo — con imágenes claras y bien iluminadas se acerca al 95-98%.' },
-              { q: '¿Con qué sistemas contables es compatible?', a: 'Actualmente el export está optimizado para GNS Contable. Si usás otro sistema contactanos y lo adaptamos.' },
+              { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos imágenes (foto de celular o escáner), PDFs y XMLs de CFE digital emitidos por DGI.' },
+              { q: '¿Con qué sistemas contables es compatible?', a: 'Compatible con GNS Contable, ZetaSoftware y Siigo. El Excel se exporta con las columnas exactas de cada sistema.' },
               { q: '¿Qué pasa cuando se vence el trial?', a: 'Tu cuenta queda pausada. Podés activar tu plan en cualquier momento desde la sección "Mi Plan" y retomás donde estabas con todo tu historial.' },
               { q: '¿Mis facturas están seguras?', a: 'Sí. Los archivos se procesan y se eliminan del servidor inmediatamente. Los datos extraídos se guardan en tu cuenta protegida con Supabase (infraestructura de AWS).' },
             ].map((f) => (
