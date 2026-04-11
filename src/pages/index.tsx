@@ -92,7 +92,7 @@ export default function LandingPage() {
         <div className="logo" onClick={() => router.push('/')}>Ritto</div>
         <div className="nav-btns">
           <button className="btn-login" onClick={() => router.push('/login')}>Iniciar sesión</button>
-          <button className="nav-cta" onClick={() => router.push('/login')}>Empezar gratis</button>
+          <button className="nav-cta" onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
         </div>
       </nav>
 
@@ -101,7 +101,7 @@ export default function LandingPage() {
         <h1>Tus facturas,<br />procesadas en <em>segundos</em></h1>
         <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.</p>
         <div className="hero-btns">
-          <button className="btn-primary" onClick={() => router.push('/login')}>Probar gratis 14 días</button>
+          <button className="btn-primary" onClick={() => router.push('/login?signup=true')}>Probar gratis 14 días</button>
           <button className="btn-ghost" onClick={() => router.push('/login')}>Iniciar sesión</button>
         </div>
       </section>
@@ -173,7 +173,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Exportación a Excel</li>
                 <li><span className="check">✓</span>1 empresa</li>
               </ul>
-              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
             </div>
             <div className="price-card featured">
               <div className="popular-badge">Más popular</div>
@@ -187,7 +187,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Multi-empresa</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
-              <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
+              <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
             </div>
             <div className="price-card">
               <div className="price-name">Empresa</div>
@@ -201,7 +201,7 @@ export default function LandingPage() {
                 <li><span className="check">✓</span>Soporte prioritario</li>
                 <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
-              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login')}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
             </div>
           </div>
         </div>
@@ -211,7 +211,7 @@ export default function LandingPage() {
         <div className="cta-section">
           <h2>Empezá hoy</h2>
           <p>14 días gratis, sin tarjeta de crédito. Cancelás cuando quieras.</p>
-          <button className="btn-white" onClick={() => router.push('/login')}>Crear cuenta gratis</button>
+          <button className="btn-white" onClick={() => router.push('/login?signup=true')}>Crear cuenta gratis</button>
         </div>
       </div>
 

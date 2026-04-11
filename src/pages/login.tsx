@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
@@ -53,6 +53,10 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('');
   const [registered, setRegistered] = useState(false);
 
+  useEffect(() => {
+    if (router.query.signup === 'true') setMode('signup');
+  }, [router.query.signup]);
+
   async function handleStep1(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -93,11 +97,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, nombre, plan: selectedPlan, sistema: selectedSistema }),
       }).catch(() => {});
 
-      if (data.session) {
-        router.push('/app');
-      } else {
-        setRegistered(true);
-      }
+      router.push('/app');
     }
     setLoading(false);
   }

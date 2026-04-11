@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-type ActivePage = 'facturas' | 'plan' | 'settings';
+type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia';
 
 interface SidebarProps {
   active: ActivePage;
@@ -30,6 +30,18 @@ export default function Sidebar({ active, userEmail, trialDaysLeft, planName }: 
           <line x1="16" y1="13" x2="8" y2="13"/>
           <line x1="16" y1="17" x2="8" y2="17"/>
           <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'guia' as const,
+      label: 'Guía de uso',
+      path: '/guia',
+      icon: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       ),
     },
