@@ -73,11 +73,24 @@ export default function LandingPage() {
         .price-list li:last-child { border-bottom: none; }
         .check { color: var(--green); font-weight: 700; flex-shrink: 0; }
 
+        .how-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+        .how-step { text-align: center; }
+        .how-num { width: 44px; height: 44px; border-radius: 50%; background: var(--green); color: #fff; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+        .how-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+        .how-desc { font-size: 14px; color: var(--gray); line-height: 1.6; }
+        .how-connector { display: flex; align-items: center; justify-content: center; padding-top: 22px; }
+
+        .faq { display: flex; flex-direction: column; gap: 12px; max-width: 620px; margin: 0 auto; }
+        .faq-item { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+        .faq-q { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 6px; }
+        .faq-a { font-size: 14px; color: var(--gray); line-height: 1.6; }
+
         .cta-wrap { padding: 0 2rem 80px; margin-top: 80px; }
         .cta-section { max-width: 880px; margin: 0 auto; background: var(--dark); color: #fff; text-align: center; padding: 80px 2rem; border-radius: 24px; }
         .cta-section h2 { font-family: 'DM Serif Display', serif; font-size: clamp(28px,4vw,44px); margin-bottom: 16px; letter-spacing: -0.5px; }
         .cta-section p { color: rgba(255,255,255,0.6); font-size: 17px; margin-bottom: 36px; }
         .btn-white { background: #fff; color: var(--dark); border: none; padding: 14px 34px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; }
+        @media (max-width: 600px) { .how-steps { grid-template-columns: 1fr; gap: 20px; } }
 
         footer { max-width: 880px; margin: 0 auto; padding: 32px 2rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px; }
         footer p { font-size: 13px; color: var(--gray); }
@@ -139,14 +152,38 @@ export default function LandingPage() {
 
       <section className="section">
         <div className="section-inner">
+          <div className="section-label">Cómo funciona</div>
+          <div className="section-title">Tres pasos y listo</div>
+          <div className="how-steps">
+            <div className="how-step">
+              <div className="how-num">1</div>
+              <div className="how-title">Subí tus facturas</div>
+              <div className="how-desc">Arrastrá o seleccioná hasta 10 archivos a la vez — imágenes, PDFs o XMLs de CFE digital.</div>
+            </div>
+            <div className="how-step">
+              <div className="how-num">2</div>
+              <div className="how-title">Ritto extrae los datos</div>
+              <div className="how-desc">IA lee cada factura y extrae RUT, fecha, proveedor, IVA y líneas de detalle automáticamente.</div>
+            </div>
+            <div className="how-step">
+              <div className="how-num">3</div>
+              <div className="how-title">Exportá a tu sistema</div>
+              <div className="how-desc">Descargá el Excel con las columnas exactas de GNS Contable e importalo directamente.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div className="section-inner">
           <div className="section-label">Funcionalidades</div>
           <div className="section-title">Todo lo que necesitás,<br />sin complicaciones</div>
           <div className="features">
             {[
-              { icon: '📄', title: '100% de precisión', desc: 'Ritto extrae RUT, IVA, líneas de producto y totales sin errores manuales.' },
-              { icon: '📊', title: 'Exportá a Excel', desc: 'Un clic y tenés tu resumen en formato DGI listo para contabilidad.' },
-              { icon: '🔗', title: 'Compatible con tu sistema contable', desc: 'Funciona con GNS, Siigo y Zetasoftware. Exportá y pegá directo, sin retoques.' },
-              { icon: '⚡', title: 'Procesamiento en paralelo', desc: 'Subí múltiples facturas a la vez y Ritto las procesa todas simultáneamente.' },
+              { icon: '🔍', title: 'Alta precisión con IA', desc: 'Gemini extrae RUT, IVA, líneas de producto y totales. Los XMLs de CFE se leen con 100% de exactitud.' },
+              { icon: '📊', title: 'Excel listo para importar', desc: 'Columnas exactas de GNS Contable. Un clic y pegás directo en tu sistema sin retoques.' },
+              { icon: '⚡', title: 'Hasta 10 a la vez', desc: 'Subí múltiples facturas simultáneamente y se procesan todas en paralelo.' },
+              { icon: '📁', title: 'PDF, imagen y XML', desc: 'Fotos de celular, PDFs escaneados o CFE digitales de DGI — todos funcionan.' },
             ].map((f) => (
               <div className="feat-card" key={f.title}>
                 <div className="feat-icon">{f.icon}</div>
@@ -158,7 +195,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+      <section className="section">
         <div className="section-inner">
           <div className="section-label">Planes</div>
           <div className="section-title">Elegí el plan<br />que se adapta a tu empresa</div>
@@ -166,43 +203,62 @@ export default function LandingPage() {
             <div className="price-card">
               <div className="price-name">Pro</div>
               <div className="price-amount">$490</div>
-              <div className="price-period">UYU/mes · 1 usuario</div>
+              <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>1 usuario</li>
-                <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
-                <li><span className="check">✓</span>1 empresa</li>
+                <li><span className="check">✓</span>100 facturas por mes</li>
+                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
+                <li><span className="check">✓</span>Exportación a Excel GNS</li>
+                <li><span className="check">✓</span>Soporte por email</li>
               </ul>
-              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
             </div>
             <div className="price-card featured">
               <div className="popular-badge">Más popular</div>
               <div className="price-name">Pyme</div>
               <div className="price-amount">$1.990</div>
-              <div className="price-period">UYU/mes · hasta 5 usuarios</div>
+              <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 5 usuarios</li>
-                <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
-                <li><span className="check">✓</span>Multi-empresa</li>
+                <li><span className="check">✓</span>500 facturas por mes</li>
+                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
+                <li><span className="check">✓</span>Exportación a Excel GNS</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
-              <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
+              <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
             </div>
             <div className="price-card">
               <div className="price-name">Empresa</div>
               <div className="price-amount">$4.990</div>
-              <div className="price-period">UYU/mes · hasta 20 usuarios</div>
+              <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 20 usuarios</li>
                 <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
-                <li><span className="check">✓</span>Multi-empresa</li>
-                <li><span className="check">✓</span>Soporte prioritario</li>
+                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
+                <li><span className="check">✓</span>Exportación a Excel GNS</li>
+                <li><span className="check">✓</span>Soporte dedicado</li>
                 <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
-              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
+              <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div className="section-inner">
+          <div className="section-label">Preguntas frecuentes</div>
+          <div className="section-title" style={{ marginBottom: 32 }}>FAQ</div>
+          <div className="faq">
+            {[
+              { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos imágenes (foto de celular o escáner), PDFs y XMLs de CFE digital emitidos por DGI. Los CFE XML tienen la mayor precisión porque son datos estructurados directamente de DGI.' },
+              { q: '¿Qué tan precisa es la extracción con IA?', a: 'Los XMLs de CFE se leen con 100% de precisión. Para imágenes y PDFs la precisión depende de la calidad del archivo — con imágenes claras y bien iluminadas se acerca al 95-98%.' },
+              { q: '¿Con qué sistemas contables es compatible?', a: 'Actualmente el export está optimizado para GNS Contable. Si usás otro sistema contactanos y lo adaptamos.' },
+              { q: '¿Qué pasa cuando se vence el trial?', a: 'Tu cuenta queda pausada. Podés activar tu plan en cualquier momento desde la sección "Mi Plan" y retomás donde estabas con todo tu historial.' },
+              { q: '¿Mis facturas están seguras?', a: 'Sí. Los archivos se procesan y se eliminan del servidor inmediatamente. Los datos extraídos se guardan en tu cuenta protegida con Supabase (infraestructura de AWS).' },
+            ].map((f) => (
+              <div className="faq-item" key={f.q}>
+                <div className="faq-q">{f.q}</div>
+                <div className="faq-a">{f.a}</div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
