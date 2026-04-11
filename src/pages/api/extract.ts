@@ -53,13 +53,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (isPDF) {
-      extracted = await extractFromPDF(file.filepath);
-      return res.json({ ...base, source: 'pdf', status: 'done', ...extracted });
+      const result = await extractFromPDF(file.filepath);
+      const { _validationWarning, ...rest } = result as typeof result & { _validationWarning?: string };
+      return res.json({ ...base, source: 'pdf', status: 'done', ...rest, ...((_validationWarning) ? { warning: _validationWarning } : {}) });
     }
 
     if (isImage) {
-      extracted = await extractFromImage(file.filepath, mimeType);
-      return res.json({ ...base, source: 'image', status: 'done', ...extracted });
+      const result = await extractFromImage(file.filepath, mimeType);
+      const { _validationWarning, ...rest } = result as typeof result & { _validationWarning?: string };
+      return res.json({ ...base, source: 'image', status: 'done', ...rest, ...((_validationWarning) ? { warning: _validationWarning } : {}) });
     }
 
     return res.status(400).json({ ...base, status: 'error', error: 'Tipo de archivo no soportado' });
