@@ -56,7 +56,7 @@ export default function BlockedPage() {
       `}</style>
 
       <nav className="nav">
-        <div className="logo">Ritto</div>
+        <div className="logo">ritto</div>
         <button className="btn-out" onClick={handleSignOut}>Cerrar sesión</button>
       </nav>
 
@@ -76,10 +76,10 @@ export default function BlockedPage() {
             </div>
           )}
 
-          <button className="btn-pay" onClick={() => window.location.href = 'mailto:hola@ritto.lat?subject=Activar%20plan'}>
-            Activar mi plan
+          <button className="btn-pay" onClick={() => router.push('/plan')}>
+            Ver planes y activar
           </button>
-          <button className="btn-contact" onClick={() => window.location.href = 'mailto:hola@ritto.lat'}>
+          <button className="btn-contact" onClick={() => window.location.href = 'mailto:soporte@ritto.app'}>
             Hablar con soporte
           </button>
           <p className="trial-info">¿Necesitás más tiempo? Escribinos y lo arreglamos.</p>

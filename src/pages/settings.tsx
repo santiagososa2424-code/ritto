@@ -119,7 +119,7 @@ export default function SettingsPage() {
         }
       `}</style>
 
-      <Sidebar active="settings" userEmail={user?.email} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="settings" userEmail={user?.email} empresa={profile.empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
 
       <div className="with-sidebar">
         <div className="page-wrap">

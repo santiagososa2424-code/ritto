@@ -17,6 +17,7 @@ export default function GuiaPage() {
   const [user, setUser] = useState<User | null>(null);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
+  const [empresa, setEmpresa] = useState<string | undefined>();
   const [active, setActive] = useState<Section>('archivos');
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function GuiaPage() {
           setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / 86400000)));
         }
         if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
+        if (p.empresa) setEmpresa(p.empresa);
       });
     });
   }, [router]);
@@ -112,7 +114,7 @@ export default function GuiaPage() {
         }
       `}</style>
 
-      <Sidebar active="guia" userEmail={user.email} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="guia" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
 
       <div className="with-sidebar">
         <div className="page-wrap">

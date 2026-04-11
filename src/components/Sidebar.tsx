@@ -6,11 +6,12 @@ type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia';
 interface SidebarProps {
   active: ActivePage;
   userEmail?: string;
+  empresa?: string;
   trialDaysLeft?: number | null;
   planName?: string;
 }
 
-export default function Sidebar({ active, userEmail, trialDaysLeft, planName }: SidebarProps) {
+export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, planName }: SidebarProps) {
   const router = useRouter();
 
   async function signOut() {
@@ -133,13 +134,17 @@ export default function Sidebar({ active, userEmail, trialDaysLeft, planName }: 
           width: 7px; height: 7px; border-radius: 50%;
           background: #4ade80; flex-shrink: 0;
         }
+        .sb-empresa {
+          font-size: 13px; font-weight: 700; color: #fff;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         .sb-plan-tag {
           font-size: 11px; font-weight: 600;
           text-transform: uppercase; letter-spacing: 0.5px;
           color: rgba(255,255,255,0.4);
         }
         .sb-email {
-          font-size: 12px; color: rgba(255,255,255,0.55);
+          font-size: 11px; color: rgba(255,255,255,0.45);
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .sb-logout {
@@ -215,6 +220,7 @@ export default function Sidebar({ active, userEmail, trialDaysLeft, planName }: 
               Trial · {trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} restante{trialDaysLeft !== 1 ? 's' : ''}
             </div>
           )}
+          {empresa && <div className="sb-empresa">{empresa}</div>}
           {planName && <div className="sb-plan-tag">Plan {planName}</div>}
           {userEmail && <div className="sb-email">{userEmail}</div>}
           <button className="sb-logout" onClick={signOut}>Cerrar sesión</button>

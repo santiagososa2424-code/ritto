@@ -62,6 +62,7 @@ export default function PlanPage() {
   const [planKey, setPlanKey] = useState<string>('pro');
   const [status, setStatus] = useState<string>('trial');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [empresa, setEmpresa] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export default function PlanPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('plan, subscription_status, trial_ends_at')
+        .select('plan, subscription_status, trial_ends_at, empresa')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
@@ -78,6 +79,7 @@ export default function PlanPage() {
             if (p.plan) setPlanKey(p.plan);
             if (p.subscription_status) setStatus(p.subscription_status);
             if (p.trial_ends_at) setTrialEndsAt(p.trial_ends_at);
+            if (p.empresa) setEmpresa(p.empresa);
           }
           setLoading(false);
         });
@@ -232,7 +234,7 @@ export default function PlanPage() {
         }
       `}</style>
 
-      <Sidebar active="plan" userEmail={user.email} trialDaysLeft={trialDaysLeft} planName={plan.name} />
+      <Sidebar active="plan" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={plan.name} />
 
       <div className="with-sidebar">
         <div className="page-wrap">

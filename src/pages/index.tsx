@@ -89,7 +89,7 @@ export default function LandingPage() {
       `}</style>
 
       <nav className="nav">
-        <div className="logo" onClick={() => router.push('/')}>Ritto</div>
+        <div className="logo" onClick={() => router.push('/')}>ritto</div>
         <div className="nav-btns">
           <button className="btn-login" onClick={() => router.push('/login')}>Iniciar sesión</button>
           <button className="nav-cta" onClick={() => router.push('/login?signup=true')}>Empezar gratis</button>
@@ -123,7 +123,7 @@ export default function LandingPage() {
                 </svg>
               </div>
               <p><strong>Arrastrá tus facturas</strong> o hacé clic para subir</p>
-              <p style={{ marginTop: 4, fontSize: 12 }}>PDF, JPG, PNG · hasta 32 por vez</p>
+              <p style={{ marginTop: 4, fontSize: 12 }}>PDF, JPG, PNG, XML · múltiples a la vez</p>
             </div>
             <table className="result-table">
               <thead><tr><th>Proveedor</th><th>RUT</th><th>Neto</th><th>IVA</th><th>Total</th><th /></tr></thead>
@@ -146,7 +146,7 @@ export default function LandingPage() {
               { icon: '📄', title: '100% de precisión', desc: 'Ritto extrae RUT, IVA, líneas de producto y totales sin errores manuales.' },
               { icon: '📊', title: 'Exportá a Excel', desc: 'Un clic y tenés tu resumen en formato DGI listo para contabilidad.' },
               { icon: '🔗', title: 'Compatible con tu sistema contable', desc: 'Funciona con GNS, Siigo y Zetasoftware. Exportá y pegá directo, sin retoques.' },
-              { icon: '⚡', title: 'Hasta 32 facturas', desc: 'Procesá lotes grandes de una sola vez, sin perder tiempo uno por uno.' },
+              { icon: '⚡', title: 'Procesamiento en paralelo', desc: 'Subí múltiples facturas a la vez y Ritto las procesa todas simultáneamente.' },
             ].map((f) => (
               <div className="feat-card" key={f.title}>
                 <div className="feat-icon">{f.icon}</div>
@@ -216,8 +216,8 @@ export default function LandingPage() {
       </div>
 
       <footer>
-        <div className="logo">Ritto</div>
-        <p>© 2025 ritto.lat · Uruguay</p>
+        <div className="logo">ritto</div>
+        <p>© 2025 ritto.app · Uruguay</p>
       </footer>
     </>
   );

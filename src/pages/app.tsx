@@ -65,6 +65,7 @@ export default function AppPage() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
+  const [empresa, setEmpresa] = useState<string | undefined>();
   const [sistema, setSistema] = useState<SistemaContable>('gns');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -89,6 +90,7 @@ export default function AppPage() {
           }
           if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
           if (p.sistema_contable) setSistema(p.sistema_contable as SistemaContable);
+          if (p.empresa) setEmpresa(p.empresa);
         });
     });
   }, [router]);
@@ -130,9 +132,22 @@ export default function AppPage() {
       const n = f.name.toLowerCase();
       return n.endsWith('.xml') || n.endsWith('.pdf') || f.type.startsWith('image/');
     });
-    for (const file of supported) {
-      const id = crypto.randomUUID();
-      setInvoices((prev) => [{ id, fileName: file.name, source: getSource(file), status: 'processing' }, ...prev]);
+    if (supported.length === 0) return;
+
+    // Add all to UI immediately as "processing"
+    const entries = supported.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+    }));
+    setInvoices((prev) => [
+      ...entries.map(({ id, file }) => ({
+        id, fileName: file.name, source: getSource(file), status: 'processing' as const,
+      })),
+      ...prev,
+    ]);
+
+    // Process all in parallel
+    await Promise.all(entries.map(async ({ id, file }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('id', id);
@@ -147,7 +162,7 @@ export default function AppPage() {
           inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv
         ));
       }
-    }
+    }));
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -327,7 +342,7 @@ export default function AppPage() {
         }
       `}</style>
 
-      <Sidebar active="facturas" userEmail={user.email} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
 
       <div className="with-sidebar">
         <div className="page-wrap">
@@ -393,7 +408,7 @@ export default function AppPage() {
               </svg>
             </div>
             <h2>Subí tus facturas</h2>
-            <p>Tocá para seleccionar o arrastrá archivos acá</p>
+            <p>Tocá para seleccionar o arrastrá — procesamos varios a la vez</p>
             <div className="upload-types">
               <span className="type-pill xml">XML · CFE Digital</span>
               <span className="type-pill">PDF</span>
