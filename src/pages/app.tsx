@@ -69,7 +69,15 @@ export default function AppPage() {
   const [sistema, setSistema] = useState<SistemaContable>('gns');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [planKey, setPlanKey] = useState<string>('pyme');
+  const [monthlyUsed, setMonthlyUsed] = useState<number>(0);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [search, setSearch] = useState<string>('');
+  const [limitWarning, setLimitWarning] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const PLAN_LIMITS: Record<string, number | null> = { pro: 100, pyme: 500, empresa: null };
+  const MAX_FILES = 10;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -88,7 +96,10 @@ export default function AppPage() {
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))));
           }
-          if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
+          if (p.plan) {
+            setPlanKey(p.plan);
+            setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
+          }
           if (p.sistema_contable) setSistema(p.sistema_contable as SistemaContable);
           if (p.empresa) setEmpresa(p.empresa);
         });
@@ -97,6 +108,13 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!user) return;
+    // Count invoices uploaded this month
+    const firstOfMonth = new Date();
+    firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
+    supabase.from('invoices').select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', firstOfMonth.toISOString())
+      .then(({ count }) => { if (count != null) setMonthlyUsed(count); });
+
     supabase.from('invoices').select('*').order('created_at', { ascending: false })
       .then(({ data }) => {
         if (data) setInvoices(data.map(fromDB));
@@ -117,6 +135,7 @@ export default function AppPage() {
   }
 
   async function deleteInvoice(id: string) {
+    setConfirmDelete(null);
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
     await supabase.from('invoices').delete().eq('id', id);
   }
@@ -134,8 +153,23 @@ export default function AppPage() {
     });
     if (supported.length === 0) return;
 
+    // Check file count limit
+    if (supported.length > MAX_FILES) {
+      setLimitWarning(`Máximo ${MAX_FILES} archivos a la vez. Se procesarán los primeros ${MAX_FILES}.`);
+      setTimeout(() => setLimitWarning(''), 5000);
+    }
+    const toProcess = supported.slice(0, MAX_FILES);
+
+    // Check monthly plan limit
+    const limit = PLAN_LIMITS[planKey];
+    if (limit !== null && monthlyUsed >= limit) {
+      setLimitWarning(`Alcanzaste el límite de ${limit} facturas este mes para el plan ${planKey.charAt(0).toUpperCase() + planKey.slice(1)}. Mejorá tu plan para continuar.`);
+      setTimeout(() => setLimitWarning(''), 6000);
+      return;
+    }
+
     // Add all to UI immediately as "processing"
-    const entries = supported.map((file) => ({
+    const entries = toProcess.map((file) => ({
       id: crypto.randomUUID(),
       file,
     }));
@@ -156,7 +190,10 @@ export default function AppPage() {
         const data: ExtractedInvoice = await res.json();
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
-        if (merged.status === 'done') await saveInvoice(merged);
+        if (merged.status === 'done') {
+          await saveInvoice(merged);
+          setMonthlyUsed((n) => n + 1);
+        }
       } catch {
         setInvoices((prev) => prev.map((inv) =>
           inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv
@@ -196,9 +233,21 @@ export default function AppPage() {
   const totalAmount = done.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
 
   const monthOptions = getMonthOptions(done);
-  const filteredInvoices = filterMonth === 'all'
-    ? invoices
-    : invoices.filter((inv) => inv.fecha?.startsWith(filterMonth));
+  const monthLimit = PLAN_LIMITS[planKey];
+  const monthPct = monthLimit ? Math.min(100, (monthlyUsed / monthLimit) * 100) : 0;
+  const monthRemaining = monthLimit !== null ? Math.max(0, monthLimit - monthlyUsed) : null;
+
+  const filteredInvoices = invoices
+    .filter((inv) => filterMonth === 'all' || inv.fecha?.startsWith(filterMonth))
+    .filter((inv) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        inv.proveedor?.toLowerCase().includes(q) ||
+        inv.rut?.toLowerCase().includes(q) ||
+        inv.fileName?.toLowerCase().includes(q)
+      );
+    });
 
   if (!user) return null;
 
@@ -272,6 +321,26 @@ export default function AppPage() {
           font-family: 'Figtree', sans-serif; font-size: 13px; background: var(--white);
           color: var(--dark); outline: none; cursor: pointer;
         }
+        .search-input {
+          border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px 6px 32px;
+          font-family: 'Figtree', sans-serif; font-size: 13px; background: var(--white);
+          color: var(--dark); outline: none; width: 180px;
+        }
+        .search-input:focus { border-color: var(--green); }
+        .search-wrap { position: relative; }
+        .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+        .limit-bar { margin-top: 8px; }
+        .limit-track { background: var(--bg); border-radius: 99px; height: 4px; overflow: hidden; }
+        .limit-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+        .limit-label { font-size: 11px; color: var(--gray); margin-top: 3px; }
+        .warning-bar {
+          background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px;
+          padding: 10px 14px; font-size: 13px; color: #78350f; margin-bottom: 14px;
+          display: flex; align-items: center; gap: 8px;
+        }
+        .confirm-del { display: inline-flex; align-items: center; gap: 6px; }
+        .btn-confirm-yes { background: var(--red); color: #fff; border: none; border-radius: 5px; padding: 3px 8px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'Figtree', sans-serif; }
+        .btn-confirm-no { background: none; border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: 'Figtree', sans-serif; color: var(--gray); }
 
         .table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
         .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -382,8 +451,16 @@ export default function AppPage() {
               <div className="stat-value">{done.length}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Este mes</div>
-              <div className="stat-value">{thisMonth.length}</div>
+              <div className="stat-label">Uso mensual</div>
+              <div className="stat-value">{monthlyUsed}{monthLimit !== null ? <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--gray)' }}>/{monthLimit}</span> : ''}</div>
+              {monthLimit !== null && (
+                <div className="limit-bar">
+                  <div className="limit-track">
+                    <div className="limit-fill" style={{ width: `${monthPct}%`, background: monthPct > 85 ? '#dc2626' : monthPct > 60 ? '#f59e0b' : 'var(--green)' }} />
+                  </div>
+                  <div className="limit-label">{monthRemaining} restantes este mes</div>
+                </div>
+              )}
             </div>
             <div className="stat-card">
               <div className="stat-label">Monto total (UYU)</div>
@@ -424,6 +501,13 @@ export default function AppPage() {
             />
           </div>
 
+          {limitWarning && (
+            <div className="warning-bar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              {limitWarning}
+            </div>
+          )}
+
           {processing.length > 0 && (
             <div className="processing-bar">
               <div className="spinner" />
@@ -437,12 +521,14 @@ export default function AppPage() {
               {done.length > 0 && <span className="count-badge">{done.length}</span>}
             </div>
             <div className="section-right">
+              <div className="search-wrap">
+                <span className="search-icon">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9b9b9b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input className="search-input" placeholder="Buscar proveedor…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
               {monthOptions.length > 0 && (
-                <select
-                  className="filter-select"
-                  value={filterMonth}
-                  onChange={(e) => setFilterMonth(e.target.value)}
-                >
+                <select className="filter-select" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
                   <option value="all">Todas las fechas</option>
                   {monthOptions.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -505,7 +591,11 @@ export default function AppPage() {
                         <td>
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
                           {inv.status === 'done' && <span className="status-done">Listo</span>}
-                          {inv.status === 'error' && <span className="status-error" title={inv.error}>Error</span>}
+                          {inv.status === 'error' && (
+                            <span className="status-error" title={inv.error} style={{ cursor: 'help' }}>
+                              Error {inv.error ? '?' : ''}
+                            </span>
+                          )}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {inv.status === 'done' && (
@@ -521,7 +611,14 @@ export default function AppPage() {
                               XLS
                             </button>
                           )}
-                          <button className="btn-remove" onClick={() => deleteInvoice(inv.id)} style={{ marginLeft: 4 }}>×</button>
+                          {confirmDelete === inv.id ? (
+                            <span className="confirm-del" style={{ marginLeft: 4 }}>
+                              <button className="btn-confirm-yes" onClick={() => deleteInvoice(inv.id)}>Sí</button>
+                              <button className="btn-confirm-no" onClick={() => setConfirmDelete(null)}>No</button>
+                            </span>
+                          ) : (
+                            <button className="btn-remove" onClick={() => setConfirmDelete(inv.id)} style={{ marginLeft: 4 }}>×</button>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -265,6 +265,16 @@ export default function LoginPage() {
                 ? <>¿No tenés cuenta? <button onClick={() => switchMode('signup')}>Registrate gratis</button></>
                 : <>¿Ya tenés cuenta? <button onClick={() => switchMode('login')}>Iniciá sesión</button></>}
             </div>
+            {mode === 'login' && (
+              <div style={{ textAlign: 'center', marginTop: 12 }}>
+                <button
+                  onClick={() => router.push('/forgot-password')}
+                  style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Olvidé mi contraseña
+                </button>
+              </div>
+            )}
           </div>
         )}
 
