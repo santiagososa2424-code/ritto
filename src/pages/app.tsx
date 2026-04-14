@@ -188,13 +188,15 @@ export default function AppPage() {
       try {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
         const data: ExtractedInvoice = await res.json();
+        if (!res.ok) console.error('[ritto extract error]', file.name, data);
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
           await saveInvoice(merged);
           setMonthlyUsed((n) => n + 1);
         }
-      } catch {
+      } catch (err) {
+        console.error('[ritto extract catch]', file.name, err);
         setInvoices((prev) => prev.map((inv) =>
           inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv
         ));
