@@ -187,8 +187,13 @@ export default function AppPage() {
       formData.append('id', id);
       try {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
-        const data: ExtractedInvoice = await res.json();
-        if (!res.ok) console.error('[ritto extract error]', file.name, 'status:', res.status, 'error:', (data as {error?: string}).error ?? JSON.stringify(data));
+        let data: ExtractedInvoice;
+        try {
+          data = await res.json();
+        } catch {
+          data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` };
+        }
+        if (!res.ok) console.error('[ritto extract error]', file.name, 'status:', res.status, 'error:', (data as {error?: string}).error);
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
