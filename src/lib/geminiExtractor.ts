@@ -2,8 +2,11 @@ import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
 import fs from 'fs';
 import type { ExtractedInvoice } from './types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+function getModel() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY no configurada en el servidor');
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-1.5-flash' });
+}
 
 const PROMPT = `Sos un sistema experto en extracción de datos de comprobantes fiscales uruguayos (CFE - Comprobantes Fiscales Electrónicos).
 Tu tarea es leer el documento y extraer los datos con la máxima precisión posible.
@@ -118,7 +121,7 @@ function parseResponse(text: string): Partial<ExtractedInvoice> {
 }
 
 async function callGemini(parts: Part[]): Promise<string> {
-  const result = await model.generateContent(parts);
+  const result = await getModel().generateContent(parts);
   return result.response.text();
 }
 
