@@ -324,7 +324,7 @@ export default function PlanPage() {
                 Pago seguro a través de MercadoPago
               </div>
               <hr className="cta-divider" />
-              <a href="mailto:soporte@ritto.app" className="support-link">
+              <a href="mailto:soporte@ritto.lat" className="support-link">
                 ¿Tenés preguntas? Contactá a soporte
               </a>
             </div>
@@ -384,7 +384,7 @@ export default function PlanPage() {
                 ))}
               <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', marginTop: 10 }}>
                 Para cambiar de plan contactá a{' '}
-                <a href="mailto:soporte@ritto.app" style={{ color: 'var(--green)' }}>soporte@ritto.app</a>
+                <a href="mailto:soporte@ritto.lat" style={{ color: 'var(--green)' }}>soporte@ritto.lat</a>
               </div>
             </>
           )}

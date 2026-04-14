@@ -79,7 +79,7 @@ export default function BlockedPage() {
           <button className="btn-pay" onClick={() => router.push('/plan')}>
             Ver planes y activar
           </button>
-          <button className="btn-contact" onClick={() => window.location.href = 'mailto:soporte@ritto.app'}>
+          <button className="btn-contact" onClick={() => window.location.href = 'mailto:soporte@ritto.lat'}>
             Hablar con soporte
           </button>
           <p className="trial-info">¿Necesitás más tiempo? Escribinos y lo arreglamos.</p>

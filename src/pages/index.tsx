@@ -272,7 +272,7 @@ export default function LandingPage() {
 
       <footer>
         <div className="logo">ritto</div>
-        <p>© 2025 ritto.app · Uruguay</p>
+        <p>© 2025 ritto.lat · Uruguay</p>
       </footer>
     </>
   );

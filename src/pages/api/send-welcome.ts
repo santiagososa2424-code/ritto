@@ -114,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="https://ritto.app/app"
+                    <a href="https://ritto.lat/app"
                        style="display:inline-block;background:#0a7c59;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.2px;">
                       Ir al dashboard →
                     </a>
@@ -129,7 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             <td align="center" style="padding:24px 0 0;">
               <p style="margin:0;font-size:12px;color:#9b9b9b;line-height:1.6;">
                 Ritto · Montevideo, Uruguay<br/>
-                ¿Preguntas? Escribinos a <a href="mailto:soporte@ritto.app" style="color:#0a7c59;text-decoration:none;">soporte@ritto.app</a>
+                ¿Preguntas? Escribinos a <a href="mailto:soporte@ritto.lat" style="color:#0a7c59;text-decoration:none;">soporte@ritto.lat</a>
               </p>
             </td>
           </tr>
@@ -143,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await resend.emails.send({
-      from: 'Ritto <bienvenida@ritto.app>',
+      from: 'Ritto <bienvenida@ritto.lat>',
       to: email,
       subject: `Bienvenido a Ritto, ${nombreDisplay} 🎉`,
       html,
