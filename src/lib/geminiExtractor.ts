@@ -5,7 +5,7 @@ import type { ExtractedInvoice } from './types';
 function getModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY no configurada en el servidor');
-  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-1.5-flash' });
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.0-flash' });
 }
 
 const PROMPT = `Sos un sistema experto en extracción de datos de comprobantes fiscales uruguayos (CFE - Comprobantes Fiscales Electrónicos).
