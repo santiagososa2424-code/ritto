@@ -117,9 +117,9 @@ function parseResponse(text: string): Partial<ExtractedInvoice> {
   }
 }
 
-async function callGemini(parts: Part[]): Promise<Partial<ExtractedInvoice>> {
+async function callGemini(parts: Part[]): Promise<string> {
   const result = await model.generateContent(parts);
-  return parseResponse(result.response.text());
+  return result.response.text();
 }
 
 const RETRY_PROMPT_SUFFIX = (errors: string[]) => `
@@ -129,18 +129,27 @@ ${errors.map(e => `- ${e}`).join('\n')}
 
 Por favor corregí estos errores específicamente y respondé con un JSON válido.`;
 
+function buildRetryParts(parts: Part[], errors: string[]): Part[] {
+  const lastPart = parts[parts.length - 1];
+  const baseText = (lastPart as { text?: string }).text ?? '';
+  return [
+    ...parts.slice(0, -1),
+    { text: baseText + RETRY_PROMPT_SUFFIX(errors) },
+  ];
+}
+
 async function extractWithRetry(parts: Part[]): Promise<Partial<ExtractedInvoice> & { _validationWarning?: string }> {
-  // First attempt
+  // First attempt — let real API errors (auth, quota, etc.) propagate immediately
+  const rawText = await callGemini(parts);
+
+  // Try parsing — only retry if JSON is invalid
   let extracted: Partial<ExtractedInvoice>;
   try {
-    extracted = await callGemini(parts);
-  } catch (e) {
+    extracted = parseResponse(rawText);
+  } catch {
     // JSON parse failed — retry once with explicit instruction
-    const retryParts: Part[] = [
-      ...parts.slice(0, -1),
-      { text: parts[parts.length - 1].text + RETRY_PROMPT_SUFFIX(['JSON inválido — asegurate de responder SOLO con JSON, sin texto adicional']) },
-    ];
-    extracted = await callGemini(retryParts);
+    const retryText = await callGemini(buildRetryParts(parts, ['JSON inválido — respondé SOLO con JSON, sin texto adicional']));
+    extracted = parseResponse(retryText); // if this also fails, let it throw
   }
 
   const validation = validateExtraction(extracted);

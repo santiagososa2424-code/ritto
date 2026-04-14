@@ -13,7 +13,7 @@ export default function BlockedPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
-      supabase.from('profiles').select('plan, trial_ends_at').eq('id', data.user.id).single()
+      supabase.from('profiles').select('*').eq('id', data.user.id).single()
         .then(({ data: p }) => {
           if (p) {
             setPlan(p.plan ?? 'pro');

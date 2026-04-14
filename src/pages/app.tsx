@@ -592,8 +592,8 @@ export default function AppPage() {
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
                           {inv.status === 'done' && <span className="status-done">Listo</span>}
                           {inv.status === 'error' && (
-                            <span className="status-error" title={inv.error} style={{ cursor: 'help' }}>
-                              Error {inv.error ? '?' : ''}
+                            <span className="status-error" title={inv.error}>
+                              Error{inv.error ? `: ${inv.error.slice(0, 60)}${inv.error.length > 60 ? '…' : ''}` : ''}
                             </span>
                           )}
                         </td>

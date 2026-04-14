@@ -11,6 +11,10 @@ export const config = { api: { bodyParser: false }, maxDuration: 60 };
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ status: 'error', error: 'GEMINI_API_KEY no configurada en el servidor' });
+  }
+
   const form = formidable({ maxFileSize: 20 * 1024 * 1024 });
 
   let fields: Fields;

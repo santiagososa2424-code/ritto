@@ -71,7 +71,7 @@ export default function PlanPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('plan, subscription_status, trial_ends_at, empresa')
+        .select('*')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
