@@ -163,9 +163,10 @@ async function extractWithRetry(parts: Part[]): Promise<Partial<ExtractedInvoice
 
   let retried: Partial<ExtractedInvoice>;
   try {
-    retried = await callGemini(retryParts);
+    const retriedText = await callGemini(retryParts);
+    retried = parseResponse(retriedText);
   } catch {
-    // If retry also fails JSON parse, return original with warning
+    // If retry also fails, return original with warning
     return { ...extracted, _validationWarning: validation.errors.join('; ') };
   }
 
