@@ -1,4 +1,4 @@
--- Organizations table: one per empresa, holds plan/billing
+-- 1. Organizations table first (no dependency on profiles.organization_id yet)
 CREATE TABLE IF NOT EXISTS organizations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL DEFAULT '',
@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS organizations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 2. Add columns to profiles (organization_id FK now valid since organizations exists)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'owner'; -- 'owner' | 'member'
+
+-- 3. Enable RLS and create policies (profiles.organization_id now exists)
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Members can read their org" ON organizations
@@ -20,11 +25,7 @@ CREATE POLICY "Members can read their org" ON organizations
 CREATE POLICY "Owner can update their org" ON organizations
   FOR UPDATE USING (owner_id = auth.uid());
 
--- Add org reference to profiles
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'owner'; -- 'owner' | 'member'
-
--- Backfill: create an org for every existing profile that doesn't have one
+-- 4. Backfill: create an org for every existing profile that doesn't have one
 INSERT INTO organizations (name, plan, subscription_status, trial_ends_at, owner_id, max_users)
 SELECT
   COALESCE(p.empresa, ''),
