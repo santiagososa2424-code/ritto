@@ -25,19 +25,9 @@ CREATE POLICY "Members can read their org" ON organizations
 CREATE POLICY "Owner can update their org" ON organizations
   FOR UPDATE USING (owner_id = auth.uid());
 
--- 4. Backfill: create an org for every existing profile that doesn't have one
-INSERT INTO organizations (name, plan, subscription_status, trial_ends_at, owner_id, max_users)
-SELECT
-  COALESCE(p.empresa, ''),
-  COALESCE(p.plan, 'pro'),
-  COALESCE(p.subscription_status, 'trial'),
-  p.trial_ends_at,
-  p.id,
-  CASE COALESCE(p.plan, 'pro')
-    WHEN 'pyme' THEN 5
-    WHEN 'empresa' THEN 20
-    ELSE 1
-  END
+-- 4. Backfill: create an org for every existing profile (use defaults, avoid optional columns)
+INSERT INTO organizations (name, owner_id)
+SELECT COALESCE(p.empresa, ''), p.id
 FROM profiles p
 WHERE p.organization_id IS NULL;
 
