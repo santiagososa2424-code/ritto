@@ -232,6 +232,40 @@ export default function AppPage() {
     setDownloading(null);
   }
 
+  function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
+    const headers = ['Proveedor','Tipo','Fecha','Número','Código','Descripción','Cantidad','Moneda','Precio Unit.','Descuento','Sub Total','Impuestos','Total'];
+    const escape = (v: string | number) => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows: string[] = [headers.join(',')];
+    for (const inv of invoiceList.filter(i => i.status === 'done')) {
+      const items = inv.items && inv.items.length > 0 ? inv.items : [{
+        codigo: '', descripcion: inv.tipoDocumento ?? 'Factura', cantidad: 1,
+        precioUnitario: inv.neto ?? inv.total ?? 0, descuento: 0,
+        impuesto: inv.ivaTotal && inv.neto && inv.neto > 0 ? Math.round((inv.ivaTotal / inv.neto) * 100) : 22,
+        subtotal: inv.neto ?? 0, totalItem: inv.total ?? 0,
+      }];
+      for (const item of items) {
+        const imp = (item.subtotal ?? 0) * ((item.impuesto ?? 0) / 100);
+        rows.push([
+          inv.proveedor ?? '', inv.tipoDocumento ?? '', inv.fecha ?? '', inv.nroDocumento ?? '',
+          item.codigo ?? '', item.descripcion ?? '', item.cantidad ?? 1, inv.moneda ?? 'UYU',
+          item.precioUnitario ?? 0, item.descuento ?? 0, item.subtotal ?? 0, imp,
+          (item.subtotal ?? 0) + imp,
+        ].map(escape).join(','));
+      }
+    }
+    const bom = '\uFEFF'; // UTF-8 BOM so Excel/Sheets handles accents correctly
+    const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const done = invoices.filter((i) => i.status === 'done');
   const processing = invoices.filter((i) => i.status === 'processing');
   const now = new Date();
@@ -445,7 +479,21 @@ export default function AppPage() {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar todas</span>
+                <span>Exportar XLS</span>
+              </button>
+              <button
+                className="btn-export"
+                style={{ background: 'var(--gray)' }}
+                onClick={() => downloadCSV(done, `ritto-${new Date().toISOString().slice(0,10)}.csv`)}
+                disabled={done.length === 0}
+                title="Abre en Google Sheets, LibreOffice, Excel y más"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Exportar CSV</span>
               </button>
             </div>
           </div>
@@ -606,17 +654,27 @@ export default function AppPage() {
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {inv.status === 'done' && (
-                            <button
-                              className="btn-dl"
-                              disabled={downloading === inv.id}
-                              onClick={() => downloadExcel([inv], inv.id)}
-                              title={`Descargar para ${SISTEMA_NAMES[sistema]}`}
-                            >
-                              {downloading === inv.id
-                                ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
-                                : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
-                              XLS
-                            </button>
+                            <>
+                              <button
+                                className="btn-dl"
+                                disabled={downloading === inv.id}
+                                onClick={() => downloadExcel([inv], inv.id)}
+                                title={`Descargar para ${SISTEMA_NAMES[sistema]}`}
+                              >
+                                {downloading === inv.id
+                                  ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
+                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
+                                XLS
+                              </button>
+                              <button
+                                className="btn-dl"
+                                style={{ marginLeft: 4, background: '#f0f0f0', color: '#555' }}
+                                onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}-${inv.fecha ?? ''}.csv`)}
+                                title="Descargar CSV (abre en Google Sheets, LibreOffice, etc.)"
+                              >
+                                CSV
+                              </button>
+                            </>
                           )}
                           {confirmDelete === inv.id ? (
                             <span className="confirm-del" style={{ marginLeft: 4 }}>
