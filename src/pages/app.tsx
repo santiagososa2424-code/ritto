@@ -108,11 +108,11 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!user) return;
-    // Count invoices uploaded this month
+    // Count invoices uploaded this month (org-wide, for plan limit enforcement)
     const firstOfMonth = new Date();
     firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
     supabase.from('invoices').select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id).gte('created_at', firstOfMonth.toISOString())
+      .gte('created_at', firstOfMonth.toISOString())
       .then(({ count }) => { if (count != null) setMonthlyUsed(count); });
 
     supabase.from('invoices').select('*').order('created_at', { ascending: false })
