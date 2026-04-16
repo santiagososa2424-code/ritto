@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia';
+type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia' | 'dashboard' | 'beneficios';
 
 interface SidebarProps {
   active: ActivePage;
@@ -35,6 +35,17 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
       ),
     },
     {
+      id: 'dashboard' as const,
+      label: 'Dashboard',
+      path: '/dashboard',
+      icon: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+        </svg>
+      ),
+    },
+    {
       id: 'guia' as const,
       label: 'Guía de uso',
       path: '/guia',
@@ -43,6 +54,16 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'beneficios' as const,
+      label: 'Utilidades',
+      path: '/beneficios',
+      icon: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
         </svg>
       ),
     },

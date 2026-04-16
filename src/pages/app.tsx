@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -74,10 +74,16 @@ export default function AppPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
   const [limitWarning, setLimitWarning] = useState<string>('');
+  const [page, setPage] = useState(0);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileMapRef = useRef<Map<string, File>>(new Map());
 
-  const PLAN_LIMITS: Record<string, number | null> = { pro: 100, pyme: 500, empresa: null };
+  const PLAN_LIMITS: Record<string, number | null> = { pro: null, pyme: null, empresa: null };
   const MAX_FILES = 10;
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -140,6 +146,26 @@ export default function AppPage() {
     await supabase.from('invoices').delete().eq('id', id);
   }
 
+  async function retryInvoice(id: string) {
+    const file = fileMapRef.current.get(id);
+    if (!file) return;
+    setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: 'processing' as const, error: undefined } : inv));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('id', id);
+    try {
+      const res = await fetch('/api/extract', { method: 'POST', body: formData });
+      let data: ExtractedInvoice;
+      try { data = await res.json(); }
+      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+      const merged = { ...data, id };
+      setInvoices((prev) => prev.map((inv) => inv.id === id ? merged : inv));
+      if (merged.status === 'done') { await saveInvoice(merged); setMonthlyUsed((n) => n + 1); }
+    } catch {
+      setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv));
+    }
+  }
+
   function getSource(file: File): InvoiceSource {
     if (file.name.toLowerCase().endsWith('.xml') || file.type.includes('xml')) return 'cfe_xml';
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) return 'pdf';
@@ -168,11 +194,8 @@ export default function AppPage() {
       return;
     }
 
-    // Add all to UI immediately as "processing"
-    const entries = toProcess.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-    }));
+    const entries = toProcess.map((file) => ({ id: crypto.randomUUID(), file }));
+    entries.forEach(({ id, file }) => fileMapRef.current.set(id, file));
     setInvoices((prev) => [
       ...entries.map(({ id, file }) => ({
         id, fileName: file.name, source: getSource(file), status: 'processing' as const,
@@ -180,26 +203,58 @@ export default function AppPage() {
       ...prev,
     ]);
 
-    // Process all in parallel
-    await Promise.all(entries.map(async ({ id, file }) => {
+    async function runEntry({ id, file }: { id: string; file: File }) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('id', id);
       try {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
-        const data: ExtractedInvoice = await res.json();
+        let data: ExtractedInvoice;
+        try { data = await res.json(); }
+        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
+          const isDup = invoices.some(
+            (inv) => inv.status === 'done' && inv.nroDocumento && merged.nroDocumento &&
+              inv.nroDocumento === merged.nroDocumento && inv.proveedor === merged.proveedor && inv.id !== id
+          );
+          if (isDup) {
+            setInvoices((prev) => prev.map((inv) =>
+              inv.id === id ? { ...merged, status: 'error' as const, error: '⚠️ Posible duplicado — esta factura ya fue cargada' } : inv
+            ));
+            return;
+          }
           await saveInvoice(merged);
           setMonthlyUsed((n) => n + 1);
         }
-      } catch {
+      } catch (err) {
+        console.error('[ritto extract catch]', file.name, err);
         setInvoices((prev) => prev.map((inv) =>
           inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv
         ));
       }
-    }));
+    }
+
+    const isXMLFile = (f: File) => f.name.toLowerCase().endsWith('.xml');
+    const xmlEntries = entries.filter((e) => isXMLFile(e.file));
+    const aiEntries = entries.filter((e) => !isXMLFile(e.file));
+
+    async function runWithConcurrency(items: typeof entries, limit: number) {
+      let i = 0;
+      async function next(): Promise<void> {
+        if (i >= items.length) return;
+        const entry = items[i++];
+        await runEntry(entry);
+        return next();
+      }
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
+    }
+
+    await Promise.all([
+      Promise.all(xmlEntries.map(runEntry)),
+      runWithConcurrency(aiEntries, 2),
+    ]);
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -225,6 +280,40 @@ export default function AppPage() {
     setDownloading(null);
   }
 
+  function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
+    const headers = ['Proveedor','Tipo','Fecha','Número','Código','Descripción','Cantidad','Moneda','Precio Unit.','Descuento','Sub Total','Impuestos','Total'];
+    const escape = (v: string | number) => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows: string[] = [headers.join(',')];
+    for (const inv of invoiceList.filter((i) => i.status === 'done')) {
+      const items = inv.items && inv.items.length > 0 ? inv.items : [{
+        codigo: '', descripcion: inv.tipoDocumento ?? 'Factura', cantidad: 1,
+        precioUnitario: inv.neto ?? inv.total ?? 0, descuento: 0,
+        impuesto: inv.ivaTotal && inv.neto && inv.neto > 0 ? Math.round((inv.ivaTotal / inv.neto) * 100) : 22,
+        subtotal: inv.neto ?? 0, totalItem: inv.total ?? 0,
+      }];
+      for (const item of items) {
+        const imp = (item.subtotal ?? 0) * ((item.impuesto ?? 0) / 100);
+        rows.push([
+          inv.proveedor ?? '', inv.tipoDocumento ?? '', inv.fecha ?? '', inv.nroDocumento ?? '',
+          item.codigo ?? '', item.descripcion ?? '', item.cantidad ?? 1, inv.moneda ?? 'UYU',
+          item.precioUnitario ?? 0, item.descuento ?? 0, item.subtotal ?? 0, imp,
+          (item.subtotal ?? 0) + imp,
+        ].map(escape).join(','));
+      }
+    }
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const done = invoices.filter((i) => i.status === 'done');
   const processing = invoices.filter((i) => i.status === 'processing');
   const now = new Date();
@@ -248,6 +337,23 @@ export default function AppPage() {
         inv.fileName?.toLowerCase().includes(q)
       );
     });
+
+  const filteredDone = filteredInvoices.filter((i) => i.status === 'done');
+
+  const sortedInvoices = sortKey
+    ? [...filteredInvoices].sort((a, b) => {
+        const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? '');
+        const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? '');
+        if (av !== '' && bv !== '' && !isNaN(Number(av)) && !isNaN(Number(bv))) {
+          return sortDir === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av);
+        }
+        return sortDir === 'asc' ? av.localeCompare(bv, 'es') : bv.localeCompare(av, 'es');
+      })
+    : filteredInvoices;
+
+  const totalPages = Math.ceil(sortedInvoices.length / PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const pagedInvoices = sortedInvoices.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   if (!user) return null;
 
@@ -399,12 +505,29 @@ export default function AppPage() {
           .main-layout { grid-template-columns: 1fr; }
           .right-col { display: none; }
         }
+        .th-sort { cursor: pointer; user-select: none; }
+        .th-sort:hover { color: var(--dark); }
+        .invoice-card-view { display: none; }
         @media (max-width: 768px) {
           .page-wrap { padding: 18px 16px 80px; }
           .stats-row { grid-template-columns: repeat(2, 1fr); }
           .stats-row .stat-card:last-child { display: none; }
           .page-title { font-size: 22px; }
-          .sistema-chip span { display: none; }
+          .sistema-chip { font-size: 11px; padding: 4px 8px; }
+        }
+        @media (max-width: 640px) {
+          .table-scroll { display: none; }
+          .invoice-card-view { display: block; }
+          .section-right { flex-wrap: wrap; }
+          .search-input { width: 140px; }
+          .header-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+          .inv-card { border-bottom: 1px solid var(--border); padding: 14px 16px; }
+          .inv-card:last-child { border-bottom: none; }
+          .inv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+          .inv-card-prov { font-size: 14px; font-weight: 600; }
+          .inv-card-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
+          .inv-card-total { font-size: 15px; font-weight: 700; text-align: right; flex-shrink: 0; }
+          .inv-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
         }
         @media (max-width: 480px) {
           .btn-export span { display: none; }
@@ -430,15 +553,29 @@ export default function AppPage() {
               </div>
               <button
                 className="btn-export"
-                onClick={() => downloadExcel(done, 'all')}
-                disabled={done.length === 0 || downloading !== null}
+                onClick={() => downloadExcel(filteredDone, 'filtered')}
+                disabled={filteredDone.length === 0 || downloading !== null}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar todas</span>
+                <span>Exportar XLS</span>
+              </button>
+              <button
+                className="btn-export"
+                style={{ background: 'var(--gray)' }}
+                onClick={() => downloadCSV(filteredDone, `ritto-${new Date().toISOString().slice(0,10)}.csv`)}
+                disabled={filteredDone.length === 0}
+                title="Abre en Google Sheets, LibreOffice, Excel y más"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Exportar CSV</span>
               </button>
             </div>
           </div>
@@ -551,25 +688,41 @@ export default function AppPage() {
                   : 'Todavía no subiste ninguna factura.\nSoportamos imágenes, PDFs y XMLs de CFE.'}
               </div>
             ) : (
+              <>
               <div className="table-scroll">
                 <table>
                   <thead>
                     <tr>
                       <th>Archivo</th>
                       <th>Tipo</th>
-                      <th>Proveedor</th>
+                      <th className="th-sort" onClick={() => { setSortKey('proveedor'); setSortDir((d) => sortKey === 'proveedor' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        Proveedor {sortKey === 'proveedor' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>RUT</th>
-                      <th>Fecha</th>
+                      <th className="th-sort" onClick={() => { setSortKey('fecha'); setSortDir((d) => sortKey === 'fecha' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+                        Fecha {sortKey === 'fecha' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>Neto</th>
                       <th>IVA</th>
-                      <th>Total</th>
+                      <th className="th-sort" onClick={() => { setSortKey('total'); setSortDir((d) => sortKey === 'total' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+                        Total {sortKey === 'total' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>Estado</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredInvoices.map((inv) => (
-                      <tr key={inv.id}>
+                    {pagedInvoices.map((inv) => (
+                      <React.Fragment key={inv.id}>
+                      <tr
+                        onClick={() => {
+                          if (inv.items && inv.items.length > 0) {
+                            setExpandedRows((prev) => { const s = new Set(prev); s.has(inv.id) ? s.delete(inv.id) : s.add(inv.id); return s; });
+                          }
+                        }}
+                        style={{ cursor: inv.items && inv.items.length > 0 ? 'pointer' : 'default' }}
+                        title={inv.items && inv.items.length > 0 ? 'Clic para ver ítems' : undefined}
+                      >
                         <td><div className="file-name" title={inv.fileName}>{inv.fileName}</div></td>
                         <td>
                           <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>
@@ -621,10 +774,79 @@ export default function AppPage() {
                           )}
                         </td>
                       </tr>
+                      {expandedRows.has(inv.id) && inv.items && inv.items.length > 0 && (
+                        <tr style={{ background: '#f9fafb' }}>
+                          <td colSpan={10} style={{ padding: '0 13px 12px' }}>
+                            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                              <thead>
+                                <tr>
+                                  {['Código','Descripción','Cant.','Precio Unit.','Subtotal'].map((h) => (
+                                    <th key={h} style={{ textAlign: h === 'Descripción' || h === 'Código' ? 'left' : 'right', padding: '5px 8px', color: 'var(--gray)', fontWeight: 500, fontSize: 11 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {inv.items.map((item, i) => (
+                                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '4px 8px' }}>{item.codigo || '—'}</td>
+                                    <td style={{ padding: '4px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.descripcion}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{item.cantidad}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precioUnitario)}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.subtotal)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <div className="invoice-card-view">
+                {pagedInvoices.map((inv) => (
+                  <div key={inv.id} className="inv-card">
+                    <div className="inv-card-top">
+                      <div style={{ minWidth: 0 }}>
+                        <div className="inv-card-prov">{inv.proveedor ?? inv.fileName}</div>
+                        <div className="inv-card-sub">{inv.fecha ?? '—'}{inv.rut ? ` · ${inv.rut}` : ''}</div>
+                      </div>
+                      <div className="inv-card-total">
+                        {inv.total != null ? `${inv.moneda ?? 'UYU'} ${fmt(inv.total)}` : '—'}
+                        {inv.status === 'processing' && <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 2 }}>Procesando…</div>}
+                        {inv.status === 'error' && <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }} title={inv.error}>Error</div>}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--gray)', display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>{sourceLabel(inv.source)}</span>
+                      {inv.ivaTotal != null && <span>IVA: {fmt(inv.ivaTotal)}</span>}
+                      {inv.neto != null && <span>Neto: {fmt(inv.neto)}</span>}
+                    </div>
+                    <div className="inv-card-actions">
+                      {inv.status === 'done' && (
+                        <>
+                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>XLS</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>CSV</button>
+                        </>
+                      )}
+                      {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
+                        <button className="btn-dl" style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffc107' }} onClick={() => retryInvoice(inv.id)}>↺ Reintentar</button>
+                      )}
+                      {confirmDelete === inv.id ? (
+                        <>
+                          <button className="btn-confirm-yes" onClick={() => deleteInvoice(inv.id)}>Sí</button>
+                          <button className="btn-confirm-no" onClick={() => setConfirmDelete(null)}>No</button>
+                        </>
+                      ) : (
+                        <button className="btn-remove" onClick={() => setConfirmDelete(inv.id)}>×</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </>
             )}
           </div>
           </div>{/* end main-col */}
