@@ -79,6 +79,15 @@ export default function LoginPage() {
     if (data.user) {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+      // Check if this email was invited to an org
+      const { data: invite } = await supabase
+        .from('org_invites')
+        .select('id, organization_id')
+        .eq('email', email.trim().toLowerCase())
+        .eq('status', 'pending')
+        .maybeSingle();
+
       await supabase.from('profiles').upsert({
         id: data.user.id,
         nombre,
@@ -89,7 +98,13 @@ export default function LoginPage() {
         sistema_contable: selectedSistema,
         subscription_status: 'trial',
         trial_ends_at: trialEndsAt.toISOString(),
+        ...(invite ? { organization_id: invite.organization_id, role: 'member' } : {}),
       });
+
+      if (invite) {
+        await supabase.from('org_invites').update({ status: 'accepted' }).eq('id', invite.id);
+      }
+
       // send welcome email (fire and forget)
       fetch('/api/send-welcome', {
         method: 'POST',

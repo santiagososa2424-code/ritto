@@ -10,13 +10,13 @@ const PLANS = {
     price: '$490',
     period: 'UYU/mes',
     features: [
-      'Hasta 100 facturas por mes',
-      'Imágenes, PDFs y CFE XML',
-      'Exportación a Excel',
-      '1 usuario',
+      '1 usuario · 1 empresa',
+      'Facturas ilimitadas',
+      'PDF, imagen y XML CFE',
+      'Exportación a Excel y CSV',
       'Soporte por email',
     ],
-    // TODO: Reemplazá este link con tu link de cobro de MercadoPago para Plan Pro
+    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Pro
     mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_PRO',
     color: '#1d4ed8',
     bg: '#eff6ff',
@@ -26,13 +26,14 @@ const PLANS = {
     price: '$1.990',
     period: 'UYU/mes',
     features: [
-      'Hasta 500 facturas por mes',
-      'Imágenes, PDFs y CFE XML',
-      'Exportación a Excel',
-      'Hasta 3 usuarios',
+      'Hasta 5 usuarios · 1 empresa compartida',
+      'Facturas ilimitadas',
+      'PDF, imagen y XML CFE',
+      'Exportación a Excel y CSV',
+      'Historial compartido del equipo',
       'Soporte prioritario',
     ],
-    // TODO: Reemplazá este link con tu link de cobro de MercadoPago para Plan Pyme
+    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Pyme
     mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_PYME',
     color: '#92400e',
     bg: '#fef3c7',
@@ -42,14 +43,15 @@ const PLANS = {
     price: '$4.990',
     period: 'UYU/mes',
     features: [
+      'Hasta 20 usuarios · 1 empresa compartida',
       'Facturas ilimitadas',
-      'Imágenes, PDFs y CFE XML',
-      'Exportación a Excel',
-      'Usuarios ilimitados',
-      'Soporte dedicado 24/7',
-      'Integración con sistema contable',
+      'PDF, imagen y XML CFE',
+      'Exportación a Excel y CSV',
+      'Historial compartido del equipo',
+      'Soporte prioritario',
+      'Onboarding personalizado',
     ],
-    // TODO: Reemplazá este link con tu link de cobro de MercadoPago para Plan Empresa
+    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Empresa
     mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_EMPRESA',
     color: '#6b21a8',
     bg: '#f3e8ff',

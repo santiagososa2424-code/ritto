@@ -74,10 +74,13 @@ export default function AppPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
   const [limitWarning, setLimitWarning] = useState<string>('');
+  const [page, setPage] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileMapRef = useRef<Map<string, File>>(new Map());
 
-  const PLAN_LIMITS: Record<string, number | null> = { pro: 100, pyme: 500, empresa: null };
+  const PLAN_LIMITS: Record<string, number | null> = { pro: null, pyme: null, empresa: null };
   const MAX_FILES = 10;
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -134,6 +137,26 @@ export default function AppPage() {
     });
   }
 
+  async function retryInvoice(id: string) {
+    const file = fileMapRef.current.get(id);
+    if (!file) return;
+    setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: 'processing' as const, error: undefined } : inv));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('id', id);
+    try {
+      const res = await fetch('/api/extract', { method: 'POST', body: formData });
+      let data: ExtractedInvoice;
+      try { data = await res.json(); }
+      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+      const merged = { ...data, id };
+      setInvoices((prev) => prev.map((inv) => inv.id === id ? merged : inv));
+      if (merged.status === 'done') { await saveInvoice(merged); setMonthlyUsed((n) => n + 1); }
+    } catch {
+      setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv));
+    }
+  }
+
   async function deleteInvoice(id: string) {
     setConfirmDelete(null);
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
@@ -173,6 +196,7 @@ export default function AppPage() {
       id: crypto.randomUUID(),
       file,
     }));
+    entries.forEach(({ id, file }) => fileMapRef.current.set(id, file));
     setInvoices((prev) => [
       ...entries.map(({ id, file }) => ({
         id, fileName: file.name, source: getSource(file), status: 'processing' as const,
@@ -310,6 +334,10 @@ export default function AppPage() {
         inv.fileName?.toLowerCase().includes(q)
       );
     });
+
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const pagedInvoices = filteredInvoices.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   if (!user) return null;
 
@@ -477,6 +505,16 @@ export default function AppPage() {
 
       <div className="with-sidebar">
         <div className="page-wrap">
+          {trialDaysLeft !== null && trialDaysLeft <= 3 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 14, color: '#78350f' }}>
+                ⏳ <strong>Te quedan {trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} de prueba.</strong> Activá tu plan para no perder el acceso.
+              </span>
+              <button onClick={() => router.push('/plan')} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontFamily: 'Figtree, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Ver planes →
+              </button>
+            </div>
+          )}
           <div className="page-header">
             <div>
               <h1 className="page-title">Facturas</h1>
@@ -601,10 +639,10 @@ export default function AppPage() {
                 <span className="search-icon">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9b9b9b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 </span>
-                <input className="search-input" placeholder="Buscar proveedor…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="search-input" placeholder="Buscar proveedor…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
               </div>
               {monthOptions.length > 0 && (
-                <select className="filter-select" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+                <select className="filter-select" value={filterMonth} onChange={(e) => { setFilterMonth(e.target.value); setPage(0); }}>
                   <option value="all">Todas las fechas</option>
                   {monthOptions.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -644,7 +682,7 @@ export default function AppPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredInvoices.map((inv) => (
+                    {pagedInvoices.map((inv) => (
                       <tr key={inv.id}>
                         <td><div className="file-name" title={inv.fileName}>{inv.fileName}</div></td>
                         <td>
@@ -668,9 +706,7 @@ export default function AppPage() {
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
                           {inv.status === 'done' && <span className="status-done">Listo</span>}
                           {inv.status === 'error' && (
-                            <span className="status-error" title={inv.error}>
-                              Error{inv.error ? `: ${inv.error.slice(0, 60)}${inv.error.length > 60 ? '…' : ''}` : ''}
-                            </span>
+                            <span className="status-error" title={inv.error}>Error</span>
                           )}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
@@ -697,6 +733,14 @@ export default function AppPage() {
                               </button>
                             </>
                           )}
+                          {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
+                            <button
+                              className="btn-dl"
+                              style={{ marginLeft: 4, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107' }}
+                              onClick={() => retryInvoice(inv.id)}
+                              title="Reintentar extracción"
+                            >↺ Reintentar</button>
+                          )}
                           {confirmDelete === inv.id ? (
                             <span className="confirm-del" style={{ marginLeft: 4 }}>
                               <button className="btn-confirm-yes" onClick={() => deleteInvoice(inv.id)}>Sí</button>
@@ -710,6 +754,21 @@ export default function AppPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 0', borderTop: '1px solid var(--border)' }}>
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--white)', cursor: safePage === 0 ? 'not-allowed' : 'pointer', opacity: safePage === 0 ? 0.4 : 1, fontFamily: 'Figtree, sans-serif', fontSize: 13 }}
+                >← Anterior</button>
+                <span style={{ fontSize: 13, color: 'var(--gray)' }}>Página {safePage + 1} de {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--white)', cursor: safePage >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: safePage >= totalPages - 1 ? 0.4 : 1, fontFamily: 'Figtree, sans-serif', fontSize: 13 }}
+                >Siguiente →</button>
               </div>
             )}
           </div>
