@@ -11,22 +11,22 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
     id: 'pro',
     name: 'Pro',
     price: '$490',
-    desc: 'UYU/mes · 1 usuario',
-    features: ['1 usuario', 'Facturas ilimitadas', 'Exportación a Excel', '1 empresa'],
+    desc: 'UYU/mes · 1 usuario · 1 empresa',
+    features: ['1 usuario', '1 empresa', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte por email'],
   },
   {
     id: 'pyme',
     name: 'Pyme',
     price: '$1.990',
     desc: 'UYU/mes · hasta 5 usuarios',
-    features: ['Hasta 5 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario'],
+    features: ['Hasta 5 usuarios', '1 empresa compartida', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte prioritario'],
   },
   {
     id: 'empresa',
     name: 'Empresa',
     price: '$4.990',
     desc: 'UYU/mes · hasta 20 usuarios',
-    features: ['Hasta 20 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario', 'Onboarding personalizado'],
+    features: ['Hasta 20 usuarios', '1 empresa compartida', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte prioritario', 'Onboarding personalizado'],
   },
 ];
 

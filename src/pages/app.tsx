@@ -180,8 +180,7 @@ export default function AppPage() {
       ...prev,
     ]);
 
-    // Process all in parallel
-    await Promise.all(entries.map(async ({ id, file }) => {
+    async function runEntry({ id, file }: { id: string; file: File }) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('id', id);
@@ -206,7 +205,29 @@ export default function AppPage() {
           inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv
         ));
       }
-    }));
+    }
+
+    // XMLs: instant, run all in parallel
+    // AI (PDF/image): max 2 concurrent to avoid Gemini timeouts
+    const isXMLFile = (f: File) => f.name.toLowerCase().endsWith('.xml');
+    const xmlEntries = entries.filter(e => isXMLFile(e.file));
+    const aiEntries = entries.filter(e => !isXMLFile(e.file));
+
+    async function runWithConcurrency(items: typeof entries, limit: number) {
+      let i = 0;
+      async function next(): Promise<void> {
+        if (i >= items.length) return;
+        const entry = items[i++];
+        await runEntry(entry);
+        return next();
+      }
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
+    }
+
+    await Promise.all([
+      Promise.all(xmlEntries.map(runEntry)),
+      runWithConcurrency(aiEntries, 2),
+    ]);
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
