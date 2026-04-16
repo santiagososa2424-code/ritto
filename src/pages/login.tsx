@@ -79,6 +79,15 @@ export default function LoginPage() {
     if (data.user) {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+      // Check if there's a pending org invite for this email
+      const { data: invite } = await supabase
+        .from('org_invites')
+        .select('id, organization_id')
+        .eq('email', email.trim().toLowerCase())
+        .eq('status', 'pending')
+        .maybeSingle();
+
       await supabase.from('profiles').upsert({
         id: data.user.id,
         nombre,
@@ -89,8 +98,13 @@ export default function LoginPage() {
         sistema_contable: selectedSistema,
         subscription_status: 'trial',
         trial_ends_at: trialEndsAt.toISOString(),
+        ...(invite ? { organization_id: invite.organization_id, role: 'member' } : {}),
       });
-      // send welcome email (fire and forget)
+
+      if (invite) {
+        await supabase.from('org_invites').update({ status: 'accepted' }).eq('id', invite.id);
+      }
+
       fetch('/api/send-welcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -275,6 +289,11 @@ export default function LoginPage() {
                 </button>
               </div>
             )}
+            <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray)', marginTop: 16, lineHeight: 1.6 }}>
+              <a href="/terminos" target="_blank" style={{ color: 'var(--gray)', textDecoration: 'underline' }}>Términos</a>
+              {' · '}
+              <a href="/privacidad" target="_blank" style={{ color: 'var(--gray)', textDecoration: 'underline' }}>Privacidad</a>
+            </p>
           </div>
         )}
 
@@ -325,6 +344,12 @@ export default function LoginPage() {
                 {loading ? 'Creando cuenta…' : 'Empezar trial gratis'}
               </button>
             </div>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray)', marginTop: 14, lineHeight: 1.6 }}>
+              Al crear tu cuenta aceptás los{' '}
+              <a href="/terminos" target="_blank" style={{ color: 'var(--green)', textDecoration: 'underline' }}>Términos y Condiciones</a>
+              {' '}y la{' '}
+              <a href="/privacidad" target="_blank" style={{ color: 'var(--green)', textDecoration: 'underline' }}>Política de Privacidad</a>.
+            </p>
           </div>
         )}
       </div>
