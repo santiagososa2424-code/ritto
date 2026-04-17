@@ -96,7 +96,7 @@ function generateZetaExcel(invoices: ExtractedInvoice[]): Buffer {
   }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, makeSheet(headers, rows, [14,10,8,10,14,10,12,12,16,14,35,10,14,12,12,12]), 'Zeta');
-  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xls' }));
 }
 
 function generateSiigoExcel(invoices: ExtractedInvoice[]): Buffer {

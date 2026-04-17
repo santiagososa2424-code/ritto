@@ -362,11 +362,14 @@ export default function GuiaPage() {
                     <div className="step-num" style={{ background: '#16a34a' }}>S</div>
                     <div className="step-body">
                       <div className="step-title">Siigo</div>
-                      <div className="step-desc">Andá a <strong>Compras → Importación de comprobantes → Cargar plantilla</strong> y seleccioná el archivo descargado de Ritto.</div>
+                      <div className="step-desc">Siigo no tiene importación directa de facturas de compra desde Excel. Usá el archivo descargado como referencia para registrar cada factura en <strong>Contabilidad → Documentos</strong> como comprobante de egreso. El archivo tiene todo lo que necesitás: proveedor, fecha, montos y desglose de IVA.</div>
                     </div>
                   </div>
                 </div>
-                <div className="tip-box">
+                <div className="warn-box">
+                  <strong>Nota para usuarios de ZetaSoftware:</strong> el archivo se descarga en formato <strong>.xls</strong> (no .xlsx). Asegurate de abrirlo desde ZetaSoftware directamente, no desde Excel, para que el formato sea compatible.
+                </div>
+                <div className="tip-box" style={{ marginTop: 12 }}>
                   ¿No usás ninguno de estos sistemas? Igual podés usar el CSV — abrís el archivo en Excel o Google Sheets y copiás los datos que necesitás.
                 </div>
               </div>
