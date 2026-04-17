@@ -11,22 +11,22 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
     id: 'pro',
     name: 'Pro',
     price: '$490',
-    desc: 'UYU/mes · 1 usuario · 1 empresa',
-    features: ['1 usuario', '1 empresa', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte por email'],
+    desc: 'UYU/mes · 1 usuario',
+    features: ['1 usuario', 'Facturas ilimitadas', 'Exportación a Excel', '1 empresa'],
   },
   {
     id: 'pyme',
     name: 'Pyme',
     price: '$1.990',
     desc: 'UYU/mes · hasta 5 usuarios',
-    features: ['Hasta 5 usuarios', '1 empresa compartida', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte prioritario'],
+    features: ['Hasta 5 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario'],
   },
   {
     id: 'empresa',
     name: 'Empresa',
     price: '$4.990',
     desc: 'UYU/mes · hasta 20 usuarios',
-    features: ['Hasta 20 usuarios', '1 empresa compartida', 'Facturas ilimitadas', 'Exportación a Excel y CSV', 'Soporte prioritario', 'Onboarding personalizado'],
+    features: ['Hasta 20 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario', 'Onboarding personalizado'],
   },
 ];
 
@@ -80,7 +80,7 @@ export default function LoginPage() {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-      // Check if this email was invited to an org
+      // Check if there's a pending org invite for this email
       const { data: invite } = await supabase
         .from('org_invites')
         .select('id, organization_id')
@@ -105,7 +105,6 @@ export default function LoginPage() {
         await supabase.from('org_invites').update({ status: 'accepted' }).eq('id', invite.id);
       }
 
-      // send welcome email (fire and forget)
       fetch('/api/send-welcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -290,6 +289,11 @@ export default function LoginPage() {
                 </button>
               </div>
             )}
+            <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray)', marginTop: 16, lineHeight: 1.6 }}>
+              <a href="/terminos" target="_blank" style={{ color: 'var(--gray)', textDecoration: 'underline' }}>Términos</a>
+              {' · '}
+              <a href="/privacidad" target="_blank" style={{ color: 'var(--gray)', textDecoration: 'underline' }}>Privacidad</a>
+            </p>
           </div>
         )}
 
@@ -340,6 +344,12 @@ export default function LoginPage() {
                 {loading ? 'Creando cuenta…' : 'Empezar trial gratis'}
               </button>
             </div>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray)', marginTop: 14, lineHeight: 1.6 }}>
+              Al crear tu cuenta aceptás los{' '}
+              <a href="/terminos" target="_blank" style={{ color: 'var(--green)', textDecoration: 'underline' }}>Términos y Condiciones</a>
+              {' '}y la{' '}
+              <a href="/privacidad" target="_blank" style={{ color: 'var(--green)', textDecoration: 'underline' }}>Política de Privacidad</a>.
+            </p>
           </div>
         )}
       </div>

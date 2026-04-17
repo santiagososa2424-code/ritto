@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -75,6 +75,9 @@ export default function AppPage() {
   const [search, setSearch] = useState<string>('');
   const [limitWarning, setLimitWarning] = useState<string>('');
   const [page, setPage] = useState(0);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const fileMapRef = useRef<Map<string, File>>(new Map());
 
@@ -111,11 +114,11 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!user) return;
-    // Count invoices uploaded this month (org-wide, for plan limit enforcement)
+    // Count invoices uploaded this month
     const firstOfMonth = new Date();
     firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
     supabase.from('invoices').select('*', { count: 'exact', head: true })
-      .gte('created_at', firstOfMonth.toISOString())
+      .eq('user_id', user.id).gte('created_at', firstOfMonth.toISOString())
       .then(({ count }) => { if (count != null) setMonthlyUsed(count); });
 
     supabase.from('invoices').select('*').order('created_at', { ascending: false })
@@ -137,6 +140,12 @@ export default function AppPage() {
     });
   }
 
+  async function deleteInvoice(id: string) {
+    setConfirmDelete(null);
+    setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+    await supabase.from('invoices').delete().eq('id', id);
+  }
+
   async function retryInvoice(id: string) {
     const file = fileMapRef.current.get(id);
     if (!file) return;
@@ -155,12 +164,6 @@ export default function AppPage() {
     } catch {
       setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: 'error', error: 'Error de conexión' } : inv));
     }
-  }
-
-  async function deleteInvoice(id: string) {
-    setConfirmDelete(null);
-    setInvoices((prev) => prev.filter((inv) => inv.id !== id));
-    await supabase.from('invoices').delete().eq('id', id);
   }
 
   function getSource(file: File): InvoiceSource {
@@ -191,11 +194,7 @@ export default function AppPage() {
       return;
     }
 
-    // Add all to UI immediately as "processing"
-    const entries = toProcess.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-    }));
+    const entries = toProcess.map((file) => ({ id: crypto.randomUUID(), file }));
     entries.forEach(({ id, file }) => fileMapRef.current.set(id, file));
     setInvoices((prev) => [
       ...entries.map(({ id, file }) => ({
@@ -211,15 +210,21 @@ export default function AppPage() {
       try {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
         let data: ExtractedInvoice;
-        try {
-          data = await res.json();
-        } catch {
-          data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` };
-        }
-        if (!res.ok) console.error('[ritto extract error]', file.name, 'status:', res.status, 'error:', (data as {error?: string}).error);
+        try { data = await res.json(); }
+        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
+          const isDup = invoices.some(
+            (inv) => inv.status === 'done' && inv.nroDocumento && merged.nroDocumento &&
+              inv.nroDocumento === merged.nroDocumento && inv.proveedor === merged.proveedor && inv.id !== id
+          );
+          if (isDup) {
+            setInvoices((prev) => prev.map((inv) =>
+              inv.id === id ? { ...merged, status: 'error' as const, error: '⚠️ Posible duplicado — esta factura ya fue cargada' } : inv
+            ));
+            return;
+          }
           await saveInvoice(merged);
           setMonthlyUsed((n) => n + 1);
         }
@@ -231,11 +236,9 @@ export default function AppPage() {
       }
     }
 
-    // XMLs: instant, run all in parallel
-    // AI (PDF/image): max 2 concurrent to avoid Gemini timeouts
     const isXMLFile = (f: File) => f.name.toLowerCase().endsWith('.xml');
-    const xmlEntries = entries.filter(e => isXMLFile(e.file));
-    const aiEntries = entries.filter(e => !isXMLFile(e.file));
+    const xmlEntries = entries.filter((e) => isXMLFile(e.file));
+    const aiEntries = entries.filter((e) => !isXMLFile(e.file));
 
     async function runWithConcurrency(items: typeof entries, limit: number) {
       let i = 0;
@@ -284,7 +287,7 @@ export default function AppPage() {
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const rows: string[] = [headers.join(',')];
-    for (const inv of invoiceList.filter(i => i.status === 'done')) {
+    for (const inv of invoiceList.filter((i) => i.status === 'done')) {
       const items = inv.items && inv.items.length > 0 ? inv.items : [{
         codigo: '', descripcion: inv.tipoDocumento ?? 'Factura', cantidad: 1,
         precioUnitario: inv.neto ?? inv.total ?? 0, descuento: 0,
@@ -301,7 +304,7 @@ export default function AppPage() {
         ].map(escape).join(','));
       }
     }
-    const bom = '\uFEFF'; // UTF-8 BOM so Excel/Sheets handles accents correctly
+    const bom = '\uFEFF';
     const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -335,9 +338,22 @@ export default function AppPage() {
       );
     });
 
-  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const filteredDone = filteredInvoices.filter((i) => i.status === 'done');
+
+  const sortedInvoices = sortKey
+    ? [...filteredInvoices].sort((a, b) => {
+        const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? '');
+        const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? '');
+        if (av !== '' && bv !== '' && !isNaN(Number(av)) && !isNaN(Number(bv))) {
+          return sortDir === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av);
+        }
+        return sortDir === 'asc' ? av.localeCompare(bv, 'es') : bv.localeCompare(av, 'es');
+      })
+    : filteredInvoices;
+
+  const totalPages = Math.ceil(sortedInvoices.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, totalPages - 1));
-  const pagedInvoices = filteredInvoices.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const pagedInvoices = sortedInvoices.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   if (!user) return null;
 
@@ -489,12 +505,29 @@ export default function AppPage() {
           .main-layout { grid-template-columns: 1fr; }
           .right-col { display: none; }
         }
+        .th-sort { cursor: pointer; user-select: none; }
+        .th-sort:hover { color: var(--dark); }
+        .invoice-card-view { display: none; }
         @media (max-width: 768px) {
           .page-wrap { padding: 18px 16px 80px; }
           .stats-row { grid-template-columns: repeat(2, 1fr); }
           .stats-row .stat-card:last-child { display: none; }
           .page-title { font-size: 22px; }
-          .sistema-chip span { display: none; }
+          .sistema-chip { font-size: 11px; padding: 4px 8px; }
+        }
+        @media (max-width: 640px) {
+          .table-scroll { display: none; }
+          .invoice-card-view { display: block; }
+          .section-right { flex-wrap: wrap; }
+          .search-input { width: 140px; }
+          .header-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+          .inv-card { border-bottom: 1px solid var(--border); padding: 14px 16px; }
+          .inv-card:last-child { border-bottom: none; }
+          .inv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+          .inv-card-prov { font-size: 14px; font-weight: 600; }
+          .inv-card-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
+          .inv-card-total { font-size: 15px; font-weight: 700; text-align: right; flex-shrink: 0; }
+          .inv-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
         }
         @media (max-width: 480px) {
           .btn-export span { display: none; }
@@ -505,16 +538,6 @@ export default function AppPage() {
 
       <div className="with-sidebar">
         <div className="page-wrap">
-          {trialDaysLeft !== null && trialDaysLeft <= 3 && (
-            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 14, color: '#78350f' }}>
-                ⏳ <strong>Te quedan {trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} de prueba.</strong> Activá tu plan para no perder el acceso.
-              </span>
-              <button onClick={() => router.push('/plan')} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontFamily: 'Figtree, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                Ver planes →
-              </button>
-            </div>
-          )}
           <div className="page-header">
             <div>
               <h1 className="page-title">Facturas</h1>
@@ -530,8 +553,8 @@ export default function AppPage() {
               </div>
               <button
                 className="btn-export"
-                onClick={() => downloadExcel(done, 'all')}
-                disabled={done.length === 0 || downloading !== null}
+                onClick={() => downloadExcel(filteredDone, 'filtered')}
+                disabled={filteredDone.length === 0 || downloading !== null}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -543,8 +566,8 @@ export default function AppPage() {
               <button
                 className="btn-export"
                 style={{ background: 'var(--gray)' }}
-                onClick={() => downloadCSV(done, `ritto-${new Date().toISOString().slice(0,10)}.csv`)}
-                disabled={done.length === 0}
+                onClick={() => downloadCSV(filteredDone, `ritto-${new Date().toISOString().slice(0,10)}.csv`)}
+                disabled={filteredDone.length === 0}
                 title="Abre en Google Sheets, LibreOffice, Excel y más"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -639,10 +662,10 @@ export default function AppPage() {
                 <span className="search-icon">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9b9b9b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 </span>
-                <input className="search-input" placeholder="Buscar proveedor…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+                <input className="search-input" placeholder="Buscar proveedor…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               {monthOptions.length > 0 && (
-                <select className="filter-select" value={filterMonth} onChange={(e) => { setFilterMonth(e.target.value); setPage(0); }}>
+                <select className="filter-select" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
                   <option value="all">Todas las fechas</option>
                   {monthOptions.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -665,25 +688,41 @@ export default function AppPage() {
                   : 'Todavía no subiste ninguna factura.\nSoportamos imágenes, PDFs y XMLs de CFE.'}
               </div>
             ) : (
+              <>
               <div className="table-scroll">
                 <table>
                   <thead>
                     <tr>
                       <th>Archivo</th>
                       <th>Tipo</th>
-                      <th>Proveedor</th>
+                      <th className="th-sort" onClick={() => { setSortKey('proveedor'); setSortDir((d) => sortKey === 'proveedor' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        Proveedor {sortKey === 'proveedor' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>RUT</th>
-                      <th>Fecha</th>
+                      <th className="th-sort" onClick={() => { setSortKey('fecha'); setSortDir((d) => sortKey === 'fecha' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+                        Fecha {sortKey === 'fecha' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>Neto</th>
                       <th>IVA</th>
-                      <th>Total</th>
+                      <th className="th-sort" onClick={() => { setSortKey('total'); setSortDir((d) => sortKey === 'total' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+                        Total {sortKey === 'total' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </th>
                       <th>Estado</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
                     {pagedInvoices.map((inv) => (
-                      <tr key={inv.id}>
+                      <React.Fragment key={inv.id}>
+                      <tr
+                        onClick={() => {
+                          if (inv.items && inv.items.length > 0) {
+                            setExpandedRows((prev) => { const s = new Set(prev); s.has(inv.id) ? s.delete(inv.id) : s.add(inv.id); return s; });
+                          }
+                        }}
+                        style={{ cursor: inv.items && inv.items.length > 0 ? 'pointer' : 'default' }}
+                        title={inv.items && inv.items.length > 0 ? 'Clic para ver ítems' : undefined}
+                      >
                         <td><div className="file-name" title={inv.fileName}>{inv.fileName}</div></td>
                         <td>
                           <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>
@@ -706,40 +745,24 @@ export default function AppPage() {
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
                           {inv.status === 'done' && <span className="status-done">Listo</span>}
                           {inv.status === 'error' && (
-                            <span className="status-error" title={inv.error}>Error</span>
+                            <span className="status-error" title={inv.error}>
+                              Error{inv.error ? `: ${inv.error.slice(0, 60)}${inv.error.length > 60 ? '…' : ''}` : ''}
+                            </span>
                           )}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {inv.status === 'done' && (
-                            <>
-                              <button
-                                className="btn-dl"
-                                disabled={downloading === inv.id}
-                                onClick={() => downloadExcel([inv], inv.id)}
-                                title={`Descargar para ${SISTEMA_NAMES[sistema]}`}
-                              >
-                                {downloading === inv.id
-                                  ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
-                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
-                                XLS
-                              </button>
-                              <button
-                                className="btn-dl"
-                                style={{ marginLeft: 4, background: '#f0f0f0', color: '#555' }}
-                                onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}-${inv.fecha ?? ''}.csv`)}
-                                title="Descargar CSV (abre en Google Sheets, LibreOffice, etc.)"
-                              >
-                                CSV
-                              </button>
-                            </>
-                          )}
-                          {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
                             <button
                               className="btn-dl"
-                              style={{ marginLeft: 4, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107' }}
-                              onClick={() => retryInvoice(inv.id)}
-                              title="Reintentar extracción"
-                            >↺ Reintentar</button>
+                              disabled={downloading === inv.id}
+                              onClick={() => downloadExcel([inv], inv.id)}
+                              title={`Descargar para ${SISTEMA_NAMES[sistema]}`}
+                            >
+                              {downloading === inv.id
+                                ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
+                                : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
+                              XLS
+                            </button>
                           )}
                           {confirmDelete === inv.id ? (
                             <span className="confirm-del" style={{ marginLeft: 4 }}>
@@ -751,25 +774,79 @@ export default function AppPage() {
                           )}
                         </td>
                       </tr>
+                      {expandedRows.has(inv.id) && inv.items && inv.items.length > 0 && (
+                        <tr style={{ background: '#f9fafb' }}>
+                          <td colSpan={10} style={{ padding: '0 13px 12px' }}>
+                            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                              <thead>
+                                <tr>
+                                  {['Código','Descripción','Cant.','Precio Unit.','Subtotal'].map((h) => (
+                                    <th key={h} style={{ textAlign: h === 'Descripción' || h === 'Código' ? 'left' : 'right', padding: '5px 8px', color: 'var(--gray)', fontWeight: 500, fontSize: 11 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {inv.items.map((item, i) => (
+                                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '4px 8px' }}>{item.codigo || '—'}</td>
+                                    <td style={{ padding: '4px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.descripcion}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{item.cantidad}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precioUnitario)}</td>
+                                    <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.subtotal)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 0', borderTop: '1px solid var(--border)' }}>
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={safePage === 0}
-                  style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--white)', cursor: safePage === 0 ? 'not-allowed' : 'pointer', opacity: safePage === 0 ? 0.4 : 1, fontFamily: 'Figtree, sans-serif', fontSize: 13 }}
-                >← Anterior</button>
-                <span style={{ fontSize: 13, color: 'var(--gray)' }}>Página {safePage + 1} de {totalPages}</span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={safePage >= totalPages - 1}
-                  style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--white)', cursor: safePage >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: safePage >= totalPages - 1 ? 0.4 : 1, fontFamily: 'Figtree, sans-serif', fontSize: 13 }}
-                >Siguiente →</button>
+              <div className="invoice-card-view">
+                {pagedInvoices.map((inv) => (
+                  <div key={inv.id} className="inv-card">
+                    <div className="inv-card-top">
+                      <div style={{ minWidth: 0 }}>
+                        <div className="inv-card-prov">{inv.proveedor ?? inv.fileName}</div>
+                        <div className="inv-card-sub">{inv.fecha ?? '—'}{inv.rut ? ` · ${inv.rut}` : ''}</div>
+                      </div>
+                      <div className="inv-card-total">
+                        {inv.total != null ? `${inv.moneda ?? 'UYU'} ${fmt(inv.total)}` : '—'}
+                        {inv.status === 'processing' && <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 2 }}>Procesando…</div>}
+                        {inv.status === 'error' && <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }} title={inv.error}>Error</div>}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--gray)', display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>{sourceLabel(inv.source)}</span>
+                      {inv.ivaTotal != null && <span>IVA: {fmt(inv.ivaTotal)}</span>}
+                      {inv.neto != null && <span>Neto: {fmt(inv.neto)}</span>}
+                    </div>
+                    <div className="inv-card-actions">
+                      {inv.status === 'done' && (
+                        <>
+                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>XLS</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>CSV</button>
+                        </>
+                      )}
+                      {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
+                        <button className="btn-dl" style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffc107' }} onClick={() => retryInvoice(inv.id)}>↺ Reintentar</button>
+                      )}
+                      {confirmDelete === inv.id ? (
+                        <>
+                          <button className="btn-confirm-yes" onClick={() => deleteInvoice(inv.id)}>Sí</button>
+                          <button className="btn-confirm-no" onClick={() => setConfirmDelete(null)}>No</button>
+                        </>
+                      ) : (
+                        <button className="btn-remove" onClick={() => setConfirmDelete(inv.id)}>×</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
+              </>
             )}
           </div>
           </div>{/* end main-col */}
