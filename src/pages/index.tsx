@@ -272,7 +272,12 @@ export default function LandingPage() {
 
       <footer>
         <div className="logo">ritto</div>
-        <p>© 2025 ritto.lat · Uruguay</p>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <p>© 2025 ritto.lat · Uruguay</p>
+          <a href="/terminos" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Términos</a>
+          <a href="/privacidad" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Privacidad</a>
+          <a href="mailto:soporte@ritto.lat" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Soporte</a>
+        </div>
       </footer>
     </>
   );
