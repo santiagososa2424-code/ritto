@@ -16,8 +16,6 @@ const PLANS = {
       'Exportación a Excel y CSV',
       'Soporte por email',
     ],
-    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Pro
-    mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_PRO',
     color: '#1d4ed8',
     bg: '#eff6ff',
   },
@@ -33,8 +31,6 @@ const PLANS = {
       'Historial compartido del equipo',
       'Soporte prioritario',
     ],
-    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Pyme
-    mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_PYME',
     color: '#92400e',
     bg: '#fef3c7',
   },
@@ -51,8 +47,6 @@ const PLANS = {
       'Soporte prioritario',
       'Onboarding personalizado',
     ],
-    // TODO: Reemplazá con el link de suscripción de MercadoPago para Plan Empresa
-    mpLink: 'https://www.mercadopago.com.uy/subscriptions/checkout?preapproval_plan_id=PLAN_EMPRESA',
     color: '#6b21a8',
     bg: '#f3e8ff',
   },
@@ -307,23 +301,17 @@ export default function PlanPage() {
           {!isActive && (
             <div className="cta-card">
               <a
-                href={plan.mpLink}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={`mailto:soporte@ritto.lat?subject=Quiero activar el Plan ${plan.name}&body=Hola, quiero activar el Plan ${plan.name} (${plan.price}/mes). Mi email registrado es: ${user.email}`}
                 className="btn-activate"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                  <line x1="1" y1="10" x2="23" y2="10"/>
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
                 </svg>
                 Activar Plan {plan.name} · {plan.price}/mes
               </a>
               <div className="mp-note">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0110 0v4"/>
-                </svg>
-                Pago seguro a través de MercadoPago
+                Te respondemos en menos de 24 hs con el link de pago
               </div>
               <hr className="cta-divider" />
               <a href="mailto:soporte@ritto.lat" className="support-link">
@@ -371,16 +359,14 @@ export default function PlanPage() {
                       </div>
                     </div>
                     <a
-                      href={p.mpLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={`mailto:soporte@ritto.lat?subject=Quiero activar el Plan ${p.name}&body=Hola, quiero activar el Plan ${p.name} (${p.price}/mes). Mi email registrado es: ${user.email}`}
                       className="btn-upgrade"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                        <polyline points="17 6 23 6 23 12"/>
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
                       </svg>
-                      {isActive ? 'Cambiar' : 'Activar'}
+                      {isActive ? 'Cambiar' : 'Consultar'}
                     </a>
                   </div>
                 ))}

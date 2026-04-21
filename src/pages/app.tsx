@@ -683,9 +683,20 @@ export default function AppPage() {
               </div>
             ) : filteredInvoices.length === 0 ? (
               <div className="empty-state">
-                {filterMonth !== 'all'
-                  ? 'No hay facturas en ese período.'
-                  : 'Todavía no subiste ninguna factura.\nSoportamos imágenes, PDFs y XMLs de CFE.'}
+                {filterMonth !== 'all' ? (
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Sin facturas en ese período</div>
+                    <div>Probá seleccionando otro mes o "Todas las fechas".</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📂</div>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
+                    <div>Usá el área de arriba para subir XMLs, PDFs o fotos.</div>
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#bbb' }}>Los XML de DGI son instantáneos y 100% exactos.</div>
+                  </>
+                )}
               </div>
             ) : (
               <>
