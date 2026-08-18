@@ -137,7 +137,7 @@ export default function GuiaPage() {
               <div className="card">
                 <div className="card-title">¿Para qué sirve Ritto?</div>
                 <div className="card-desc">
-                  Ritto lee tus facturas automáticamente y te da los datos listos para cargar en tu sistema contable.
+                  Ritto lee tus facturas automáticamente y te da los datos listos para tu planilla.
                   En vez de tipear a mano cada número, subís el archivo y en segundos tenés todo extraído: quién te facturó, la fecha, el IVA y el total.
                 </div>
               </div>
@@ -148,7 +148,7 @@ export default function GuiaPage() {
                   <div className="step">
                     <div className="step-num">1</div>
                     <div className="step-body">
-                      <div className="step-title">Andá a "Facturas" en el menú</div>
+                      <div className="step-title">Andá a “Facturas” en el menú</div>
                       <div className="step-desc">Es la primera opción del menú lateral. Ahí vas a ver tu historial y el área para subir nuevas facturas.</div>
                     </div>
                   </div>
@@ -158,9 +158,9 @@ export default function GuiaPage() {
                       <div className="step-title">Subí tu factura</div>
                       <div className="step-desc">
                         Hacé clic en el área verde o arrastrá el archivo desde tu computadora. Podés subir <strong>fotos, PDFs o archivos XML</strong>.
-                        También podés subir <strong>varias a la vez</strong> — seleccioná todas juntas.
+                        También podés subir <strong>varias a la vez</strong> — selección todas juntas.
                       </div>
-                      <div className="step-tip">Tip: si tenés la factura en papel, sacale una foto con el celular y mandátela a vos mismo.</div>
+                      <div className="step-tip">Tip: si tenés la factura en papel, sacale una foto con el celular y mandatéla a vos mismo.</div>
                     </div>
                   </div>
                   <div className="step">
@@ -168,7 +168,7 @@ export default function GuiaPage() {
                     <div className="step-body">
                       <div className="step-title">Esperá unos segundos</div>
                       <div className="step-desc">
-                        Vas a ver "procesando…" mientras Ritto lee la factura. En general tarda entre 3 y 15 segundos según el tipo de archivo.
+                        Vas a ver “procesando…” mientras Ritto lee la factura. En general tarda entre 3 y 15 segundos según el tipo de archivo.
                         Los archivos XML son instantáneos.
                       </div>
                     </div>
@@ -178,7 +178,7 @@ export default function GuiaPage() {
                     <div className="step-body">
                       <div className="step-title">Revisá los datos y descargá</div>
                       <div className="step-desc">
-                        Cuando aparece <strong>"Listo"</strong>, los datos están extraídos. Podés descargar el archivo con el botón <strong>XLS</strong> (Excel) o <strong>CSV</strong>.
+                        Cuando aparece <strong>“Listo”</strong>, los datos están extraídos. Podés descargar el archivo con el botón <strong>XLS</strong> (Excel) o <strong>CSV</strong>.
                         El CSV abre en Google Sheets si no tenés Excel instalado.
                       </div>
                     </div>
@@ -192,7 +192,7 @@ export default function GuiaPage() {
                   {[
                     {
                       q: '¿Puedo subir varias facturas a la vez?',
-                      a: 'Sí, hasta 10 a la vez. Seleccionás todos los archivos juntos al mismo tiempo y se procesan en paralelo.',
+                      a: 'Sí, hasta 10 a la vez. Selección todos los archivos juntos al mismo tiempo y se procesan en paralelo.',
                     },
                     {
                       q: '¿Los datos se guardan?',
@@ -204,7 +204,7 @@ export default function GuiaPage() {
                     },
                     {
                       q: '¿Puedo borrar una factura?',
-                      a: 'Sí, con el botón "×" al final de cada fila. Te va a pedir confirmación antes de borrar.',
+                      a: 'Sí, con el botón “×” al final de cada fila. Te va a pedir confirmación antes de borrar.',
                     },
                     {
                       q: '¿Puedo buscar facturas de un mes específico?',
@@ -248,7 +248,7 @@ export default function GuiaPage() {
                     <span className="format-badge" style={{ background: '#f3e8ff', color: '#6b21a8' }}>Foto</span>
                     <div className="format-title">Foto (JPG / PNG)</div>
                     <div className="format-desc">
-                      Si tenés la factura en papel, sacale una foto con el celular. Mandátela a vos mismo por WhatsApp o email y descargá la foto.
+                      Si tenés la factura en papel, sacale una foto con el celular. Mandatéla a vos mismo por WhatsApp o email y descargá la foto.
                     </div>
                     <div className="format-best" style={{ color: '#6b7280' }}>Funciona bien si la foto es clara y completa</div>
                   </div>
@@ -313,7 +313,7 @@ export default function GuiaPage() {
               <div className="card">
                 <div className="card-title">¿Cómo descargo mis facturas?</div>
                 <div className="card-desc">
-                  Una vez que una factura dice <strong>"Listo"</strong>, podés descargar los datos en dos formatos.
+                  Una vez que una factura dice <strong>“Listo”</strong>, podés descargar los datos en dos formatos.
                   Si tenés Excel instalado usá el XLS. Si no, usá el CSV que abre en Google Sheets (gratis).
                 </div>
                 <div style={{ marginTop: 20 }}>
@@ -323,8 +323,7 @@ export default function GuiaPage() {
                       <div className="export-title">XLS (Excel)</div>
                       <div className="export-desc">
                         El botón <strong>XLS</strong> al lado de cada factura descarga esa factura sola.<br />
-                        El botón <strong>Exportar XLS</strong> arriba descarga todas las facturas que tenés en pantalla de una vez.<br />
-                        Abrís el archivo con Excel y lo importás a tu sistema contable.
+                        El botón <strong>Exportar XLS</strong> arriba descarga todas las facturas que tenés en pantalla de una vez.
                       </div>
                     </div>
                   </div>
@@ -334,7 +333,7 @@ export default function GuiaPage() {
                       <div className="export-title">CSV (Google Sheets y más)</div>
                       <div className="export-desc">
                         El botón <strong>CSV</strong> descarga el mismo contenido pero en un formato que abre en cualquier programa.<br />
-                        Si no tenés Excel, abrís <strong>sheets.google.com</strong>, hacés clic en el símbolo "+" y subís el archivo CSV. Gratis y sin instalar nada.
+                        Si no tenés Excel, abrís <strong>sheets.google.com</strong>, hacés clic en el símbolo “+” y subís el archivo CSV. Gratis y sin instalar nada.
                       </div>
                     </div>
                   </div>
@@ -342,47 +341,58 @@ export default function GuiaPage() {
               </div>
 
               <div className="card">
-                <div className="card-title">¿Cómo importo el archivo en mi sistema contable?</div>
-                <div className="steps">
+                <div className="card-title">¿Cómo lo uso con mi planilla de Excel o Google Sheets?</div>
+                <div className="card-desc">
+                  Ritto descarga los datos con las columnas que vos definís. Si ya tenés tu propia planilla armada, la idea es que los nombres coincidan y solo tengas que pegar las filas nuevas.
+                </div>
+                <div className="steps" style={{ marginTop: 20 }}>
                   <div className="step">
-                    <div className="step-num" style={{ background: '#1d4ed8' }}>G</div>
+                    <div className="step-num">1</div>
                     <div className="step-body">
-                      <div className="step-title">GNS Contable</div>
-                      <div className="step-desc">Andá a <strong>Importaciones → Comprobantes de Compra → Importar Excel</strong> y seleccioná el archivo descargado de Ritto.</div>
+                      <div className="step-title">Fijate cómo se llaman las columnas de tu planilla</div>
+                      <div className="step-desc">Abrí tu Excel o Google Sheets y mirá la primera fila. Anotá los nombres exactos: “Proveedor”, “Fecha”, “Total”, o como los tengas vos.</div>
                     </div>
                   </div>
                   <div className="step">
-                    <div className="step-num" style={{ background: '#f59e0b' }}>Z</div>
+                    <div className="step-num">2</div>
                     <div className="step-body">
-                      <div className="step-title">ZetaSoftware</div>
-                      <div className="step-desc">Andá a <strong>Compras → Importar comprobantes → Desde Excel</strong> y seleccioná el archivo. Si las facturas son en dólares, revisá la columna "Cotización" antes de importar.</div>
+                      <div className="step-title">Configurá esos nombres en Ritto</div>
+                      <div className="step-desc">Andá a <strong>Configuración → Plantilla de Excel</strong>. Ahí ponés los mismos nombres que tiene tu planilla. Si tu columna se llama “Empresa proveedora”, escribís eso. Si se llama “IVA”, escribís eso. Una vez que lo guardás, Ritto siempre va a descargar con esos nombres.</div>
+                      <div className="step-tip">Solo lo hacés una vez — queda guardado para siempre en tu cuenta.</div>
                     </div>
                   </div>
                   <div className="step">
-                    <div className="step-num" style={{ background: '#16a34a' }}>S</div>
+                    <div className="step-num">3</div>
                     <div className="step-body">
-                      <div className="step-title">Siigo</div>
-                      <div className="step-desc">Siigo no tiene importación directa de facturas de compra desde Excel. Usá el archivo descargado como referencia para registrar cada factura en <strong>Contabilidad → Documentos</strong> como comprobante de egreso. El archivo tiene todo lo que necesitás: proveedor, fecha, montos y desglose de IVA.</div>
+                      <div className="step-title">Descargá el XLS desde Ritto</div>
+                      <div className="step-desc">Processás tus facturas, hacés clic en <strong>Exportar XLS</strong> y te baja un archivo con exactamente las columnas que configuraste.</div>
+                    </div>
+                  </div>
+                  <div className="step">
+                    <div className="step-num">4</div>
+                    <div className="step-body">
+                      <div className="step-title">Pegás las filas nuevas en tu planilla</div>
+                      <div className="step-desc">Abrís el archivo de Ritto, selección todas las filas de datos (sin el encabezado), las copiás y las pegás al final de tu planilla. Las fórmulas que ya tenés en las columnas de al lado se aplican solas si las arrastrás hacia abajo.</div>
                     </div>
                   </div>
                 </div>
-                <div className="warn-box">
-                  <strong>Nota para usuarios de ZetaSoftware:</strong> el archivo se descarga en formato <strong>.xls</strong> (no .xlsx). Asegurate de abrirlo desde ZetaSoftware directamente, no desde Excel, para que el formato sea compatible.
-                </div>
-                <div className="tip-box" style={{ marginTop: 12 }}>
-                  ¿No usás ninguno de estos sistemas? Igual podés usar el CSV — abrís el archivo en Excel o Google Sheets y copiás los datos que necesitás.
+                <div className="tip-box">
+                  <strong>Tip:</strong> si tu planilla tiene fórmulas en columnas separadas (por ejemplo una que calcula el IVA), simplemente arrastrá esa fórmula hacia abajo para que cubra las filas nuevas. Los datos que trae Ritto no tocan esas columnas.
                 </div>
               </div>
 
               <div className="card">
-                <div className="card-title">¿Qué datos trae el archivo?</div>
+                <div className="card-title">¿No tenés planilla todavía? Usá la que trae Ritto</div>
                 <div className="card-desc" style={{ marginBottom: 16 }}>
-                  Cada fila del archivo es un producto o servicio de la factura. Las columnas incluyen:
+                  Si arrancás de cero, Ritto ya viene con una plantilla básica lista. Descargás el XLS y ya tenés un archivo ordenado con estas columnas:
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {['Proveedor', 'Tipo de factura', 'Fecha', 'Número', 'Código del producto', 'Descripción', 'Cantidad', 'Moneda', 'Precio unitario', 'Descuento', 'Subtotal sin IVA', 'IVA', 'Total con IVA'].map((col) => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {['Proveedor', 'RUT', 'Fecha', 'Nro. Documento', 'Tipo', 'Moneda', 'Neto', 'IVA Total', 'Total'].map((col) => (
                     <span key={col} style={{ background: '#f0f0f2', borderRadius: 6, padding: '4px 10px', fontSize: 13, color: '#555' }}>{col}</span>
                   ))}
+                </div>
+                <div className="card-desc">
+                  Podés agregar tus propias fórmulas encima de eso — por ejemplo una columna que sume los totales del mes, o que marque las facturas en dólares. Ritto solo agrega filas de datos, no toca lo que vos agregues.
                 </div>
               </div>
             </>
