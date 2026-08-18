@@ -38,6 +38,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile>({ nombre: '', empresa: '', rut: '', telefono: '' });
   const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>(DEFAULT_COLUMNS.map((c) => ({ ...c })));
   const [savingMapping, setSavingMapping] = useState(false);
+  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
+  const [savingSheet, setSavingSheet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
@@ -45,12 +47,10 @@ export default function SettingsPage() {
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
 
-  // Password change
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
 
-  // Team
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -77,13 +77,13 @@ export default function SettingsPage() {
           if (Array.isArray(p.excel_mapping) && p.excel_mapping.length > 0) {
             setExcelColumns(p.excel_mapping as ExcelColumn[]);
           }
+          if (p.google_sheet_id) setGoogleSheetUrl(p.google_sheet_id);
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             const days = Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
             setTrialDaysLeft(days);
           }
           if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
 
-          // Load team if org owner on multi-user plan
           if (p.organization_id && p.role === 'owner' && p.plan && p.plan !== 'pro') {
             loadTeam(p.organization_id, data.user.id);
           }
@@ -144,7 +144,6 @@ export default function SettingsPage() {
     const email = inviteEmail.trim().toLowerCase();
     if (!email) return;
 
-    // Check member limit
     const limit = PLAN_LIMITS[profile.plan ?? 'pro'];
     if (members.length + 1 >= limit) {
       setError(`El plan ${planName} permite máximo ${limit} usuarios. Mejorá el plan para agregar más.`);
@@ -197,6 +196,16 @@ export default function SettingsPage() {
     if (err) setError('Error al guardar la plantilla.');
     else { setSuccess('Plantilla guardada'); setTimeout(() => setSuccess(''), 3000); }
     setSavingMapping(false);
+  }
+
+  async function saveSheetUrl() {
+    if (!user) return;
+    setSavingSheet(true);
+    setError('');
+    const { error: err } = await supabase.from('profiles').update({ google_sheet_id: googleSheetUrl || null }).eq('id', user.id);
+    if (err) setError('Error al guardar.');
+    else { setSuccess('URL guardada'); setTimeout(() => setSuccess(''), 3000); }
+    setSavingSheet(false);
   }
 
   async function cancelInvite(inviteId: string) {
@@ -371,6 +380,34 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Google Sheets */}
+          <div className="card">
+            <div className="card-title">
+              <span>Google Sheets</span>
+              <span style={{ background: '#f3e8ff', color: '#6b21a8', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Próximamente</span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
+              Pegá la URL de tu Google Sheet y Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada. La conexión con tu cuenta de Google la configuramos en los próximos días.
+            </p>
+            <div className="field">
+              <label>URL de tu Google Sheet</label>
+              <input
+                type="text"
+                value={googleSheetUrl}
+                onChange={(e) => setGoogleSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet}>
+                {savingSheet ? 'Guardando…' : 'Guardar URL'}
+              </button>
+              <button type="button" className="btn-save" style={{ background: 'var(--border)', color: 'var(--gray)', cursor: 'not-allowed' }} disabled title="Disponible próximamente">
+                Conectar con Google →
+              </button>
+            </div>
+          </div>
+
           {/* Password */}
           <form onSubmit={changePassword}>
             <div className="card">
@@ -393,7 +430,7 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Team management — only for multi-user plan owners */}
+          {/* Team management */}
           {isMultiUserPlan && isOwner && (
             <div className="card">
               <div className="card-title">
@@ -406,7 +443,6 @@ export default function SettingsPage() {
                 {members.length} miembro{members.length !== 1 ? 's' : ''} + vos · {invites.length} invitación{invites.length !== 1 ? 'es' : ''} pendiente{invites.length !== 1 ? 's' : ''}
               </p>
 
-              {/* Members */}
               {members.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   {members.map((m) => (
@@ -426,7 +462,6 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Pending invites */}
               {invites.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   {invites.map((inv) => (
@@ -441,8 +476,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Invite form */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: members.length + invites.length > 0 ? 0 : 0 }}>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                 <label style={{ marginBottom: 8, display: 'block' }}>Invitar por email</label>
                 <form onSubmit={sendInvite}>
                   <div className="invite-row">
