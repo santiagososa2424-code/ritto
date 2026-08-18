@@ -21,8 +21,8 @@ const features = [
         <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
       </svg>
     ),
-    title: 'Exportá listo para tu sistema contable',
-    desc: 'Un clic y tenés el Excel formateado para GNS Contable, ZetaSoftware o Siigo. Sin copiar a mano, sin errores de tipeo.',
+    title: 'Exportá a tu Excel o Google Sheets',
+    desc: 'Un clic y tenés el archivo con las columnas exactas de tu planilla. Sin copiar a mano, sin errores de tipeo, sin rearmar nada.',
     badge: 'Ahorro de tiempo',
   },
   {
@@ -122,7 +122,7 @@ export default function BeneficiosPage() {
         <div className="page-wrap">
           <h1 className="page-title">¿Para qué sirve Ritto?</h1>
           <p className="page-sub">
-            Ritto toma tus facturas — en cualquier formato — y las convierte en datos listos para tu contador o sistema contable. Sin tipeo, sin Excel manual, sin errores.
+            Ritto toma tus facturas — en cualquier formato — y las convierte en datos listos para tu planilla de Excel o Google Sheets. Sin tipeo, sin errores, sin perder tiempo.
           </p>
 
           <div className="features-grid">
