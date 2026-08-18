@@ -1,21 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { generateSystemExcel } from '../../lib/excelExporter';
-import type { ExtractedInvoice, SistemaContable } from '../../lib/types';
+import { generateCustomExcel } from '../../lib/excelExporter';
+import { DEFAULT_COLUMNS } from '../../lib/types';
+import type { ExtractedInvoice, ExcelColumn } from '../../lib/types';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { invoices, sistema } = req.body as { invoices: ExtractedInvoice[]; sistema?: SistemaContable };
+  const { invoices, mapping } = req.body as { invoices: ExtractedInvoice[]; mapping?: ExcelColumn[] };
   if (!Array.isArray(invoices) || invoices.length === 0) {
     return res.status(400).json({ error: 'No hay facturas para exportar' });
   }
 
-  const sys: SistemaContable = sistema ?? 'gns';
-  const buffer = generateSystemExcel(invoices, sys);
+  const columns = mapping && mapping.length > 0 ? mapping : DEFAULT_COLUMNS;
+  const buffer = generateCustomExcel(invoices, columns);
   const date = new Date().toISOString().slice(0, 10);
-  const sysLabel = sys === 'zeta' ? 'ZetaSoftware' : sys === 'siigo' ? 'Siigo' : 'GNS';
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="ritto-${sysLabel}-${date}.xlsx"`);
+  res.setHeader('Content-Disposition', `attachment; filename="ritto-${date}.xlsx"`);
   res.send(buffer);
 }
