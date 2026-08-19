@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [savingMapping, setSavingMapping] = useState(false);
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [savingSheet, setSavingSheet] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
@@ -74,12 +75,11 @@ export default function SettingsPage() {
             organization_id: p.organization_id,
             role: p.role,
           });
-          let em = p.excel_mapping;
-          if (typeof em === 'string') { try { em = JSON.parse(em); } catch { em = null; } }
-          if (Array.isArray(em) && em.length > 0) {
-            setExcelColumns(em as ExcelColumn[]);
+          if (Array.isArray(p.excel_mapping) && p.excel_mapping.length > 0) {
+            setExcelColumns(p.excel_mapping as ExcelColumn[]);
           }
           if (p.google_sheet_id) setGoogleSheetUrl(p.google_sheet_id);
+          if (p.google_access_token) setGoogleConnected(true);
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             const days = Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
             setTrialDaysLeft(days);
@@ -94,6 +94,17 @@ export default function SettingsPage() {
       });
     });
   }, [router]);
+
+  useEffect(() => {
+    if (router.query.google === 'connected') {
+      setSuccess('¡Cuenta de Google conectada exitosamente!');
+      setGoogleConnected(true);
+      setTimeout(() => setSuccess(''), 4000);
+    }
+    if (router.query.error === 'google_denied' || router.query.error === 'google_token') {
+      setError('No se pudo conectar con Google. Intentá de nuevo.');
+    }
+  }, [router.query]);
 
   async function loadTeam(orgId: string, myId: string) {
     const { data: mems } = await supabase
@@ -194,9 +205,8 @@ export default function SettingsPage() {
     if (!user) return;
     setSavingMapping(true);
     setError('');
-    const { error: err } = await supabase.from('profiles')
-      .upsert({ id: user.id, excel_mapping: excelColumns }, { onConflict: 'id', ignoreDuplicates: false });
-    if (err) setError(`Error al guardar la plantilla: ${err.message}`);
+    const { error: err } = await supabase.from('profiles').update({ excel_mapping: excelColumns }).eq('id', user.id);
+    if (err) setError('Error al guardar la plantilla.');
     else { setSuccess('Plantilla guardada'); setTimeout(() => setSuccess(''), 3000); }
     setSavingMapping(false);
   }
@@ -387,10 +397,14 @@ export default function SettingsPage() {
           <div className="card">
             <div className="card-title">
               <span>Google Sheets</span>
-              <span style={{ background: '#f3e8ff', color: '#6b21a8', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Próximamente</span>
+              {googleConnected && (
+                <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Conectado</span>
+              )}
             </div>
             <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
-              Pegá la URL de tu Google Sheet y Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada. La conexión con tu cuenta de Google la configuramos en los próximos días.
+              {googleConnected
+                ? 'Tu cuenta de Google está conectada. Pegá la URL de tu planilla y usá el botón "Exportar a Google Sheets" en Facturas para mandar las filas directamente.'
+                : 'Conectá tu cuenta de Google y pegá la URL de tu planilla. Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada.'}
             </p>
             <div className="field">
               <label>URL de tu Google Sheet</label>
@@ -405,9 +419,19 @@ export default function SettingsPage() {
               <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet}>
                 {savingSheet ? 'Guardando…' : 'Guardar URL'}
               </button>
-              <button type="button" className="btn-save" style={{ background: 'var(--border)', color: 'var(--gray)', cursor: 'not-allowed' }} disabled title="Disponible próximamente">
-                Conectar con Google →
-              </button>
+              {googleConnected ? (
+                <button type="button" className="btn-save" style={{ background: '#dcfce7', color: '#166534', cursor: 'default' }} disabled>
+                  ✓ Google conectado
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-save"
+                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
+                >
+                  Conectar con Google →
+                </button>
+              )}
             </div>
           </div>
 

@@ -63,6 +63,9 @@ export default function AppPage() {
   const [planName, setPlanName] = useState<string | undefined>();
   const [empresa, setEmpresa] = useState<string | undefined>();
   const [excelMapping, setExcelMapping] = useState<ExcelColumn[]>(DEFAULT_COLUMNS);
+  const [googleSheetId, setGoogleSheetId] = useState('');
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -92,10 +95,10 @@ export default function AppPage() {
         .single()
         .then(({ data: p }) => {
           if (!p) return;
+          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
           const isBlocked = p.subscription_status === 'blocked';
           const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
           if (isBlocked || trialExpired) { router.replace('/blocked'); return; }
-          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))));
           }
@@ -103,19 +106,18 @@ export default function AppPage() {
             setPlanKey(p.plan);
             setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
           }
-          let em = p.excel_mapping;
-          if (typeof em === 'string') { try { em = JSON.parse(em); } catch { em = null; } }
-          if (Array.isArray(em) && em.length > 0) {
-            setExcelMapping(em as ExcelColumn[]);
+          if (Array.isArray(p.excel_mapping) && p.excel_mapping.length > 0) {
+            setExcelMapping(p.excel_mapping as ExcelColumn[]);
           }
           if (p.empresa) setEmpresa(p.empresa);
+          if (p.google_sheet_id) setGoogleSheetId(p.google_sheet_id as string);
+          if (p.google_access_token) setGoogleConnected(true);
         });
     });
   }, [router]);
 
   useEffect(() => {
     if (!user) return;
-    // Count invoices uploaded this month
     const firstOfMonth = new Date();
     firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
     supabase.from('invoices').select('*', { count: 'exact', head: true })
@@ -180,14 +182,12 @@ export default function AppPage() {
     });
     if (supported.length === 0) return;
 
-    // Check file count limit
     if (supported.length > MAX_FILES) {
       setLimitWarning(`Máximo ${MAX_FILES} archivos a la vez. Se procesarán los primeros ${MAX_FILES}.`);
       setTimeout(() => setLimitWarning(''), 5000);
     }
     const toProcess = supported.slice(0, MAX_FILES);
 
-    // Check monthly plan limit
     const limit = PLAN_LIMITS[planKey];
     if (limit !== null && monthlyUsed >= limit) {
       setLimitWarning(`Alcanzaste el límite de ${limit} facturas este mes para el plan ${planKey.charAt(0).toUpperCase() + planKey.slice(1)}. Mejorá tu plan para continuar.`);
@@ -281,6 +281,31 @@ export default function AppPage() {
     setDownloading(null);
   }
 
+  async function exportToSheets(invoiceList: ExtractedInvoice[]) {
+    if (!user) return;
+    setSheetsStatus('loading');
+    try {
+      const res = await fetch('/api/sheets/append', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
+      });
+      if (res.ok) {
+        setSheetsStatus('ok');
+      } else {
+        const data = await res.json();
+        if (data.error === 'Google account not connected' || data.error === 'No Google Sheet URL configured') {
+          window.location.href = '/settings';
+          return;
+        }
+        setSheetsStatus('error');
+      }
+    } catch {
+      setSheetsStatus('error');
+    }
+    setTimeout(() => setSheetsStatus('idle'), 3000);
+  }
+
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
     const escape = (v: string | number) => {
       const s = String(v ?? '');
@@ -364,7 +389,7 @@ export default function AppPage() {
         .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--dark); line-height: 1.1; }
         .page-sub { font-size: 13px; color: var(--gray); margin-top: 3px; }
-        .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 
         .sistema-chip {
           background: var(--green-light); color: var(--green);
@@ -511,7 +536,6 @@ export default function AppPage() {
           .invoice-card-view { display: block; }
           .section-right { flex-wrap: wrap; }
           .search-input { width: 140px; }
-          .header-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
           .inv-card { border-bottom: 1px solid var(--border); padding: 14px 16px; }
           .inv-card:last-child { border-bottom: none; }
           .inv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -549,17 +573,24 @@ export default function AppPage() {
               </button>
               <button
                 className="btn-export"
-                style={{ background: 'var(--gray)' }}
-                onClick={() => downloadCSV(filteredDone, `ritto-${new Date().toISOString().slice(0,10)}.csv`)}
-                disabled={filteredDone.length === 0}
-                title="Abre en Google Sheets, LibreOffice, Excel y más"
+                style={{
+                  background: sheetsStatus === 'ok' ? '#166534' : sheetsStatus === 'error' ? '#dc2626' : googleConnected && googleSheetId ? '#1a7a59' : 'var(--gray)',
+                }}
+                onClick={() => {
+                  if (!googleConnected || !googleSheetId) { window.location.href = '/settings'; return; }
+                  exportToSheets(filteredDone);
+                }}
+                disabled={filteredDone.length === 0 || sheetsStatus === 'loading'}
+                title={!googleConnected ? 'Conectá tu Google en Configuración' : !googleSheetId ? 'Configurá la URL de tu planilla en Configuración' : 'Exportar a Google Sheets'}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar a Google Sheets</span>
+                <span>
+                  {sheetsStatus === 'loading' ? 'Enviando…' : sheetsStatus === 'ok' ? '¡Enviado!' : sheetsStatus === 'error' ? 'Error' : 'Exportar a Google Sheets'}
+                </span>
               </button>
             </div>
           </div>
@@ -823,7 +854,10 @@ export default function AppPage() {
                       {inv.status === 'done' && (
                         <>
                           <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>Descargar Excel</button>
-                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>Para Google Sheets</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => {
+                            if (!googleConnected || !googleSheetId) { window.location.href = '/settings'; return; }
+                            exportToSheets([inv]);
+                          }}>Para Google Sheets</button>
                         </>
                       )}
                       {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
@@ -844,7 +878,7 @@ export default function AppPage() {
               </>
             )}
           </div>
-          </div>{/* end main-col */}
+          </div>
 
           {/* Right panel */}
           <div className="right-col">
@@ -921,7 +955,7 @@ export default function AppPage() {
             </div>
           </div>
 
-          </div>{/* end main-layout */}
+          </div>
         </div>
       </div>
     </>
