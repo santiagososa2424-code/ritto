@@ -180,10 +180,12 @@ export default function LandingPage() {
           <div className="section-title">Todo lo que necesitás,<br />sin complicaciones</div>
           <div className="features">
             {[
-              { icon: '🔍', title: 'Extracción automática', desc: 'Gemini extrae RUT, IVA, líneas de detalle y totales de cada factura sin intervención manual.' },
-              { icon: '📊', title: 'Excel listo para importar', desc: 'Columnas exactas de GNS Contable. Un clic y pegás directo en tu sistema sin retoques.' },
-              { icon: '⚡', title: 'Hasta 10 a la vez', desc: 'Subí múltiples facturas simultáneamente y se procesan todas en paralelo.' },
-              { icon: '📁', title: 'PDF, imagen y XML', desc: 'Fotos de celular, PDFs escaneados o CFE digitales de DGI — todos funcionan.' },
+              { icon: '⚡', title: 'Listo en segundos', desc: 'Subí la factura y en segundos tenés todos los datos extraídos: proveedor, RUT, fecha, IVA y totales. Sin tipear nada.' },
+              { icon: '📊', title: 'Excel y CSV listos para importar', desc: 'Descargá el archivo con un clic e importalo directo a GNS, ZetaSoftware o Siigo. Columnas exactas, sin retoques.' },
+              { icon: '👥', title: 'Trabajo en equipo', desc: 'En los planes Pyme y Empresa, todo el equipo comparte el mismo historial de facturas. Invitás usuarios desde Configuración.' },
+              { icon: '📁', title: 'Foto, PDF o XML', desc: 'Sacá una foto con el celular, subí el PDF o el XML digital de DGI — los tres funcionan. Hasta 10 facturas a la vez.' },
+              { icon: '🔒', title: 'Tus datos seguros', desc: 'Los archivos se eliminan del servidor después de procesarse. Los datos quedan guardados solo en tu cuenta, protegidos con cifrado.' },
+              { icon: '🇺🇾', title: 'Hecho para Uruguay', desc: 'Entiende el IVA básico (22%), mínimo (10%) y exonerado. Compatible con CFE de DGI y todos los formatos de facturas locales.' },
             ].map((f) => (
               <div className="feat-card" key={f.title}>
                 <div className="feat-icon">{f.icon}</div>
@@ -205,9 +207,10 @@ export default function LandingPage() {
               <div className="price-amount">$490</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>100 facturas por mes</li>
+                <li><span className="check">✓</span>1 usuario · 1 empresa</li>
+                <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
+                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
                 <li><span className="check">✓</span>Soporte por email</li>
               </ul>
               <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -218,9 +221,11 @@ export default function LandingPage() {
               <div className="price-amount">$1.990</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>500 facturas por mes</li>
+                <li><span className="check">✓</span>Hasta 5 usuarios · 1 empresa</li>
+                <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
+                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
+                <li><span className="check">✓</span>Historial compartido del equipo</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
               <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -230,10 +235,12 @@ export default function LandingPage() {
               <div className="price-amount">$4.990</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
+                <li><span className="check">✓</span>Hasta 20 usuarios · 1 empresa</li>
                 <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel</li>
-                <li><span className="check">✓</span>Soporte dedicado</li>
+                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
+                <li><span className="check">✓</span>Historial compartido del equipo</li>
+                <li><span className="check">✓</span>Soporte prioritario</li>
                 <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
               <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -248,10 +255,12 @@ export default function LandingPage() {
           <div className="section-title" style={{ marginBottom: 32 }}>FAQ</div>
           <div className="faq">
             {[
-              { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos imágenes (foto de celular o escáner), PDFs y XMLs de CFE digital emitidos por DGI.' },
-              { q: '¿Con qué sistemas contables es compatible?', a: 'Compatible con GNS Contable, ZetaSoftware y Siigo. El Excel se exporta con las columnas exactas de cada sistema.' },
-              { q: '¿Qué pasa cuando se vence el trial?', a: 'Tu cuenta queda pausada. Podés activar tu plan en cualquier momento desde la sección "Mi Plan" y retomás donde estabas con todo tu historial.' },
-              { q: '¿Mis facturas están seguras?', a: 'Sí. Los archivos se procesan y se eliminan del servidor inmediatamente. Los datos extraídos se guardan en tu cuenta protegida con Supabase (infraestructura de AWS).' },
+              { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos fotos de celular, PDFs y archivos XML de CFE digital de DGI. Si tenés la factura en papel, sacale una foto y listo.' },
+              { q: '¿Con qué sistemas contables es compatible?', a: 'Compatible con GNS Contable, ZetaSoftware y Siigo. El archivo que descargás ya tiene las columnas exactas que necesita cada sistema — solo importarlo.' },
+              { q: '¿Cuántos usuarios puede usar una misma cuenta?', a: 'En el plan Pro es 1 usuario. En Pyme hasta 5 personas comparten la misma empresa y ven las mismas facturas. En Empresa hasta 20 usuarios.' },
+              { q: '¿Qué pasa cuando se vence la prueba gratuita?', a: 'Tu cuenta queda pausada pero no perdés nada. Activás tu plan desde "Mi Plan" y retomás donde estabas con todo el historial.' },
+              { q: '¿Mis facturas están seguras?', a: 'Sí. Los archivos se eliminan del servidor inmediatamente después de procesar. Los datos quedan guardados solo en tu cuenta, cifrados y protegidos.' },
+              { q: '¿Necesito saber de contabilidad para usarlo?', a: 'No. Subís la factura, Ritto extrae los datos y descargás el archivo. Si tenés dudas sobre qué hacer con el archivo, tu contador te puede guiar en dos minutos.' },
             ].map((f) => (
               <div className="faq-item" key={f.q}>
                 <div className="faq-q">{f.q}</div>

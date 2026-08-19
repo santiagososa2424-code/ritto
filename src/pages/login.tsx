@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'signup';
 type Plan = 'pro' | 'pyme' | 'empresa';
-type Sistema = 'gns' | 'zeta' | 'siigo';
 
 const PLANS: { id: Plan; name: string; price: string; desc: string; features: string[] }[] = [
   {
@@ -30,12 +29,6 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
   },
 ];
 
-const SISTEMAS: { id: Sistema; name: string; desc: string }[] = [
-  { id: 'gns', name: 'GNS Contable', desc: 'Gestión de Importaciones' },
-  { id: 'zeta', name: 'ZetaSoftware', desc: 'Importación de comprobantes XLS' },
-  { id: 'siigo', name: 'Siigo', desc: 'Importación de comprobantes contables' },
-];
-
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('login');
@@ -47,7 +40,6 @@ export default function LoginPage() {
   const [rut, setRut] = useState('');
   const [telefono, setTelefono] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<Plan>('pyme');
-  const [selectedSistema, setSelectedSistema] = useState<Sistema>('gns');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -80,7 +72,6 @@ export default function LoginPage() {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-      // Check if there's a pending org invite for this email
       const { data: invite } = await supabase
         .from('org_invites')
         .select('id, organization_id')
@@ -95,9 +86,9 @@ export default function LoginPage() {
         rut: rut || null,
         telefono: telefono || null,
         plan: selectedPlan,
-        sistema_contable: selectedSistema,
         subscription_status: 'trial',
         trial_ends_at: trialEndsAt.toISOString(),
+        onboarding_complete: false,
         ...(invite ? { organization_id: invite.organization_id, role: 'member' } : {}),
       });
 
@@ -108,10 +99,10 @@ export default function LoginPage() {
       fetch('/api/send-welcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, nombre, plan: selectedPlan, sistema: selectedSistema }),
+        body: JSON.stringify({ email, nombre, plan: selectedPlan }),
       }).catch(() => {});
 
-      router.push('/app');
+      router.push('/onboarding');
     }
     setLoading(false);
   }
@@ -179,16 +170,6 @@ export default function LoginPage() {
         .plan-features { list-style: none; }
         .plan-features li { font-size: 13px; color: var(--gray); padding: 3px 0; display: flex; gap: 6px; }
         .plan-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-        .sistema-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-        .sistema-card {
-          background: var(--white); border: 2px solid var(--border);
-          border-radius: 12px; padding: 18px 14px; cursor: pointer;
-          transition: border-color 0.15s, background 0.15s; text-align: center;
-        }
-        .sistema-card.selected { border-color: var(--green); background: var(--green-light); }
-        .s-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-        .s-desc { font-size: 11px; color: var(--gray); line-height: 1.3; }
-        .sistema-card.selected .s-desc { color: var(--green); }
         .trial-badge {
           background: var(--green-light); color: var(--green);
           border-radius: 8px; padding: 10px 14px; font-size: 13px;
@@ -199,7 +180,7 @@ export default function LoginPage() {
         .btn-start { flex: 1; background: var(--green); color: #fff; border: none; padding: 13px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; }
         .btn-start:disabled { opacity: 0.6; cursor: not-allowed; }
         @media (max-width: 680px) {
-          .plan-grid, .sistema-grid { grid-template-columns: 1fr; }
+          .plan-grid { grid-template-columns: 1fr; }
           .card { padding: 24px 18px; }
           .field-row { grid-template-columns: 1fr; gap: 0; }
         }
@@ -321,22 +302,8 @@ export default function LoginPage() {
               ))}
             </div>
 
-            <div className="section-label">¿Qué sistema contable usás?</div>
-            <div className="sistema-grid">
-              {SISTEMAS.map((s) => (
-                <div
-                  key={s.id}
-                  className={`sistema-card${selectedSistema === s.id ? ' selected' : ''}`}
-                  onClick={() => setSelectedSistema(s.id)}
-                >
-                  <div className="s-name">{s.name}</div>
-                  <div className="s-desc">{s.desc}</div>
-                </div>
-              ))}
-            </div>
-
             <div className="trial-badge">
-              Plan <strong>{PLANS.find(p => p.id === selectedPlan)?.name}</strong> · Excel listo para <strong>{SISTEMAS.find(s => s.id === selectedSistema)?.name}</strong> · 14 días gratis
+              Plan <strong>{PLANS.find(p => p.id === selectedPlan)?.name}</strong> · 14 días gratis · Configurás tu planilla en el siguiente paso
             </div>
             <div className="step2-actions">
               <button className="btn-back" onClick={() => setStep(1)}>← Atrás</button>
