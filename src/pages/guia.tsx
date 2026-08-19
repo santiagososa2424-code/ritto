@@ -58,10 +58,10 @@ export default function GuiaPage() {
 
         .example-box {
           background: #f8fffe; border: 1.5px solid var(--green-light);
-          border-radius: 10px; padding: 14px 16px; margin-top: 12px; overflow-x: auto;
+          border-radius: 10px; padding: 14px 16px; margin-top: 12px;
         }
         .example-label { font-size: 11px; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-        .example-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
+        .example-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .example-table th { background: var(--green); color: #fff; padding: 6px 10px; text-align: left; font-weight: 600; font-size: 12px; }
         .example-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--dark); }
         .example-table tr:last-child td { border-bottom: none; }
@@ -117,7 +117,7 @@ export default function GuiaPage() {
             ))}
           </div>
 
-          {/* EMPEZAR */}
+          {/* ── EMPEZAR ── */}
           <div className={`section${active === 'empezar' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">📄</div>
@@ -150,7 +150,7 @@ export default function GuiaPage() {
                   <div className="step-num">3</div>
                   <div className="step-content">
                     <div className="step-title">Exportá</div>
-                    <div className="step-desc">Cuando tenés las facturas que querés, tocá “Exportar a Excel” o “Exportar a Google Sheets” arriba a la derecha.</div>
+                    <div className="step-desc">Cuando tenés las facturas que querés, tocá "Exportar a Excel" o "Exportar a Google Sheets" arriba a la derecha.</div>
                   </div>
                 </div>
               </div>
@@ -160,7 +160,7 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* EXCEL */}
+          {/* ── EXCEL ── */}
           <div className={`section${active === 'excel' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">📊</div>
@@ -172,14 +172,14 @@ export default function GuiaPage() {
                 <div className="step">
                   <div className="step-num">1</div>
                   <div className="step-content">
-                    <div className="step-title">Selecioná las facturas</div>
+                    <div className="step-title">Seleccioná las facturas</div>
                     <div className="step-desc">Podés filtrar por mes si querés exportar solo un período.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">2</div>
                   <div className="step-content">
-                    <div className="step-title">Tocá “Exportar a Excel”</div>
+                    <div className="step-title">Tocá "Exportar a Excel"</div>
                     <div className="step-desc">Se descarga un archivo .xlsx en tu dispositivo.</div>
                   </div>
                 </div>
@@ -194,17 +194,17 @@ export default function GuiaPage() {
                   <div className="step-num">4</div>
                   <div className="step-content">
                     <div className="step-title">Copiá las filas de Ritto</div>
-                    <div className="step-desc">Selecioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
+                    <div className="step-desc">Seleccioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
                   </div>
                 </div>
               </div>
               <div className="highlight">
-                ✅ Si configuraste bien las columnas (ver sección “Configurar columnas”), los datos van a caer exactamente en las columnas correctas de tu planilla.
+                ✅ Si configuraste bien las columnas (ver sección "Configurar columnas"), los datos van a caer exactamente en las columnas correctas de tu planilla.
               </div>
             </div>
           </div>
 
-          {/* SHEETS */}
+          {/* ── SHEETS ── */}
           <div className={`section${active === 'sheets' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🟢</div>
@@ -217,21 +217,21 @@ export default function GuiaPage() {
                   <div className="step-num">1</div>
                   <div className="step-content">
                     <div className="step-title">Conectás tu cuenta de Google</div>
-                    <div className="step-desc">En Configuración, tocás “Conectar con Google” y le das permiso a Ritto para editar tu planilla.</div>
+                    <div className="step-desc">En Configuración, tocás "Conectar con Google" y le das permiso a Ritto para editar tu planilla.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">2</div>
                   <div className="step-content">
                     <div className="step-title">Pegás el link de tu planilla</div>
-                    <div className="step-desc">Abrís tu Google Sheets, copiás la URL de arriba y la pegás en el campo “URL de tu Google Sheet” en Configuración.</div>
+                    <div className="step-desc">Abrís tu Google Sheets, copiás la URL de arriba y la pegás en el campo "URL de tu Google Sheet" en Configuración.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
                     <div className="step-title">Exportás con un clic</div>
-                    <div className="step-desc">Cada vez que procesás facturas, tocás “Exportar a Google Sheets” y las filas se agregan automáticamente al final de tu hoja. Listo.</div>
+                    <div className="step-desc">Cada vez que procesás facturas, tocás "Exportar a Google Sheets" y las filas se agregan automáticamente al final de tu hoja. Listo.</div>
                   </div>
                 </div>
               </div>
@@ -244,13 +244,13 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* COLUMNAS */}
+          {/* ── COLUMNAS ── */}
           <div className={`section${active === 'columnas' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🗂️</div>
               <div className="card-title">¿Para qué sirve configurar las columnas?</div>
               <div className="card-text">
-                Tu planilla de Excel probablemente tiene columnas con nombres específicos — “Razón Social”, “Importe Total”, “Fecha de compra”, etc. Si Ritto exporta con nombres distintos, tenés que mover todo a mano.<br /><br />
+                Tu planilla de Excel probablemente tiene columnas con nombres específicos — "Razón Social", "Importe Total", "Fecha de compra", etc. Si Ritto exporta con nombres distintos, tenés que mover todo a mano.<br /><br />
                 Configurando las columnas, Ritto exporta con exactamente los mismos nombres que tiene tu planilla. Así pegás los datos y caen solos en el lugar correcto.
               </div>
             </div>
@@ -260,28 +260,30 @@ export default function GuiaPage() {
               <div className="card-text">Supongamos que tu planilla de Excel tiene estas columnas:</div>
               <div className="example-box" style={{ marginTop: 12 }}>
                 <div className="example-label">Tu planilla de Excel</div>
-                <table className="example-table">
-                  <thead>
-                    <tr>
-                      <th>Razón Social</th>
-                      <th>RUT</th>
-                      <th>Fecha de compra</th>
-                      <th>Importe neto</th>
-                      <th>IVA</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>Supermercado SA</td>
-                      <td>21.234.567-8</td>
-                      <td>15/07/2025</td>
-                      <td>$1.200</td>
-                      <td>$264</td>
-                      <td>$1.464</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="example-table">
+                    <thead>
+                      <tr>
+                        <th>Razón Social</th>
+                        <th>RUT</th>
+                        <th>Fecha de compra</th>
+                        <th>Importe neto</th>
+                        <th>IVA</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Supermercado SA</td>
+                        <td>21.234.567-8</td>
+                        <td>15/07/2025</td>
+                        <td>$1.200</td>
+                        <td>$264</td>
+                        <td>$1.464</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="steps" style={{ marginTop: 20 }}>
@@ -295,15 +297,15 @@ export default function GuiaPage() {
                 <div className="step">
                   <div className="step-num">2</div>
                   <div className="step-content">
-                    <div className="step-title">En “Nombre en tu planilla” escribís el nombre exacto</div>
+                    <div className="step-title">En "Nombre en tu planilla" escribís el nombre exacto</div>
                     <div className="step-desc">Tal cual aparece en tu Excel. Respetando mayúsculas y acentos.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
-                    <div className="step-title">En “Dato de Ritto” elegís qué información va ahí</div>
-                    <div className="step-desc">Por ejemplo: “Razón Social” → Proveedor · “Importe neto” → Neto (sin IVA) · “Total” → Total</div>
+                    <div className="step-title">En "Dato de Ritto" elegís qué información va ahí</div>
+                    <div className="step-desc">Por ejemplo: "Razón Social" → Proveedor · "Importe neto" → Neto (sin IVA) · "Total" → Total</div>
                   </div>
                 </div>
                 <div className="step">
@@ -321,7 +323,7 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* TIPS */}
+          {/* ── TIPS ── */}
           <div className={`section${active === 'tips' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🚀</div>
