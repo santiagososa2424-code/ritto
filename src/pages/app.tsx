@@ -92,6 +92,7 @@ export default function AppPage() {
         .single()
         .then(({ data: p }) => {
           if (!p) return;
+          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
           const isBlocked = p.subscription_status === 'blocked';
           const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
           if (isBlocked || trialExpired) { router.replace('/blocked'); return; }
@@ -112,7 +113,6 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!user) return;
-    // Count invoices uploaded this month
     const firstOfMonth = new Date();
     firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
     supabase.from('invoices').select('*', { count: 'exact', head: true })
@@ -177,14 +177,12 @@ export default function AppPage() {
     });
     if (supported.length === 0) return;
 
-    // Check file count limit
     if (supported.length > MAX_FILES) {
       setLimitWarning(`Máximo ${MAX_FILES} archivos a la vez. Se procesarán los primeros ${MAX_FILES}.`);
       setTimeout(() => setLimitWarning(''), 5000);
     }
     const toProcess = supported.slice(0, MAX_FILES);
 
-    // Check monthly plan limit
     const limit = PLAN_LIMITS[planKey];
     if (limit !== null && monthlyUsed >= limit) {
       setLimitWarning(`Alcanzaste el límite de ${limit} facturas este mes para el plan ${planKey.charAt(0).toUpperCase() + planKey.slice(1)}. Mejorá tu plan para continuar.`);
@@ -361,7 +359,7 @@ export default function AppPage() {
         .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--dark); line-height: 1.1; }
         .page-sub { font-size: 13px; color: var(--gray); margin-top: 3px; }
-        .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 
         .sistema-chip {
           background: var(--green-light); color: var(--green);
@@ -508,7 +506,6 @@ export default function AppPage() {
           .invoice-card-view { display: block; }
           .section-right { flex-wrap: wrap; }
           .search-input { width: 140px; }
-          .header-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
           .inv-card { border-bottom: 1px solid var(--border); padding: 14px 16px; }
           .inv-card:last-child { border-bottom: none; }
           .inv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -518,7 +515,7 @@ export default function AppPage() {
           .inv-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
         }
         @media (max-width: 480px) {
-          .btn-export span { display: none; }
+          .btn-export { font-size: 12px; padding: 8px 10px; }
         }
       `}</style>
 
@@ -542,7 +539,7 @@ export default function AppPage() {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar XLS</span>
+                <span>Exportar a Excel</span>
               </button>
               <button
                 className="btn-export"
@@ -556,7 +553,7 @@ export default function AppPage() {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar CSV</span>
+                <span>Exportar a Google Sheets</span>
               </button>
             </div>
           </div>
@@ -819,8 +816,8 @@ export default function AppPage() {
                     <div className="inv-card-actions">
                       {inv.status === 'done' && (
                         <>
-                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>XLS</button>
-                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>CSV</button>
+                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>Descargar Excel</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>Para Google Sheets</button>
                         </>
                       )}
                       {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
@@ -841,7 +838,7 @@ export default function AppPage() {
               </>
             )}
           </div>
-          </div>{/* end main-col */}
+          </div>
 
           {/* Right panel */}
           <div className="right-col">
@@ -918,7 +915,7 @@ export default function AppPage() {
             </div>
           </div>
 
-          </div>{/* end main-layout */}
+          </div>
         </div>
       </div>
     </>
