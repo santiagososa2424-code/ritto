@@ -3,14 +3,8 @@ import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
-
-type Sistema = 'gns' | 'zeta' | 'siigo';
-
-const SISTEMAS: { id: Sistema; name: string; desc: string }[] = [
-  { id: 'gns', name: 'GNS Contable', desc: 'Gestión de Importaciones' },
-  { id: 'zeta', name: 'ZetaSoftware', desc: 'Importación XLS' },
-  { id: 'siigo', name: 'Siigo', desc: 'Comprobantes contables' },
-];
+import type { ExcelColumn } from '../lib/types';
+import { RITTO_FIELDS, DEFAULT_COLUMNS } from '../lib/types';
 
 const PLAN_LIMITS: Record<string, number> = { pro: 1, pyme: 5, empresa: 20 };
 
@@ -19,7 +13,6 @@ interface Profile {
   empresa: string;
   rut: string;
   telefono: string;
-  sistema_contable: Sistema;
   plan?: string;
   trial_ends_at?: string | null;
   subscription_status?: string;
@@ -42,7 +35,11 @@ interface Invite {
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile>({ nombre: '', empresa: '', rut: '', telefono: '', sistema_contable: 'gns' });
+  const [profile, setProfile] = useState<Profile>({ nombre: '', empresa: '', rut: '', telefono: '' });
+  const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>(DEFAULT_COLUMNS.map((c) => ({ ...c })));
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
+  const [savingSheet, setSavingSheet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
@@ -50,12 +47,10 @@ export default function SettingsPage() {
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
 
-  // Password change
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
 
-  // Team
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -73,20 +68,24 @@ export default function SettingsPage() {
             empresa: p.empresa ?? '',
             rut: p.rut ?? '',
             telefono: p.telefono ?? '',
-            sistema_contable: (p.sistema_contable as Sistema) ?? 'gns',
             plan: p.plan,
             trial_ends_at: p.trial_ends_at,
             subscription_status: p.subscription_status,
             organization_id: p.organization_id,
             role: p.role,
           });
+          let em = p.excel_mapping;
+          if (typeof em === 'string') { try { em = JSON.parse(em); } catch { em = null; } }
+          if (Array.isArray(em) && em.length > 0) {
+            setExcelColumns(em as ExcelColumn[]);
+          }
+          if (p.google_sheet_id) setGoogleSheetUrl(p.google_sheet_id);
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             const days = Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
             setTrialDaysLeft(days);
           }
           if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
 
-          // Load team if org owner on multi-user plan
           if (p.organization_id && p.role === 'owner' && p.plan && p.plan !== 'pro') {
             loadTeam(p.organization_id, data.user.id);
           }
@@ -123,7 +122,6 @@ export default function SettingsPage() {
       empresa: profile.empresa,
       rut: profile.rut || null,
       telefono: profile.telefono || null,
-      sistema_contable: profile.sistema_contable,
     });
     if (err) setError('Error al guardar. Intentá de nuevo.');
     else { setSuccess('Cambios guardados'); setTimeout(() => setSuccess(''), 3000); }
@@ -148,7 +146,6 @@ export default function SettingsPage() {
     const email = inviteEmail.trim().toLowerCase();
     if (!email) return;
 
-    // Check member limit
     const limit = PLAN_LIMITS[profile.plan ?? 'pro'];
     if (members.length + 1 >= limit) {
       setError(`El plan ${planName} permite máximo ${limit} usuarios. Mejorá el plan para agregar más.`);
@@ -179,6 +176,39 @@ export default function SettingsPage() {
     await supabase.from('profiles').update({ organization_id: null, role: 'owner' }).eq('id', memberId);
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
     setRemovingId(null);
+  }
+
+  function addColumn() {
+    setExcelColumns((prev) => [...prev, { id: crypto.randomUUID(), label: '', field: 'proveedor' }]);
+  }
+
+  function removeColumn(id: string) {
+    setExcelColumns((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  function updateColumn(id: string, key: 'label' | 'field', value: string) {
+    setExcelColumns((prev) => prev.map((c) => c.id === id ? { ...c, [key]: value } : c));
+  }
+
+  async function saveMapping() {
+    if (!user) return;
+    setSavingMapping(true);
+    setError('');
+    const { error: err } = await supabase.from('profiles')
+      .upsert({ id: user.id, excel_mapping: excelColumns }, { onConflict: 'id', ignoreDuplicates: false });
+    if (err) setError(`Error al guardar la plantilla: ${err.message}`);
+    else { setSuccess('Plantilla guardada'); setTimeout(() => setSuccess(''), 3000); }
+    setSavingMapping(false);
+  }
+
+  async function saveSheetUrl() {
+    if (!user) return;
+    setSavingSheet(true);
+    setError('');
+    const { error: err } = await supabase.from('profiles').update({ google_sheet_id: googleSheetUrl || null }).eq('id', user.id);
+    if (err) setError('Error al guardar.');
+    else { setSuccess('URL guardada'); setTimeout(() => setSuccess(''), 3000); }
+    setSavingSheet(false);
   }
 
   async function cancelInvite(inviteId: string) {
@@ -224,12 +254,18 @@ export default function SettingsPage() {
         .success-bar { background: var(--green-light); color: var(--green); border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
         .error-bar { background: var(--red-light); color: var(--red); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
         .form-footer { display: flex; justify-content: flex-end; margin-top: 4px; }
-        .sistema-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .sistema-opt { border: 2px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--bg); }
-        .sistema-opt.active { border-color: var(--green); background: var(--green-light); }
-        .sistema-opt .so-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-        .sistema-opt .so-desc { font-size: 11px; color: var(--gray); }
-        .sistema-opt.active .so-desc { color: var(--green); }
+        .col-row { display: grid; grid-template-columns: 22px 1fr 1fr 28px; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .col-num { font-size: 12px; color: var(--gray); text-align: right; font-weight: 500; padding-top: 2px; }
+        .col-label-input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; outline: none; width: 100%; }
+        .col-label-input:focus { border-color: var(--green); }
+        .col-field-select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; background: var(--white); outline: none; cursor: pointer; width: 100%; }
+        .col-remove { background: none; border: none; color: var(--gray); font-size: 18px; cursor: pointer; padding: 2px; border-radius: 4px; line-height: 1; }
+        .col-remove:hover { color: var(--red); }
+        .col-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .btn-add-col { background: none; border: 1.5px dashed var(--border); color: var(--gray); padding: 7px 14px; border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; }
+        .btn-add-col:hover { border-color: var(--green); color: var(--green); }
+        .btn-reset-col { background: none; border: 1px solid var(--border); color: var(--gray); padding: 7px 14px; border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; }
+        .col-header { display: grid; grid-template-columns: 22px 1fr 1fr 28px; gap: 8px; margin-bottom: 6px; }
         .member-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--bg); gap: 8px; }
         .member-row:last-child { border-bottom: none; }
         .member-name { font-size: 13px; font-weight: 500; }
@@ -291,31 +327,89 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-title">Sistema contable</div>
-              <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 14 }}>
-                El Excel se exportará con las columnas exactas de tu sistema.
-              </p>
-              <div className="sistema-grid">
-                {SISTEMAS.map((s) => (
-                  <div
-                    key={s.id}
-                    className={`sistema-opt${profile.sistema_contable === s.id ? ' active' : ''}`}
-                    onClick={() => setProfile({ ...profile, sistema_contable: s.id })}
-                  >
-                    <div className="so-name">{s.name}</div>
-                    <div className="so-desc">{s.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="form-footer" style={{ marginBottom: 16 }}>
               <button className="btn-save" type="submit" disabled={saving}>
                 {saving ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </form>
+
+          {/* Excel mapping */}
+          <div className="card">
+            <div className="card-title">Plantilla de Excel</div>
+            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
+              Definí las columnas del archivo que descargás. Podés usar exactamente los mismos nombres que tiene tu planilla — así los datos caen en el lugar correcto.
+            </p>
+
+            <div className="col-header">
+              <span />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Nombre en tu planilla</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dato de Ritto</span>
+              <span />
+            </div>
+
+            {excelColumns.map((col, i) => (
+              <div key={col.id} className="col-row">
+                <span className="col-num">{i + 1}</span>
+                <input
+                  className="col-label-input"
+                  type="text"
+                  value={col.label}
+                  placeholder="Nombre de columna"
+                  onChange={(e) => updateColumn(col.id, 'label', e.target.value)}
+                />
+                <select
+                  className="col-field-select"
+                  value={col.field}
+                  onChange={(e) => updateColumn(col.id, 'field', e.target.value)}
+                >
+                  {RITTO_FIELDS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+                <button className="col-remove" type="button" onClick={() => removeColumn(col.id)}>×</button>
+              </div>
+            ))}
+
+            <div className="col-actions">
+              <button type="button" className="btn-add-col" onClick={addColumn}>+ Agregar columna</button>
+              <button type="button" className="btn-reset-col" onClick={() => setExcelColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })))}>Restaurar por defecto</button>
+            </div>
+
+            <div className="form-footer" style={{ marginTop: 16 }}>
+              <button type="button" className="btn-save" onClick={saveMapping} disabled={savingMapping}>
+                {savingMapping ? 'Guardando…' : 'Guardar plantilla'}
+              </button>
+            </div>
+          </div>
+
+          {/* Google Sheets */}
+          <div className="card">
+            <div className="card-title">
+              <span>Google Sheets</span>
+              <span style={{ background: '#f3e8ff', color: '#6b21a8', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Próximamente</span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
+              Pegá la URL de tu Google Sheet y Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada. La conexión con tu cuenta de Google la configuramos en los próximos días.
+            </p>
+            <div className="field">
+              <label>URL de tu Google Sheet</label>
+              <input
+                type="text"
+                value={googleSheetUrl}
+                onChange={(e) => setGoogleSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet}>
+                {savingSheet ? 'Guardando…' : 'Guardar URL'}
+              </button>
+              <button type="button" className="btn-save" style={{ background: 'var(--border)', color: 'var(--gray)', cursor: 'not-allowed' }} disabled title="Disponible próximamente">
+                Conectar con Google →
+              </button>
+            </div>
+          </div>
 
           {/* Password */}
           <form onSubmit={changePassword}>
@@ -339,7 +433,7 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Team management — only for multi-user plan owners */}
+          {/* Team management */}
           {isMultiUserPlan && isOwner && (
             <div className="card">
               <div className="card-title">
@@ -352,7 +446,6 @@ export default function SettingsPage() {
                 {members.length} miembro{members.length !== 1 ? 's' : ''} + vos · {invites.length} invitación{invites.length !== 1 ? 'es' : ''} pendiente{invites.length !== 1 ? 's' : ''}
               </p>
 
-              {/* Members */}
               {members.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   {members.map((m) => (
@@ -372,7 +465,6 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Pending invites */}
               {invites.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   {invites.map((inv) => (
@@ -387,8 +479,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Invite form */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: members.length + invites.length > 0 ? 0 : 0 }}>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                 <label style={{ marginBottom: 8, display: 'block' }}>Invitar por email</label>
                 <form onSubmit={sendInvite}>
                   <div className="invite-row">

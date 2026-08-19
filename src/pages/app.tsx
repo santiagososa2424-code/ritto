@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { ExtractedInvoice, InvoiceItem, InvoiceSource, SistemaContable } from '../lib/types';
+import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '../lib/types';
+import { DEFAULT_COLUMNS } from '../lib/types';
 import Sidebar from '../components/Sidebar';
 
 function sourceLabel(s: InvoiceSource) {
@@ -51,11 +52,6 @@ function getMonthOptions(invoices: ExtractedInvoice[]): { value: string; label: 
     });
 }
 
-const SISTEMA_NAMES: Record<string, string> = {
-  gns: 'GNS Contable',
-  zeta: 'ZetaSoftware',
-  siigo: 'Siigo',
-};
 
 export default function AppPage() {
   const router = useRouter();
@@ -66,7 +62,7 @@ export default function AppPage() {
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
   const [empresa, setEmpresa] = useState<string | undefined>();
-  const [sistema, setSistema] = useState<SistemaContable>('gns');
+  const [excelMapping, setExcelMapping] = useState<ExcelColumn[]>(DEFAULT_COLUMNS);
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -99,6 +95,7 @@ export default function AppPage() {
           const isBlocked = p.subscription_status === 'blocked';
           const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
           if (isBlocked || trialExpired) { router.replace('/blocked'); return; }
+          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))));
           }
@@ -106,7 +103,11 @@ export default function AppPage() {
             setPlanKey(p.plan);
             setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
           }
-          if (p.sistema_contable) setSistema(p.sistema_contable as SistemaContable);
+          let em = p.excel_mapping;
+          if (typeof em === 'string') { try { em = JSON.parse(em); } catch { em = null; } }
+          if (Array.isArray(em) && em.length > 0) {
+            setExcelMapping(em as ExcelColumn[]);
+          }
           if (p.empresa) setEmpresa(p.empresa);
         });
     });
@@ -268,7 +269,7 @@ export default function AppPage() {
     const res = await fetch('/api/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoices: invoiceList, sistema }),
+      body: JSON.stringify({ invoices: invoiceList, mapping: excelMapping }),
     });
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -281,30 +282,20 @@ export default function AppPage() {
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
-    const headers = ['Proveedor','Tipo','Fecha','Número','Código','Descripción','Cantidad','Moneda','Precio Unit.','Descuento','Sub Total','Impuestos','Total'];
     const escape = (v: string | number) => {
       const s = String(v ?? '');
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
     };
+    const headers = excelMapping.map((c) => c.label);
     const rows: string[] = [headers.join(',')];
     for (const inv of invoiceList.filter((i) => i.status === 'done')) {
-      const items = inv.items && inv.items.length > 0 ? inv.items : [{
-        codigo: '', descripcion: inv.tipoDocumento ?? 'Factura', cantidad: 1,
-        precioUnitario: inv.neto ?? inv.total ?? 0, descuento: 0,
-        impuesto: inv.ivaTotal && inv.neto && inv.neto > 0 ? Math.round((inv.ivaTotal / inv.neto) * 100) : 22,
-        subtotal: inv.neto ?? 0, totalItem: inv.total ?? 0,
-      }];
-      for (const item of items) {
-        const imp = (item.subtotal ?? 0) * ((item.impuesto ?? 0) / 100);
-        rows.push([
-          inv.proveedor ?? '', inv.tipoDocumento ?? '', inv.fecha ?? '', inv.nroDocumento ?? '',
-          item.codigo ?? '', item.descripcion ?? '', item.cantidad ?? 1, inv.moneda ?? 'UYU',
-          item.precioUnitario ?? 0, item.descuento ?? 0, item.subtotal ?? 0, imp,
-          (item.subtotal ?? 0) + imp,
-        ].map(escape).join(','));
-      }
+      const row = excelMapping.map((col) => {
+        const v = (inv as unknown as Record<string, unknown>)[col.field];
+        return escape(v == null ? '' : typeof v === 'number' ? v : String(v));
+      });
+      rows.push(row.join(','));
     }
-    const bom = '\uFEFF';
+    const bom = '﻿';
     const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -530,7 +521,7 @@ export default function AppPage() {
           .inv-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
         }
         @media (max-width: 480px) {
-          .btn-export span { display: none; }
+          .btn-export { font-size: 12px; padding: 8px 10px; }
         }
       `}</style>
 
@@ -544,13 +535,6 @@ export default function AppPage() {
               <p className="page-sub">Procesá y exportá tus comprobantes fiscales</p>
             </div>
             <div className="header-right">
-              <div className="sistema-chip" title={`Sistema: ${SISTEMA_NAMES[sistema]}`}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M3 9h18M9 21V9"/>
-                </svg>
-                <span>{SISTEMA_NAMES[sistema]}</span>
-              </div>
               <button
                 className="btn-export"
                 onClick={() => downloadExcel(filteredDone, 'filtered')}
@@ -561,7 +545,7 @@ export default function AppPage() {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar XLS</span>
+                <span>Exportar a Excel</span>
               </button>
               <button
                 className="btn-export"
@@ -575,7 +559,7 @@ export default function AppPage() {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar CSV</span>
+                <span>Exportar a Google Sheets</span>
               </button>
             </div>
           </div>
@@ -683,9 +667,20 @@ export default function AppPage() {
               </div>
             ) : filteredInvoices.length === 0 ? (
               <div className="empty-state">
-                {filterMonth !== 'all'
-                  ? 'No hay facturas en ese período.'
-                  : 'Todavía no subiste ninguna factura.\nSoportamos imágenes, PDFs y XMLs de CFE.'}
+                {filterMonth !== 'all' ? (
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Sin facturas en ese período</div>
+                    <div>Probá seleccionando otro mes o "Todas las fechas".</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📂</div>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
+                    <div>Usá el área de arriba para subir XMLs, PDFs o fotos.</div>
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#bbb' }}>Los XML de DGI son instantáneos y 100% exactos.</div>
+                  </>
+                )}
               </div>
             ) : (
               <>
@@ -756,7 +751,7 @@ export default function AppPage() {
                               className="btn-dl"
                               disabled={downloading === inv.id}
                               onClick={() => downloadExcel([inv], inv.id)}
-                              title={`Descargar para ${SISTEMA_NAMES[sistema]}`}
+                              title="Descargar Excel"
                             >
                               {downloading === inv.id
                                 ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
@@ -827,8 +822,8 @@ export default function AppPage() {
                     <div className="inv-card-actions">
                       {inv.status === 'done' && (
                         <>
-                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>XLS</button>
-                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>CSV</button>
+                          <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>Descargar Excel</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => downloadCSV([inv], `${inv.proveedor ?? 'factura'}.csv`)}>Para Google Sheets</button>
                         </>
                       )}
                       {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
@@ -885,8 +880,8 @@ export default function AppPage() {
               </div>
               <div className="news-item">
                 <span className="news-badge badge-new">Nuevo</span>
-                <div className="news-text">Soporte para GNS Contable, ZetaSoftware y Siigo</div>
-                <div className="news-date">Abr 2025</div>
+                <div className="news-text">Plantilla de columnas personalizable — exportá con los nombres exactos de tu planilla</div>
+                <div className="news-date">Ago 2025</div>
               </div>
               <div className="news-item">
                 <span className="news-badge badge-soon">Próximamente</span>
@@ -921,7 +916,7 @@ export default function AppPage() {
                 <div className="tip-dot">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div className="tip-text">Cambiá tu <strong>sistema contable</strong> en Configuración en cualquier momento</div>
+                <div className="tip-text">Configurá tu <strong>plantilla de Excel</strong> en Configuración para que las columnas coincidan con tu planilla</div>
               </div>
             </div>
           </div>
