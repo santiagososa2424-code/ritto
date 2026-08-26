@@ -9,31 +9,36 @@ const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { plan, email } = req.body as { plan: string; email: string };
+  const { plan, email, userId } = req.body as { plan: string; email: string; userId: string };
   const item = PLAN_ITEMS[plan];
-  if (!item) return res.status(400).json({ error: 'Plan inválido' });
+  if (!item || !email || !userId) return res.status(400).json({ error: 'Parámetros inválidos' });
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
   if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados' });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 
-  const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+  const mpRes = await fetch('https://api.mercadopago.com/preapproval', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
-      items: [{ ...item, quantity: 1, currency_id: 'ARS' }],
-      payer: { email },
-      back_urls: {
-        success: `${siteUrl}/plan?payment=success`,
-        failure: `${siteUrl}/plan?payment=failure`,
-        pending: `${siteUrl}/plan?payment=pending`,
+      reason: item.title,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: item.unit_price,
+        currency_id: 'UYU',
+        free_trial: {
+          frequency: 14,
+          frequency_type: 'days',
+        },
       },
-      auto_return: 'approved',
-      external_reference: `${plan}|${email}`,
+      back_url: `${siteUrl}/plan?subscribed=1`,
+      payer_email: email,
+      external_reference: `${plan}|${userId}`,
     }),
   });
 

@@ -7,7 +7,7 @@ import Sidebar from '../components/Sidebar';
 const PLANS = {
   pro: {
     name: 'Pro',
-    price: '$490',
+    price: '$1.500',
     period: 'UYU/mes',
     features: [
       '1 usuario · 1 empresa',
@@ -21,10 +21,10 @@ const PLANS = {
   },
   pyme: {
     name: 'Pyme',
-    price: '$1.990',
+    price: '$5.000',
     period: 'UYU/mes',
     features: [
-      'Hasta 5 usuarios · 1 empresa compartida',
+      'Hasta 5 cuentas · empresas ilimitadas',
       'Facturas ilimitadas',
       'PDF, imagen y XML CFE',
       'Exportación a Excel y CSV',
@@ -36,10 +36,10 @@ const PLANS = {
   },
   empresa: {
     name: 'Empresa',
-    price: '$4.990',
+    price: '$12.000',
     period: 'UYU/mes',
     features: [
-      'Hasta 20 usuarios · 1 empresa compartida',
+      'Hasta 20 cuentas · empresas ilimitadas',
       'Facturas ilimitadas',
       'PDF, imagen y XML CFE',
       'Exportación a Excel y CSV',
@@ -60,6 +60,8 @@ export default function PlanPage() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [empresa, setEmpresa] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -81,6 +83,35 @@ export default function PlanPage() {
         });
     });
   }, [router]);
+
+  useEffect(() => {
+    if (router.query.subscribed === '1') {
+      setStatus('active');
+    }
+  }, [router.query]);
+
+  async function handleActivate(key: string) {
+    if (!user) return;
+    setPaying(true);
+    setPayError('');
+    try {
+      const res = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: key, email: user.email, userId: user.id }),
+      });
+      const data = await res.json();
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        setPayError('No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
+      }
+    } catch {
+      setPayError('Error de conexión. Intentá de nuevo.');
+    } finally {
+      setPaying(false);
+    }
+  }
 
   if (loading || !user) return null;
 
@@ -107,36 +138,18 @@ export default function PlanPage() {
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-          --green: #0a7c59;
-          --green-light: #e6f4ef;
-          --bg: #f5f5f7;
-          --dark: #111111;
-          --gray: #6b6b6b;
-          --border: #e0e0e0;
-          --white: #ffffff;
-          --red: #dc2626;
-          --red-light: #fef2f2;
+          --green: #0a7c59; --green-light: #e6f4ef; --bg: #f5f5f7;
+          --dark: #111111; --gray: #6b6b6b; --border: #e0e0e0;
+          --white: #ffffff; --red: #dc2626; --red-light: #fef2f2;
         }
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
-
         .page-wrap { padding: 28px 28px 80px; max-width: 600px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 6px; }
         .page-sub { font-size: 13px; color: var(--gray); margin-bottom: 28px; }
-
-        /* Status banner */
-        .status-banner {
-          border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;
-          border: 1px solid;
-        }
-        .status-banner.trial {
-          background: #fffbeb; border-color: #fde68a;
-        }
-        .status-banner.active {
-          background: var(--green-light); border-color: rgba(10,124,89,0.25);
-        }
-        .status-banner.blocked {
-          background: var(--red-light); border-color: #fecaca;
-        }
+        .status-banner { border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; border: 1px solid; }
+        .status-banner.trial { background: #fffbeb; border-color: #fde68a; }
+        .status-banner.active { background: var(--green-light); border-color: rgba(10,124,89,0.25); }
+        .status-banner.blocked { background: var(--red-light); border-color: #fecaca; }
         .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         .status-dot.trial { background: #f59e0b; }
@@ -146,63 +159,29 @@ export default function PlanPage() {
         .status-detail { font-size: 13px; color: var(--gray); }
         .progress-track { background: #e5e7eb; border-radius: 99px; height: 6px; margin-top: 12px; overflow: hidden; }
         .progress-fill { height: 100%; background: #f59e0b; border-radius: 99px; transition: width 0.3s; }
-
-        /* Plan card */
-        .plan-card {
-          background: var(--white); border: 1px solid var(--border);
-          border-radius: 14px; padding: 24px; margin-bottom: 16px;
-        }
+        .plan-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
         .plan-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-        .plan-badge {
-          display: inline-block; padding: 4px 12px; border-radius: 20px;
-          font-size: 13px; font-weight: 700;
-        }
-        .plan-name { font-family: 'DM Serif Display', serif; font-size: 22px; }
+        .plan-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
         .plan-price { font-size: 32px; font-weight: 700; color: var(--dark); line-height: 1; }
         .plan-price span { font-size: 14px; font-weight: 400; color: var(--gray); }
         .features { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
         .feature-item { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-        .feature-check {
-          width: 20px; height: 20px; border-radius: 50%; background: var(--green-light);
-          color: var(--green); display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; font-size: 11px; font-weight: 700;
-        }
-
-        /* CTA */
-        .cta-card {
-          background: var(--white); border: 1px solid var(--border);
-          border-radius: 14px; padding: 24px; text-align: center;
-        }
-        .btn-activate {
-          display: inline-flex; align-items: center; gap: 8px;
-          background: #009ee3; color: #fff; text-decoration: none;
-          padding: 14px 32px; border-radius: 10px;
-          font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 700;
-          width: 100%; justify-content: center; margin-bottom: 10px;
-          transition: background 0.15s; border: none; cursor: pointer;
-        }
-        .btn-activate:hover { background: #0080c0; }
-        .mp-note { font-size: 12px; color: var(--gray); display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .feature-check { width: 20px; height: 20px; border-radius: 50%; background: var(--green-light); color: var(--green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; font-weight: 700; }
+        .cta-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; text-align: center; }
+        .btn-activate { display: inline-flex; align-items: center; gap: 8px; background: #009ee3; color: #fff; padding: 14px 32px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 700; width: 100%; justify-content: center; margin-bottom: 10px; transition: background 0.15s; border: none; cursor: pointer; }
+        .btn-activate:hover:not(:disabled) { background: #0080c0; }
+        .btn-activate:disabled { opacity: 0.7; cursor: not-allowed; }
+        .mp-note { font-size: 12px; color: var(--gray); display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 10px; }
+        .trial-note { font-size: 12px; color: #0a5c44; background: var(--green-light); border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; }
         .cta-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
         .support-link { font-size: 13px; color: var(--gray); text-decoration: none; }
         .support-link:hover { color: var(--green); }
-
         .active-state { text-align: center; padding: 10px 0; }
-        .active-check {
-          width: 52px; height: 52px; background: var(--green-light);
-          border-radius: 50%; margin: 0 auto 12px;
-          display: flex; align-items: center; justify-content: center;
-        }
+        .active-check { width: 52px; height: 52px; background: var(--green-light); border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; }
         .active-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
         .active-sub { font-size: 13px; color: var(--gray); }
-
-        /* Other plans */
         .other-plans-title { font-size: 15px; font-weight: 700; margin: 28px 0 14px; }
-        .other-plan-card {
-          background: var(--white); border: 1px solid var(--border);
-          border-radius: 14px; padding: 20px; margin-bottom: 12px;
-          display: flex; align-items: center; justify-content: space-between; gap: 16px;
-        }
+        .other-plan-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         .op-left { flex: 1; min-width: 0; }
         .op-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .op-badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
@@ -211,23 +190,11 @@ export default function PlanPage() {
         .op-features { display: flex; flex-direction: column; gap: 4px; }
         .op-feat { font-size: 12px; color: var(--gray); display: flex; align-items: center; gap: 6px; }
         .op-feat-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
-        .btn-upgrade {
-          display: inline-flex; align-items: center; gap: 6px;
-          background: #009ee3; color: #fff; text-decoration: none;
-          padding: 10px 18px; border-radius: 8px; white-space: nowrap;
-          font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 700;
-          transition: background 0.15s; flex-shrink: 0;
-        }
-        .btn-upgrade:hover { background: #0080c0; }
-        @media (max-width: 480px) {
-          .other-plan-card { flex-direction: column; align-items: flex-start; }
-          .btn-upgrade { width: 100%; justify-content: center; }
-        }
-
-        @media (max-width: 768px) {
-          .page-wrap { padding: 18px 16px 80px; }
-          .page-title { font-size: 22px; }
-        }
+        .btn-upgrade { display: inline-flex; align-items: center; background: #009ee3; color: #fff; padding: 10px 18px; border-radius: 8px; white-space: nowrap; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 700; transition: background 0.15s; flex-shrink: 0; border: none; cursor: pointer; }
+        .btn-upgrade:hover:not(:disabled) { background: #0080c0; }
+        .btn-upgrade:disabled { opacity: 0.7; cursor: not-allowed; }
+        @media (max-width: 480px) { .other-plan-card { flex-direction: column; align-items: flex-start; } .btn-upgrade { width: 100%; justify-content: center; } }
+        @media (max-width: 768px) { .page-wrap { padding: 18px 16px 80px; } .page-title { font-size: 22px; } }
       `}</style>
 
       <Sidebar active="plan" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={plan.name} />
@@ -237,7 +204,6 @@ export default function PlanPage() {
           <h1 className="page-title">Mi Plan</h1>
           <p className="page-sub">Administrá tu suscripción a Ritto</p>
 
-          {/* Status banner */}
           {status === 'trial' && trialDaysLeft != null && (
             <div className="status-banner trial">
               <div className="status-row">
@@ -245,7 +211,7 @@ export default function PlanPage() {
                 <span className="status-label">Trial activo · {trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} restante{trialDaysLeft !== 1 ? 's' : ''}</span>
               </div>
               <div className="status-detail">
-                Tu período gratuito vence el {trialEndFormatted}. Activá tu plan para seguir usando Ritto sin interrupciones.
+                Tu período gratuito vence el {trialEndFormatted}. Suscribíte antes para no perder el acceso.
               </div>
               <div className="progress-track">
                 <div className="progress-fill" style={{ width: `${trialProgress}%` }} />
@@ -259,7 +225,7 @@ export default function PlanPage() {
                 <span className="status-dot blocked" />
                 <span className="status-label">Trial vencido</span>
               </div>
-              <div className="status-detail">Tu período gratuito terminó. Activá tu plan para retomar el acceso.</div>
+              <div className="status-detail">Tu período gratuito terminó. Suscribíte para retomar el acceso.</div>
             </div>
           )}
 
@@ -269,24 +235,15 @@ export default function PlanPage() {
                 <span className="status-dot active" />
                 <span className="status-label">Plan activo</span>
               </div>
-              <div className="status-detail">Tu plan está activo. Gracias por usar Ritto.</div>
+              <div className="status-detail">Tu suscripción está al día. El cobro es automático cada mes.</div>
             </div>
           )}
 
-          {/* Plan details */}
           <div className="plan-card">
             <div className="plan-header">
-              <span
-                className="plan-badge"
-                style={{ background: plan.bg, color: plan.color }}
-              >
-                {plan.name}
-              </span>
-              <div>
-                <div className="plan-price">{plan.price} <span>{plan.period}</span></div>
-              </div>
+              <span className="plan-badge" style={{ background: plan.bg, color: plan.color }}>{plan.name}</span>
+              <div className="plan-price">{plan.price} <span>{plan.period}</span></div>
             </div>
-
             <div className="features">
               {plan.features.map((f, i) => (
                 <div key={i} className="feature-item">
@@ -297,26 +254,28 @@ export default function PlanPage() {
             </div>
           </div>
 
-          {/* CTA */}
           {!isActive && (
             <div className="cta-card">
-              <a
-                href={`mailto:soporte@ritto.lat?subject=Quiero activar el Plan ${plan.name}&body=Hola, quiero activar el Plan ${plan.name} (${plan.price}/mes). Mi email registrado es: ${user.email}`}
-                className="btn-activate"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-                Activar Plan {plan.name} · {plan.price}/mes
-              </a>
+              <div className="trial-note">
+                ✓ 14 días de prueba gratis · sin tarjeta hasta que venza el trial
+              </div>
+              <button className="btn-activate" disabled={paying} onClick={() => handleActivate(planKey)}>
+                {paying ? 'Redirigiendo…' : (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                    </svg>
+                    Suscribirme · {plan.price}/mes
+                  </>
+                )}
+              </button>
+              {payError && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{payError}</div>}
               <div className="mp-note">
-                Te respondemos en menos de 24 hs con el link de pago
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Pago seguro con MercadoPago · Cancelá cuando quieras
               </div>
               <hr className="cta-divider" />
-              <a href="mailto:soporte@ritto.lat" className="support-link">
-                ¿Tenés preguntas? Contactá a soporte
-              </a>
+              <a href="mailto:soporte@ritto.lat" className="support-link">¿Tenés preguntas? Contactá a soporte</a>
             </div>
           )}
 
@@ -329,47 +288,32 @@ export default function PlanPage() {
                   </svg>
                 </div>
                 <div className="active-title">Plan activo</div>
-                <div className="active-sub">Tu suscripción está al día.</div>
+                <div className="active-sub">Tu suscripción se renueva automáticamente cada mes.</div>
               </div>
             </div>
           )}
 
-          {/* Other plans */}
           {Object.entries(PLANS).filter(([key]) => key !== planKey).length > 0 && (
             <>
-              <div className="other-plans-title">
-                {isActive ? 'Cambiar de plan' : 'Otros planes disponibles'}
-              </div>
-              {Object.entries(PLANS)
-                .filter(([key]) => key !== planKey)
-                .map(([key, p]) => (
-                  <div key={key} className="other-plan-card">
-                    <div className="op-left">
-                      <div className="op-top">
-                        <span className="op-badge" style={{ background: p.bg, color: p.color }}>{p.name}</span>
-                        <span className="op-price">{p.price} <span>{p.period}</span></span>
-                      </div>
-                      <div className="op-features">
-                        {p.features.slice(0, 3).map((f, i) => (
-                          <div key={i} className="op-feat">
-                            <span className="op-feat-dot" />
-                            {f}
-                          </div>
-                        ))}
-                      </div>
+              <div className="other-plans-title">{isActive ? 'Cambiar de plan' : 'Otros planes'}</div>
+              {Object.entries(PLANS).filter(([key]) => key !== planKey).map(([key, p]) => (
+                <div key={key} className="other-plan-card">
+                  <div className="op-left">
+                    <div className="op-top">
+                      <span className="op-badge" style={{ background: p.bg, color: p.color }}>{p.name}</span>
+                      <span className="op-price">{p.price} <span>{p.period}</span></span>
                     </div>
-                    <a
-                      href={`mailto:soporte@ritto.lat?subject=Quiero activar el Plan ${p.name}&body=Hola, quiero activar el Plan ${p.name} (${p.price}/mes). Mi email registrado es: ${user.email}`}
-                      className="btn-upgrade"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                        <polyline points="22,6 12,13 2,6"/>
-                      </svg>
-                      {isActive ? 'Cambiar' : 'Consultar'}
-                    </a>
+                    <div className="op-features">
+                      {p.features.slice(0, 3).map((f, i) => (
+                        <div key={i} className="op-feat"><span className="op-feat-dot" />{f}</div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                  <button className="btn-upgrade" disabled={paying} onClick={() => handleActivate(key)}>
+                    {isActive ? 'Cambiar' : 'Contratar'}
+                  </button>
+                </div>
+              ))}
               <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', marginTop: 10 }}>
                 Para cambiar de plan contactá a{' '}
                 <a href="mailto:soporte@ritto.lat" style={{ color: 'var(--green)' }}>soporte@ritto.lat</a>
