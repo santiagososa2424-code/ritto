@@ -45,10 +45,11 @@ export default function OnboardingPage() {
   async function finish(mapping: ExcelColumn[]) {
     if (!user) return;
     setSaving(true);
-    await supabase.from('profiles').update({
+    await supabase.from('profiles').upsert({
+      id: user.id,
       excel_mapping: mapping,
       onboarding_complete: true,
-    }).eq('id', user.id);
+    });
     router.push('/app');
   }
 
@@ -152,7 +153,7 @@ export default function OnboardingPage() {
               >
                 <div className="option-icon">📋</div>
                 <div className="option-title">Google Sheets</div>
-                <div className="option-desc">Exportás directo a tu planilla con un clic</div>
+                <div className="option-desc">Descargás un CSV y lo abrís en tu hoja de cálculo</div>
                 <div className="option-soon">Sincronización automática próximamente</div>
               </div>
             </div>
