@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '../lib/types';
-import { DEFAULT_COLUMNS } from '../lib/types';
+import { DEFAULT_COLUMNS, isCreditNote } from '../lib/types';
 import Sidebar from '../components/Sidebar';
 
 function sourceLabel(s: InvoiceSource) {
@@ -77,7 +77,11 @@ export default function AppPage() {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<Partial<ExtractedInvoice>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const fileMapRef = useRef<Map<string, File>>(new Map());
 
   const PLAN_LIMITS: Record<string, number | null> = { pro: null, pyme: null, empresa: null };
@@ -90,7 +94,7 @@ export default function AppPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('*')
+        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, mp_subscription_id')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
@@ -173,6 +177,33 @@ export default function AppPage() {
     if (file.name.toLowerCase().endsWith('.xml') || file.type.includes('xml')) return 'cfe_xml';
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) return 'pdf';
     return 'image';
+  }
+
+  const DOC_TYPES = [
+    'e-Factura', 'e-Nota de Débito de e-Factura', 'e-Nota de Crédito de e-Factura',
+    'e-Ticket', 'e-Nota de Débito de e-Ticket', 'e-Nota de Crédito de e-Ticket',
+    'e-Boleta Honorarios', 'e-Nota de Crédito de e-Boleta Honorarios',
+    'e-Factura de Exportación', 'e-Nota de Crédito de e-Factura de Exportación',
+    'e-Remito', 'Factura', 'Ticket', 'Nota de Crédito', 'Nota de Débito', 'Otro',
+  ];
+
+  async function saveEdit(id: string) {
+    if (!user) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch('/api/invoices/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: id, userId: user.id, updates: editFields }),
+      });
+      if (res.ok) {
+        setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, ...editFields } as ExtractedInvoice : inv));
+        setEditingId(null);
+        setEditFields({});
+      }
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   async function processFiles(files: File[]) {
@@ -335,7 +366,7 @@ export default function AppPage() {
   const now = new Date();
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const thisMonth = done.filter((inv) => inv.fecha?.startsWith(thisMonthKey));
-  const totalAmount = done.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
+  const totalAmount = done.reduce((sum, inv) => sum + (inv.total ?? 0) * (isCreditNote(inv.tipoDocumento) ? -1 : 1), 0);
 
   const monthOptions = getMonthOptions(done);
   const monthLimit = PLAN_LIMITS[planKey];
@@ -547,6 +578,27 @@ export default function AppPage() {
         @media (max-width: 480px) {
           .btn-export { font-size: 12px; padding: 8px 10px; }
         }
+
+        /* Inline edit form */
+        .edit-form-row { background: #f0f9ff; }
+        .edit-form-wrap { padding: 14px 16px; }
+        .edit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+        .edit-field label { display: block; font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+        .edit-input { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-family: 'Figtree', sans-serif; font-size: 13px; outline: none; background: var(--white); }
+        .edit-input:focus { border-color: #0ea5e9; }
+        .edit-actions { display: flex; gap: 8px; }
+        .btn-save-edit { background: #0ea5e9; color: #fff; border: none; padding: 8px 16px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-save-edit:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-cancel-edit { background: none; border: 1px solid var(--border); color: var(--gray); padding: 8px 14px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; }
+        @media (max-width: 640px) { .edit-grid { grid-template-columns: 1fr 1fr; } }
+
+        /* Confidence badge */
+        .badge-ai { background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+        .badge-nc { background: #fee2e2; color: #991b1b; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+
+        /* Camera button (mobile only) */
+        .btn-camera { display: none; margin-top: 10px; background: none; border: 1.5px solid var(--border); color: var(--gray); padding: 8px 16px; border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; align-items: center; gap: 6px; }
+        @media (max-width: 640px) { .btn-camera { display: inline-flex; } }
       `}</style>
 
       <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
@@ -651,6 +703,21 @@ export default function AppPage() {
               style={{ display: 'none' }}
               onChange={(e) => { if (e.target.files) processFiles(Array.from(e.target.files)); e.target.value = ''; }}
             />
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={(e) => { if (e.target.files) processFiles(Array.from(e.target.files)); e.target.value = ''; }}
+            />
+            <button
+              className="btn-camera"
+              onClick={(e) => { e.stopPropagation(); cameraRef.current?.click(); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Sacar foto
+            </button>
           </div>
 
           {limitWarning && (
@@ -754,6 +821,9 @@ export default function AppPage() {
                           <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>
                             {sourceLabel(inv.source)}
                           </span>
+                          {inv.source !== 'cfe_xml' && (
+                            <span className="badge-ai" title="Extraído por IA — verificar datos">IA</span>
+                          )}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>{inv.proveedor ?? '—'}</td>
                         <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12, whiteSpace: 'nowrap' }}>{inv.rut ?? '—'}</td>
@@ -764,8 +834,9 @@ export default function AppPage() {
                         <td style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                           {inv.ivaTotal != null ? fmt(inv.ivaTotal) : '—'}
                         </td>
-                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          {inv.total != null ? `${inv.moneda ?? 'UYU'} ${fmt(inv.total)}` : '—'}
+                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, whiteSpace: 'nowrap', color: isCreditNote(inv.tipoDocumento) ? 'var(--red)' : undefined }}>
+                          {inv.total != null ? `${isCreditNote(inv.tipoDocumento) ? '−' : ''}${inv.moneda ?? 'UYU'} ${fmt(inv.total)}` : '—'}
+                          {isCreditNote(inv.tipoDocumento) && <span className="badge-nc" title="Nota de crédito — resta del total">NC</span>}
                         </td>
                         <td>
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
@@ -778,28 +849,92 @@ export default function AppPage() {
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {inv.status === 'done' && (
-                            <button
-                              className="btn-dl"
-                              disabled={downloading === inv.id}
-                              onClick={() => downloadExcel([inv], inv.id)}
-                              title="Descargar Excel"
-                            >
-                              {downloading === inv.id
-                                ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
-                                : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
-                              XLS
-                            </button>
+                            <>
+                              <button
+                                className="btn-dl"
+                                onClick={(e) => { e.stopPropagation(); if (editingId === inv.id) { setEditingId(null); setEditFields({}); } else { setEditingId(inv.id); setEditFields({}); } }}
+                                title="Editar datos"
+                                style={{ marginRight: 4 }}
+                              >
+                                ✏
+                              </button>
+                              <button
+                                className="btn-dl"
+                                disabled={downloading === inv.id}
+                                onClick={(e) => { e.stopPropagation(); downloadExcel([inv], inv.id); }}
+                                title="Descargar Excel"
+                              >
+                                {downloading === inv.id
+                                  ? <div className="spinner" style={{ borderTopColor: 'var(--green)' }} />
+                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
+                                XLS
+                              </button>
+                            </>
                           )}
                           {confirmDelete === inv.id ? (
                             <span className="confirm-del" style={{ marginLeft: 4 }}>
-                              <button className="btn-confirm-yes" onClick={() => deleteInvoice(inv.id)}>Sí</button>
-                              <button className="btn-confirm-no" onClick={() => setConfirmDelete(null)}>No</button>
+                              <button className="btn-confirm-yes" onClick={(e) => { e.stopPropagation(); deleteInvoice(inv.id); }}>Sí</button>
+                              <button className="btn-confirm-no" onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}>No</button>
                             </span>
                           ) : (
-                            <button className="btn-remove" onClick={() => setConfirmDelete(inv.id)} style={{ marginLeft: 4 }}>×</button>
+                            <button className="btn-remove" onClick={(e) => { e.stopPropagation(); setConfirmDelete(inv.id); }} style={{ marginLeft: 4 }}>×</button>
                           )}
                         </td>
                       </tr>
+                      {editingId === inv.id && (
+                        <tr className="edit-form-row">
+                          <td colSpan={10}>
+                            <div className="edit-form-wrap">
+                              <div className="edit-grid">
+                                {([
+                                  { key: 'proveedor', label: 'Proveedor', type: 'text' },
+                                  { key: 'rut', label: 'RUT', type: 'text' },
+                                  { key: 'fecha', label: 'Fecha', type: 'date' },
+                                  { key: 'nroDocumento', label: 'Nro. Documento', type: 'text' },
+                                  { key: 'moneda', label: 'Moneda', type: 'select-moneda' },
+                                  { key: 'tipoDocumento', label: 'Tipo', type: 'select-tipo' },
+                                  { key: 'neto', label: 'Neto', type: 'number' },
+                                  { key: 'iva10', label: 'IVA 10%', type: 'number' },
+                                  { key: 'iva22', label: 'IVA 22%', type: 'number' },
+                                  { key: 'ivaTotal', label: 'IVA Total', type: 'number' },
+                                  { key: 'total', label: 'Total', type: 'number' },
+                                ] as { key: keyof ExtractedInvoice; label: string; type: string }[]).map(({ key, label, type }) => (
+                                  <div key={key} className="edit-field">
+                                    <label>{label}</label>
+                                    {type === 'select-moneda' ? (
+                                      <select className="edit-input"
+                                        value={String(editFields[key] ?? inv[key] ?? 'UYU')}
+                                        onChange={(e) => setEditFields((f) => ({ ...f, [key]: e.target.value }))}>
+                                        <option value="UYU">UYU</option>
+                                        <option value="USD">USD</option>
+                                      </select>
+                                    ) : type === 'select-tipo' ? (
+                                      <select className="edit-input"
+                                        value={String(editFields[key] ?? inv[key] ?? '')}
+                                        onChange={(e) => setEditFields((f) => ({ ...f, [key]: e.target.value }))}>
+                                        {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                                      </select>
+                                    ) : (
+                                      <input className="edit-input" type={type}
+                                        value={String(editFields[key] ?? inv[key] ?? '')}
+                                        onChange={(e) => setEditFields((f) => ({
+                                          ...f,
+                                          [key]: type === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : e.target.value,
+                                        }))} />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="edit-actions">
+                                <button className="btn-save-edit" disabled={savingEdit} onClick={() => saveEdit(inv.id)}>
+                                  {savingEdit ? 'Guardando…' : 'Guardar cambios'}
+                                </button>
+                                <button className="btn-cancel-edit" onClick={() => { setEditingId(null); setEditFields({}); }}>Cancelar</button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {expandedRows.has(inv.id) && inv.items && inv.items.length > 0 && (
                         <tr style={{ background: '#f9fafb' }}>
                           <td colSpan={10} style={{ padding: '0 13px 12px' }}>
