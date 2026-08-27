@@ -1,88 +1,91 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-const PLAN_NAMES: Record<string, string> = { pro: 'Pro', pyme: 'Pyme', empresa: 'Empresa' };
-const PLAN_PRICES: Record<string, string> = { pro: '$490', pyme: '$1.990', empresa: '$4.990' };
+const PLAN_PRICES: Record<string, string> = {
+  pro: '$1.500',
+  pyme: '$5.000',
+  empresa: '$12.000',
+};
 
 export default function BlockedPage() {
   const router = useRouter();
-  const [plan, setPlan] = useState('');
-  const [trialEnd, setTrialEnd] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState('');
+  const [userPlan, setUserPlan] = useState<string>('pro');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
-      supabase.from('profiles').select('*').eq('id', data.user.id).single()
+      setUser(data.user);
+      supabase.from('profiles').select('subscription_status, trial_ends_at, plan').eq('id', data.user.id).single()
         .then(({ data: p }) => {
-          if (p) {
-            setPlan(p.plan ?? 'pro');
-            if (p.trial_ends_at) {
-              setTrialEnd(new Date(p.trial_ends_at).toLocaleDateString('es-UY', { day: 'numeric', month: 'long', year: 'numeric' }));
-            }
-          }
+          if (p?.subscription_status === 'active') router.replace('/app');
+          if (p?.plan) setUserPlan(p.plan);
         });
     });
   }, [router]);
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.replace('/login');
+  async function handleSubscribe() {
+    if (!user) return;
+    setPaying(true);
+    setError('');
+    try {
+      const res = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: userPlan, email: user.email, userId: user.id }),
+      });
+      const data = await res.json();
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        setError(data.error ?? 'No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
+      }
+    } catch {
+      setError('Error de conexión. Intentá de nuevo.');
+    } finally {
+      setPaying(false);
+    }
   }
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root { --green: #0a7c59; --green-light: #e6f4ef; --bg: #f5f5f7; --dark: #111111; --gray: #6b6b6b; --border: #e0e0e0; --white: #ffffff; }
-        body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
-        .nav { background: rgba(245,245,247,0.95); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; align-items: center; justify-content: space-between; height: 54px; }
-        .logo { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--green); }
-        .btn-out { background: none; border: 1px solid var(--border); padding: 6px 14px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; color: var(--gray); }
-        .page { min-height: calc(100vh - 54px); display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
-        .card { background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 48px 36px; max-width: 440px; width: 100%; text-align: center; }
-        .icon { width: 64px; height: 64px; background: #fef3c7; border-radius: 16px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
-        .title { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 12px; }
-        .desc { color: var(--gray); font-size: 15px; line-height: 1.6; margin-bottom: 28px; }
-        .plan-box { background: var(--bg); border-radius: 12px; padding: 16px; margin-bottom: 24px; }
-        .plan-box .plan-name { font-weight: 600; font-size: 16px; margin-bottom: 2px; }
-        .plan-box .plan-price { font-family: 'DM Serif Display', serif; font-size: 36px; color: var(--green); }
-        .plan-box .plan-period { font-size: 13px; color: var(--gray); }
-        .btn-pay { width: 100%; background: var(--green); color: #fff; border: none; padding: 14px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
-        .btn-contact { width: 100%; background: none; border: 1.5px solid var(--border); color: var(--dark); padding: 13px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; }
-        .trial-info { font-size: 12px; color: var(--gray); margin-top: 16px; }
-        @media (max-width: 480px) { .card { padding: 32px 20px; } }
+        body { font-family: 'Figtree', sans-serif; background: #f5f5f7; color: #111; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 20px; padding: 40px 36px; max-width: 440px; width: 100%; text-align: center; }
+        .icon { width: 64px; height: 64px; background: #fef2f2; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+        .title { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 10px; }
+        .sub { font-size: 15px; color: #6b6b6b; line-height: 1.6; margin-bottom: 28px; }
+        .btn { width: 100%; background: #009ee3; color: #fff; border: none; padding: 14px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+        .btn:hover:not(:disabled) { background: #0080c0; }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .note { font-size: 12px; color: #6b6b6b; margin-top: 10px; }
+        .support { font-size: 13px; color: #6b6b6b; margin-top: 16px; }
+        .support a { color: #0a7c59; text-decoration: none; }
+        .err { color: #dc2626; font-size: 13px; margin-top: 8px; }
       `}</style>
-
-      <nav className="nav">
-        <div className="logo">ritto</div>
-        <button className="btn-out" onClick={handleSignOut}>Cerrar sesión</button>
-      </nav>
-
-      <div className="page">
-        <div className="card">
-          <div className="icon">⏰</div>
-          <h1 className="title">Tu trial terminó</h1>
-          <p className="desc">
-            Tus 14 días de prueba vencieron{trialEnd ? ` el ${trialEnd}` : ''}. Para seguir usando Ritto activá tu plan.
-          </p>
-
-          {plan && (
-            <div className="plan-box">
-              <div className="plan-name">Plan {PLAN_NAMES[plan]}</div>
-              <div className="plan-price">{PLAN_PRICES[plan]}</div>
-              <div className="plan-period">UYU / mes</div>
-            </div>
-          )}
-
-          <button className="btn-pay" onClick={() => router.push('/plan')}>
-            Ver planes y activar
-          </button>
-          <button className="btn-contact" onClick={() => window.location.href = 'mailto:soporte@ritto.lat'}>
-            Hablar con soporte
-          </button>
-          <p className="trial-info">¿Necesitás más tiempo? Escribinos y lo arreglamos.</p>
+      <div className="card">
+        <div className="icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div className="title">Tu trial terminó</div>
+        <div className="sub">
+          Los 14 días de prueba gratuita llegaron a su fin. Elegí un plan para seguir usando Ritto — el primer cobro es dentro de un mes.
+        </div>
+        <button className="btn" disabled={paying} onClick={handleSubscribe}>
+          {paying ? 'Redirigiendo…' : `Suscribirme ahora · ${PLAN_PRICES[userPlan] ?? '$1.500'}/mes`}
+        </button>
+        {error && <div className="err">{error}</div>}
+        <div className="note">Pago seguro con MercadoPago · Cancelá cuando quieras</div>
+        <div className="support">
+          ¿Preguntas? <a href="mailto:soporte@ritto.lat">soporte@ritto.lat</a>
         </div>
       </div>
     </>
