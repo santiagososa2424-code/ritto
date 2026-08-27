@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -63,6 +63,13 @@ export default function PlanPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
 
+  // Payment Brick state
+  const [brickPlan, setBrickPlan] = useState<string | null>(null);
+  const [brickPreferenceId, setBrickPreferenceId] = useState<string | null>(null);
+  const [brickAmount, setBrickAmount] = useState(0);
+  const [brickError, setBrickError] = useState('');
+  const brickInstanceRef = useRef<{ unmount: () => void } | null>(null);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
@@ -94,6 +101,7 @@ export default function PlanPage() {
     if (!user) return;
     setPaying(true);
     setPayError('');
+    setBrickError('');
     try {
       const res = await fetch('/api/payments/create', {
         method: 'POST',
@@ -101,10 +109,19 @@ export default function PlanPage() {
         body: JSON.stringify({ plan: key, email: user.email, userId: user.id }),
       });
       const data = await res.json();
-      if (data.checkout_url) {
+      if (data.preference_id) {
+        brickInstanceRef.current?.unmount();
+        brickInstanceRef.current = null;
+        setBrickPlan(key);
+        setBrickAmount(data.amount);
+        setBrickPreferenceId(data.preference_id);
+        setTimeout(() => {
+          document.getElementById('brick-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      } else if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        setPayError('No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
+        setPayError(data.error || 'No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
       }
     } catch {
       setPayError('Error de conexión. Intentá de nuevo.');
@@ -112,6 +129,81 @@ export default function PlanPage() {
       setPaying(false);
     }
   }
+
+  useEffect(() => {
+    if (!brickPreferenceId || !user) return;
+
+    const mpPublicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
+    if (!mpPublicKey) {
+      setBrickError('Configuración de pagos pendiente. Contactá soporte@ritto.lat');
+      return;
+    }
+
+    let cancelled = false;
+
+    async function initBrick() {
+      if (!(window as any).MercadoPago) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://sdk.mercadopago.com/js/v2';
+          s.onload = () => resolve();
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      if (cancelled) return;
+
+      const mp = new (window as any).MercadoPago(mpPublicKey, { locale: 'es-UY' });
+      const bricksBuilder = mp.bricks();
+
+      const instance = await bricksBuilder.create('payment', 'paymentBrick_container', {
+        initialization: { amount: brickAmount, preferenceId: brickPreferenceId },
+        customization: {
+          paymentMethods: { creditCard: 'all', debitCard: 'all', ticket: 'none', bankTransfer: 'none' },
+        },
+        callbacks: {
+          onReady: () => {},
+          onSubmit: async ({ formData }: any) => {
+            setBrickError('');
+            try {
+              const res = await fetch('/api/payments/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ formData, userId: user!.id, plan: brickPlan }),
+              });
+              const result = await res.json();
+              if (result.status === 'approved' || result.status === 'in_process') {
+                setStatus('active');
+                setBrickPreferenceId(null);
+                brickInstanceRef.current?.unmount();
+                brickInstanceRef.current = null;
+              } else {
+                setBrickError('El pago no pudo procesarse. Verificá los datos de tu tarjeta e intentá de nuevo.');
+              }
+            } catch {
+              setBrickError('Error de conexión. Intentá de nuevo.');
+            }
+          },
+          onError: (error: any) => {
+            console.error('Brick error:', error);
+            setBrickError('Error al cargar el formulario de pago.');
+          },
+        },
+      });
+
+      if (cancelled) {
+        instance?.unmount();
+      } else {
+        brickInstanceRef.current = instance;
+      }
+    }
+
+    initBrick();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [brickPreferenceId, brickAmount, brickPlan, user]);
 
   if (loading || !user) return null;
 
@@ -176,6 +268,12 @@ export default function PlanPage() {
         .cta-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
         .support-link { font-size: 13px; color: var(--gray); text-decoration: none; }
         .support-link:hover { color: var(--green); }
+        .brick-section { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+        .brick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .brick-title { font-size: 16px; font-weight: 700; }
+        .btn-close-brick { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 22px; line-height: 1; padding: 0 4px; }
+        .btn-close-brick:hover { color: var(--dark); }
+        .brick-error { color: #dc2626; font-size: 13px; margin-top: 12px; padding: 10px 12px; background: #fef2f2; border-radius: 8px; }
         .active-state { text-align: center; padding: 10px 0; }
         .active-check { width: 52px; height: 52px; background: var(--green-light); border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; }
         .active-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
@@ -254,13 +352,24 @@ export default function PlanPage() {
             </div>
           </div>
 
+          {brickPreferenceId && (
+            <div className="brick-section" id="brick-section">
+              <div className="brick-header">
+                <span className="brick-title">Completá tu pago</span>
+                <button className="btn-close-brick" onClick={() => { brickInstanceRef.current?.unmount(); brickInstanceRef.current = null; setBrickPreferenceId(null); setBrickError(''); }}>×</button>
+              </div>
+              <div id="paymentBrick_container" />
+              {brickError && <div className="brick-error">{brickError}</div>}
+            </div>
+          )}
+
           {!isActive && (
             <div className="cta-card">
               <div className="trial-note">
                 ✓ 14 días de prueba gratis · sin tarjeta hasta que venza el trial
               </div>
               <button className="btn-activate" disabled={paying} onClick={() => handleActivate(planKey)}>
-                {paying ? 'Redirigiendo…' : (
+                {paying ? 'Cargando…' : (
                   <>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
