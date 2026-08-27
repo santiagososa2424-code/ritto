@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const nombreDisplay = nombre?.trim() || 'ahí';
   const planDisplay = plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : 'Pyme';
   const sistemaDisplay =
-    sistema === 'zeta' ? 'ZetaSoftware' : sistema === 'siigo' ? 'Siigo' : 'GNS Contable';
+    sistema === 'zeta' ? 'ZetaSoftware' : sistema === 'siigo' ? 'Siigo' : sistema ? sistema : 'tu planilla';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
