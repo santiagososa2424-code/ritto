@@ -157,9 +157,9 @@ export default function PlanPage() {
       const bricksBuilder = mp.bricks();
 
       const instance = await bricksBuilder.create('payment', 'paymentBrick_container', {
-        initialization: { amount: brickAmount, preferenceId: brickPreferenceId },
+        initialization: { amount: brickAmount },
         customization: {
-          paymentMethods: { creditCard: 'all', debitCard: 'all', ticket: 'none', bankTransfer: 'none' },
+          paymentMethods: { creditCard: 'all', debitCard: 'all', ticket: 'none', bankTransfer: 'none', mercadoPago: 'none' },
         },
         callbacks: {
           onReady: () => {},
