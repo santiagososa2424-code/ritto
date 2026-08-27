@@ -1,41 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/router';
-import type { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
 
-type Section = 'primeros-pasos' | 'archivos' | 'exportar';
-
-const SECTIONS: { id: Section; label: string; emoji: string }[] = [
-  { id: 'primeros-pasos', label: 'Cómo usar Ritto', emoji: '👋' },
-  { id: 'archivos', label: '¿Qué archivo tengo?', emoji: '📄' },
-  { id: 'exportar', label: 'Descargar mis datos', emoji: '📥' },
+const sections = [
+  { id: 'empezar', label: 'Cómo empezar' },
+  { id: 'excel', label: 'Exportar a Excel' },
+  { id: 'sheets', label: 'Conectar Google Sheets' },
+  { id: 'columnas', label: 'Configurar columnas' },
+  { id: 'tips', label: 'Sacarle el jugo' },
 ];
 
 export default function GuiaPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
-  const [planName, setPlanName] = useState<string | undefined>();
-  const [empresa, setEmpresa] = useState<string | undefined>();
-  const [active, setActive] = useState<Section>('primeros-pasos');
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.replace('/login'); return; }
-      setUser(data.user);
-      supabase.from('profiles').select('*').eq('id', data.user.id).single().then(({ data: p }) => {
-        if (!p) return;
-        if (p.trial_ends_at && p.subscription_status === 'trial') {
-          setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / 86400000)));
-        }
-        if (p.plan) setPlanName(p.plan.charAt(0).toUpperCase() + p.plan.slice(1));
-        if (p.empresa) setEmpresa(p.empresa);
-      });
-    });
-  }, [router]);
-
-  if (!user) return null;
+  const [active, setActive] = useState('empezar');
 
   return (
     <>
@@ -43,360 +20,338 @@ export default function GuiaPage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
           --green: #0a7c59; --green-light: #e6f4ef; --bg: #f5f5f7;
-          --dark: #111111; --gray: #6b6b6b; --border: #e0e0e0; --white: #ffffff;
+          --dark: #111111; --gray: #6b6b6b; --border: #e0e0e0;
+          --white: #ffffff;
         }
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
-        .page-wrap { padding: 28px 28px 80px; max-width: 780px; }
-        .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 4px; }
+        .page-wrap { padding: 28px 28px 80px; max-width: 720px; }
+        .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 6px; }
         .page-sub { font-size: 14px; color: var(--gray); margin-bottom: 28px; }
 
-        .tabs { display: flex; gap: 8px; margin-bottom: 32px; flex-wrap: wrap; }
+        .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 32px; }
         .tab {
-          padding: 10px 20px; border-radius: 10px; border: 1.5px solid var(--border);
-          background: var(--white); font-family: 'Figtree', sans-serif;
-          font-size: 14px; font-weight: 500; cursor: pointer; color: var(--gray);
-          transition: all 0.15s; display: flex; align-items: center; gap: 7px;
+          padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
+          cursor: pointer; border: 1.5px solid var(--border); background: var(--white);
+          color: var(--gray); font-family: 'Figtree', sans-serif; transition: all 0.15s;
         }
         .tab:hover { border-color: var(--green); color: var(--green); }
-        .tab.active { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+        .tab.active { background: var(--green); color: #fff; border-color: var(--green); font-weight: 600; }
 
-        .card { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 16px; }
-        .card-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-        .card-desc { font-size: 15px; color: var(--gray); line-height: 1.65; }
+        .section { display: none; }
+        .section.visible { display: block; }
 
-        .steps { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
-        .step { display: flex; gap: 16px; align-items: flex-start; }
+        .card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+        .card-icon { font-size: 28px; margin-bottom: 12px; }
+        .card-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--dark); }
+        .card-text { font-size: 14px; color: var(--gray); line-height: 1.7; }
+
+        .steps { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+        .step { display: flex; gap: 14px; align-items: flex-start; }
         .step-num {
-          width: 34px; height: 34px; background: var(--green); border-radius: 50%;
-          color: #fff; font-size: 15px; font-weight: 700; display: flex;
-          align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
+          width: 28px; height: 28px; border-radius: 50%; background: var(--green);
+          color: #fff; font-size: 13px; font-weight: 700; display: flex;
+          align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;
         }
-        .step-body { flex: 1; }
-        .step-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: var(--dark); }
-        .step-desc { font-size: 14px; color: var(--gray); line-height: 1.6; }
-        .step-tip { font-size: 13px; color: var(--green); margin-top: 6px; font-weight: 500; }
+        .step-content { flex: 1; }
+        .step-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; color: var(--dark); }
+        .step-desc { font-size: 13px; color: var(--gray); line-height: 1.6; }
 
-        .tip-box {
-          background: var(--green-light); border: 1px solid rgba(10,124,89,0.2);
-          border-radius: 12px; padding: 14px 18px; margin-top: 16px;
-          font-size: 14px; color: #0a5c44; line-height: 1.6;
+        .example-box {
+          background: #f8fffe; border: 1.5px solid var(--green-light);
+          border-radius: 10px; padding: 14px 16px; margin-top: 12px;
         }
-        .warn-box {
-          background: #fffbeb; border: 1px solid #fde68a;
-          border-radius: 12px; padding: 14px 18px; margin-top: 12px;
-          font-size: 14px; color: #78350f; line-height: 1.6;
+        .example-label { font-size: 11px; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .example-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .example-table th { background: var(--green); color: #fff; padding: 6px 10px; text-align: left; font-weight: 600; font-size: 12px; }
+        .example-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--dark); }
+        .example-table tr:last-child td { border-bottom: none; }
+
+        .tip-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+        .tip { display: flex; gap: 10px; align-items: flex-start; }
+        .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+        .tip-text { font-size: 14px; color: var(--gray); line-height: 1.6; }
+        .tip-text strong { color: var(--dark); }
+
+        .badge-soon {
+          display: inline-block; background: #f3e8ff; color: #6b21a8;
+          border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.3px; margin-left: 8px;
+          vertical-align: middle;
         }
 
-        .format-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 16px; }
-        .format-card { border: 1.5px solid var(--border); border-radius: 12px; padding: 18px; background: var(--white); }
-        .format-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-bottom: 10px; }
-        .format-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-        .format-desc { font-size: 13px; color: var(--gray); line-height: 1.55; }
-        .format-best { font-size: 12px; font-weight: 600; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+        .highlight {
+          background: var(--green-light); border-left: 3px solid var(--green);
+          border-radius: 0 8px 8px 0; padding: 12px 14px; margin-top: 12px;
+          font-size: 13px; color: var(--dark); line-height: 1.6;
+        }
 
-        .faq-list { display: flex; flex-direction: column; gap: 12px; }
-        .faq-item { border: 1px solid var(--border); border-radius: 12px; padding: 18px; background: var(--white); }
-        .faq-q { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
-        .faq-a { font-size: 14px; color: var(--gray); line-height: 1.6; }
-
-        .export-option { display: flex; gap: 16px; align-items: flex-start; padding: 18px; border: 1.5px solid var(--border); border-radius: 12px; margin-bottom: 12px; background: var(--white); }
-        .export-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .export-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-        .export-desc { font-size: 13px; color: var(--gray); line-height: 1.55; }
+        .btn-go {
+          display: inline-block; margin-top: 14px;
+          background: var(--green); color: #fff; border: none;
+          padding: 10px 20px; border-radius: 8px; font-family: 'Figtree', sans-serif;
+          font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none;
+        }
 
         @media (max-width: 768px) {
           .page-wrap { padding: 18px 16px 80px; }
           .page-title { font-size: 22px; }
-          .format-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      <Sidebar active="guia" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="guia" />
 
       <div className="with-sidebar">
         <div className="page-wrap">
           <h1 className="page-title">Guía de uso</h1>
-          <p className="page-sub">Todo lo que necesitás saber para usar Ritto, paso a paso y sin complicaciones</p>
+          <p className="page-sub">Todo lo que necesitás saber para usar Ritto, explicado sin tecnicismos.</p>
 
           <div className="tabs">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <button
                 key={s.id}
                 className={`tab${active === s.id ? ' active' : ''}`}
                 onClick={() => setActive(s.id)}
               >
-                <span>{s.emoji}</span>
                 {s.label}
               </button>
             ))}
           </div>
 
-          {/* ── PRIMEROS PASOS ── */}
-          {active === 'primeros-pasos' && (
-            <>
-              <div className="card">
-                <div className="card-title">¿Para qué sirve Ritto?</div>
-                <div className="card-desc">
-                  Ritto lee tus facturas automáticamente y te da los datos listos para tu planilla.
-                  En vez de tipear a mano cada número, subís el archivo y en segundos tenés todo extraído: quién te facturó, la fecha, el IVA y el total.
-                </div>
+          <div className={`section${active === 'empezar' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">📄</div>
+              <div className="card-title">¿Qué hace Ritto?</div>
+              <div className="card-text">
+                Subís tus facturas (foto, PDF o XML) y Ritto lee automáticamente los datos — proveedor, fecha, monto, IVA — y te los entrega ordenados en un archivo Excel o directamente en tu Google Sheets.
+                <br /><br />
+                Sin tipear a mano. Sin errores. En segundos.
               </div>
+            </div>
 
-              <div className="card">
-                <div className="card-title">Paso a paso: cómo procesar una factura</div>
-                <div className="steps">
-                  <div className="step">
-                    <div className="step-num">1</div>
-                    <div className="step-body">
-                      <div className="step-title">Andá a “Facturas” en el menú</div>
-                      <div className="step-desc">Es la primera opción del menú lateral. Ahí vas a ver tu historial y el área para subir nuevas facturas.</div>
-                    </div>
+            <div className="card">
+              <div className="card-title">Primeros pasos</div>
+              <div className="steps">
+                <div className="step">
+                  <div className="step-num">1</div>
+                  <div className="step-content">
+                    <div className="step-title">Subí una factura</div>
+                    <div className="step-desc">En la pantalla de Facturas, tocá el recuadro grande o arrastrá un archivo. Podés subir foto, PDF o XML del DGI.</div>
                   </div>
-                  <div className="step">
-                    <div className="step-num">2</div>
-                    <div className="step-body">
-                      <div className="step-title">Subí tu factura</div>
-                      <div className="step-desc">
-                        Hacé clic en el área verde o arrastrá el archivo desde tu computadora. Podés subir <strong>fotos, PDFs o archivos XML</strong>.
-                        También podés subir <strong>varias a la vez</strong> — selección todas juntas.
-                      </div>
-                      <div className="step-tip">Tip: si tenés la factura en papel, sacale una foto con el celular y mandatéla a vos mismo.</div>
-                    </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">2</div>
+                  <div className="step-content">
+                    <div className="step-title">Esperá unos segundos</div>
+                    <div className="step-desc">Ritto lee la factura y extrae todos los datos automáticamente. Ves el resultado en la lista de abajo.</div>
                   </div>
-                  <div className="step">
-                    <div className="step-num">3</div>
-                    <div className="step-body">
-                      <div className="step-title">Esperá unos segundos</div>
-                      <div className="step-desc">
-                        Vas a ver “procesando…” mientras Ritto lee la factura. En general tarda entre 3 y 15 segundos según el tipo de archivo.
-                        Los archivos XML son instantáneos.
-                      </div>
-                    </div>
-                  </div>
-                  <div className="step">
-                    <div className="step-num">4</div>
-                    <div className="step-body">
-                      <div className="step-title">Revisá los datos y descargá</div>
-                      <div className="step-desc">
-                        Cuando aparece <strong>“Listo”</strong>, los datos están extraídos. Podés descargar el archivo con el botón <strong>XLS</strong> (Excel) o <strong>CSV</strong>.
-                        El CSV abre en Google Sheets si no tenés Excel instalado.
-                      </div>
-                    </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">3</div>
+                  <div className="step-content">
+                    <div className="step-title">Exportá</div>
+                    <div className="step-desc">Cuando tenés las facturas que querés, tocá "Exportar a Excel" o "Exportar a Google Sheets" arriba a la derecha.</div>
                   </div>
                 </div>
               </div>
-
-              <div className="card">
-                <div className="card-title">Preguntas frecuentes</div>
-                <div className="faq-list" style={{ marginTop: 8 }}>
-                  {[
-                    {
-                      q: '¿Puedo subir varias facturas a la vez?',
-                      a: 'Sí, hasta 10 a la vez. Selección todos los archivos juntos al mismo tiempo y se procesan en paralelo.',
-                    },
-                    {
-                      q: '¿Los datos se guardan?',
-                      a: 'Sí. Todo el historial queda guardado en tu cuenta. Podés filtrar por mes y volver a descargar cualquier factura cuando quieras.',
-                    },
-                    {
-                      q: '¿Qué hago si la extracción salió mal?',
-                      a: 'Si algún número no está bien, revisá que la foto o PDF sea legible y sin partes cortadas. Con el XML siempre va a ser exacto.',
-                    },
-                    {
-                      q: '¿Puedo borrar una factura?',
-                      a: 'Sí, con el botón “×” al final de cada fila. Te va a pedir confirmación antes de borrar.',
-                    },
-                    {
-                      q: '¿Puedo buscar facturas de un mes específico?',
-                      a: 'Sí. Arriba a la derecha de la tabla tenés un filtro por fecha donde elegís el mes que querés ver.',
-                    },
-                  ].map((f) => (
-                    <div className="faq-item" key={f.q}>
-                      <div className="faq-q">{f.q}</div>
-                      <div className="faq-a">{f.a}</div>
-                    </div>
-                  ))}
-                </div>
+              <div className="highlight">
+                💡 <strong>El mejor tipo de archivo:</strong> los XML del DGI son instantáneos y 100% exactos. Si tu proveedor te los manda, usá esos primero.
               </div>
-            </>
-          )}
+            </div>
+          </div>
 
-          {/* ── TIPOS DE ARCHIVO ── */}
-          {active === 'archivos' && (
-            <>
-              <div className="card">
-                <div className="card-title">¿Qué tipo de archivo puedo subir?</div>
-                <div className="card-desc">Ritto acepta tres tipos de archivo. Usá el que tengas disponible — todos funcionan.</div>
-                <div className="format-grid">
-                  <div className="format-card">
-                    <span className="format-badge" style={{ background: '#e0f2fe', color: '#0369a1' }}>XML</span>
-                    <div className="format-title">Archivo XML</div>
-                    <div className="format-desc">
-                      Es el formato oficial de DGI Uruguay. Tu proveedor lo adjunta al email de la factura electrónica. Es un archivo de texto con extensión <strong>.xml</strong>.
-                    </div>
-                    <div className="format-best" style={{ color: '#0a7c59' }}>Mejor opción — extracción instantánea y 100% exacta</div>
+          <div className={`section${active === 'excel' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">📊</div>
+              <div className="card-title">Exportar a Excel</div>
+              <div className="card-text">
+                Ritto te descarga un archivo Excel nuevo con todas tus facturas. Para que los datos caigan en el lugar correcto de tu planilla existente, tenés que pegar las filas.
+              </div>
+              <div className="steps" style={{ marginTop: 16 }}>
+                <div className="step">
+                  <div className="step-num">1</div>
+                  <div className="step-content">
+                    <div className="step-title">Selecioná las facturas</div>
+                    <div className="step-desc">Podés filtrar por mes si querés exportar solo un período.</div>
                   </div>
-                  <div className="format-card">
-                    <span className="format-badge" style={{ background: '#fef3c7', color: '#92400e' }}>PDF</span>
-                    <div className="format-title">Archivo PDF</div>
-                    <div className="format-desc">
-                      Si tu proveedor te manda la factura en PDF, subís ese archivo directamente. Ritto usa inteligencia artificial para leer el contenido.
-                    </div>
-                    <div className="format-best" style={{ color: '#6b7280' }}>Buena opción — tarda 5-15 segundos, muy preciso</div>
+                </div>
+                <div className="step">
+                  <div className="step-num">2</div>
+                  <div className="step-content">
+                    <div className="step-title">Tocá "Exportar a Excel"</div>
+                    <div className="step-desc">Se descarga un archivo .xlsx en tu dispositivo.</div>
                   </div>
-                  <div className="format-card">
-                    <span className="format-badge" style={{ background: '#f3e8ff', color: '#6b21a8' }}>Foto</span>
-                    <div className="format-title">Foto (JPG / PNG)</div>
-                    <div className="format-desc">
-                      Si tenés la factura en papel, sacale una foto con el celular. Mandatéla a vos mismo por WhatsApp o email y descargá la foto.
-                    </div>
-                    <div className="format-best" style={{ color: '#6b7280' }}>Funciona bien si la foto es clara y completa</div>
+                </div>
+                <div className="step">
+                  <div className="step-num">3</div>
+                  <div className="step-content">
+                    <div className="step-title">Abrí los dos archivos</div>
+                    <div className="step-desc">El que descargaste de Ritto y tu planilla existente de Excel.</div>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">4</div>
+                  <div className="step-content">
+                    <div className="step-title">Copiá las filas de Ritto</div>
+                    <div className="step-desc">Selecioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
                   </div>
                 </div>
               </div>
-
-              <div className="card">
-                <div className="card-title">¿Dónde encuentro el archivo XML?</div>
-                <div className="steps">
-                  <div className="step">
-                    <div className="step-num">A</div>
-                    <div className="step-body">
-                      <div className="step-title">En el email del proveedor</div>
-                      <div className="step-desc">Cuando una empresa te manda una factura electrónica, casi siempre viene con el XML adjunto en el correo. Buscá el archivo adjunto con extensión <strong>.xml</strong>.</div>
-                    </div>
-                  </div>
-                  <div className="step">
-                    <div className="step-num">B</div>
-                    <div className="step-body">
-                      <div className="step-title">Desde el portal de DGI</div>
-                      <div className="step-desc">Entrás a <strong>servicios.dgi.gub.uy</strong> con tu usuario empresa, vas a Consulta de CFE recibidos y podés descargar el XML de cualquier factura.</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="tip-box">
-                  Si no tenés el XML, no hay problema. El PDF o la foto también funcionan muy bien.
-                </div>
+              <div className="highlight">
+                ✅ Si configuraste bien las columnas (ver sección "Configurar columnas"), los datos van a caer exactamente en las columnas correctas de tu planilla.
               </div>
+            </div>
+          </div>
 
-              <div className="card">
-                <div className="card-title">Consejos para mejores resultados con fotos</div>
-                <div className="steps">
-                  <div className="step">
-                    <div className="step-num">1</div>
-                    <div className="step-body">
-                      <div className="step-title">Que se vea todo el documento</div>
-                      <div className="step-desc">No recortes los bordes. Tiene que verse completo, incluyendo el encabezado con el nombre del proveedor y el pie con el total.</div>
-                    </div>
+          <div className={`section${active === 'sheets' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">🟢</div>
+              <div className="card-title">Conectar Google Sheets <span className="badge-soon">Próximamente</span></div>
+              <div className="card-text">
+                Con Google Sheets conectado, no tenés que descargar ni copiar nada. Exportás desde Ritto y las filas aparecen solas al final de tu hoja, sin tocar nada más.
+              </div>
+              <div className="steps" style={{ marginTop: 16 }}>
+                <div className="step">
+                  <div className="step-num">1</div>
+                  <div className="step-content">
+                    <div className="step-title">Conectás tu cuenta de Google</div>
+                    <div className="step-desc">En Configuración, tocás "Conectar con Google" y le das permiso a Ritto para editar tu planilla.</div>
                   </div>
-                  <div className="step">
-                    <div className="step-num">2</div>
-                    <div className="step-body">
-                      <div className="step-title">Buena iluminación, sin sombras</div>
-                      <div className="step-desc">Ponés la factura en una superficie plana, con buena luz. Evitá que tu mano o el celular tiren sombra sobre el texto.</div>
-                    </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">2</div>
+                  <div className="step-content">
+                    <div className="step-title">Pegás el link de tu planilla</div>
+                    <div className="step-desc">Abrís tu Google Sheets, copiás la URL de arriba y la pegás en el campo "URL de tu Google Sheet" en Configuración.</div>
                   </div>
-                  <div className="step">
-                    <div className="step-num">3</div>
-                    <div className="step-body">
-                      <div className="step-title">Foto derecha, sin ángulos</div>
-                      <div className="step-desc">Tomá la foto de frente, no en diagonal. Cuanto más derecho mejor para que el sistema pueda leer los números.</div>
-                    </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">3</div>
+                  <div className="step-content">
+                    <div className="step-title">Exportás con un clic</div>
+                    <div className="step-desc">Cada vez que procesás facturas, tocás "Exportar a Google Sheets" y las filas se agregan automáticamente al final de tu hoja. Listo.</div>
                   </div>
                 </div>
               </div>
-            </>
-          )}
+              <div className="highlight">
+                🕐 Esta función estará disponible muy pronto. Podés dejar guardada la URL de tu planilla en Configuración ya mismo, para que cuando esté lista quede todo configurado.
+              </div>
+              <button className="btn-go" onClick={() => window.location.href = '/settings'}>
+                Ir a Configuración →
+              </button>
+            </div>
+          </div>
 
-          {/* ── EXPORTAR ── */}
-          {active === 'exportar' && (
-            <>
-              <div className="card">
-                <div className="card-title">¿Cómo descargo mis facturas?</div>
-                <div className="card-desc">
-                  Una vez que una factura dice <strong>“Listo”</strong>, podés descargar los datos en dos formatos.
-                  Si tenés Excel instalado usá el XLS. Si no, usá el CSV que abre en Google Sheets (gratis).
+          <div className={`section${active === 'columnas' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">🗂️</div>
+              <div className="card-title">¿Para qué sirve configurar las columnas?</div>
+              <div className="card-text">
+                Tu planilla de Excel probablemente tiene columnas con nombres específicos — "Razón Social", "Importe Total", "Fecha de compra", etc. Si Ritto exporta con nombres distintos, tenés que mover todo a mano.<br /><br />
+                Configurando las columnas, Ritto exporta con exactamente los mismos nombres que tiene tu planilla. Así pegás los datos y caen solos en el lugar correcto.
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-title">Ejemplo paso a paso</div>
+              <div className="card-text">Supongamos que tu planilla de Excel tiene estas columnas:</div>
+              <div className="example-box" style={{ marginTop: 12 }}>
+                <div className="example-label">Tu planilla de Excel</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="example-table">
+                    <thead>
+                      <tr>
+                        <th>Razón Social</th>
+                        <th>RUT</th>
+                        <th>Fecha de compra</th>
+                        <th>Importe neto</th>
+                        <th>IVA</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Supermercado SA</td>
+                        <td>21.234.567-8</td>
+                        <td>15/07/2025</td>
+                        <td>$1.200</td>
+                        <td>$264</td>
+                        <td>$1.464</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-                <div style={{ marginTop: 20 }}>
-                  <div className="export-option">
-                    <div className="export-icon" style={{ background: '#e6f4ef' }}>📊</div>
-                    <div>
-                      <div className="export-title">XLS (Excel)</div>
-                      <div className="export-desc">
-                        El botón <strong>XLS</strong> al lado de cada factura descarga esa factura sola.<br />
-                        El botón <strong>Exportar XLS</strong> arriba descarga todas las facturas que tenés en pantalla de una vez.
-                      </div>
-                    </div>
+              </div>
+
+              <div className="steps" style={{ marginTop: 20 }}>
+                <div className="step">
+                  <div className="step-num">1</div>
+                  <div className="step-content">
+                    <div className="step-title">Andá a Configuración → Plantilla de Excel</div>
+                    <div className="step-desc">Ahí ves una lista de columnas con dos campos cada una.</div>
                   </div>
-                  <div className="export-option">
-                    <div className="export-icon" style={{ background: '#f0f0f0' }}>📋</div>
-                    <div>
-                      <div className="export-title">CSV (Google Sheets y más)</div>
-                      <div className="export-desc">
-                        El botón <strong>CSV</strong> descarga el mismo contenido pero en un formato que abre en cualquier programa.<br />
-                        Si no tenés Excel, abrís <strong>sheets.google.com</strong>, hacés clic en el símbolo “+” y subís el archivo CSV. Gratis y sin instalar nada.
-                      </div>
-                    </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">2</div>
+                  <div className="step-content">
+                    <div className="step-title">En "Nombre en tu planilla" escribís el nombre exacto</div>
+                    <div className="step-desc">Tal cual aparece en tu Excel. Respetando mayúsculas y acentos.</div>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">3</div>
+                  <div className="step-content">
+                    <div className="step-title">En "Dato de Ritto" elegís qué información va ahí</div>
+                    <div className="step-desc">Por ejemplo: "Razón Social" → Proveedor · "Importe neto" → Neto (sin IVA) · "Total" → Total</div>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">4</div>
+                  <div className="step-content">
+                    <div className="step-title">Guardás y listo</div>
+                    <div className="step-desc">Todos los exportes siguientes van a tener tus columnas exactas.</div>
                   </div>
                 </div>
               </div>
 
-              <div className="card">
-                <div className="card-title">¿Cómo lo uso con mi planilla de Excel o Google Sheets?</div>
-                <div className="card-desc">
-                  Ritto descarga los datos con las columnas que vos definís. Si ya tenés tu propia planilla armada, la idea es que los nombres coincidan y solo tengas que pegar las filas nuevas.
-                </div>
-                <div className="steps" style={{ marginTop: 20 }}>
-                  <div className="step">
-                    <div className="step-num">1</div>
-                    <div className="step-body">
-                      <div className="step-title">Fijate cómo se llaman las columnas de tu planilla</div>
-                      <div className="step-desc">Abrí tu Excel o Google Sheets y mirá la primera fila. Anotá los nombres exactos: “Proveedor”, “Fecha”, “Total”, o como los tengas vos.</div>
-                    </div>
-                  </div>
-                  <div className="step">
-                    <div className="step-num">2</div>
-                    <div className="step-body">
-                      <div className="step-title">Configurá esos nombres en Ritto</div>
-                      <div className="step-desc">Andá a <strong>Configuración → Plantilla de Excel</strong>. Ahí ponés los mismos nombres que tiene tu planilla. Si tu columna se llama “Empresa proveedora”, escribís eso. Si se llama “IVA”, escribís eso. Una vez que lo guardás, Ritto siempre va a descargar con esos nombres.</div>
-                      <div className="step-tip">Solo lo hacés una vez — queda guardado para siempre en tu cuenta.</div>
-                    </div>
-                  </div>
-                  <div className="step">
-                    <div className="step-num">3</div>
-                    <div className="step-body">
-                      <div className="step-title">Descargá el XLS desde Ritto</div>
-                      <div className="step-desc">Processás tus facturas, hacés clic en <strong>Exportar XLS</strong> y te baja un archivo con exactamente las columnas que configuraste.</div>
-                    </div>
-                  </div>
-                  <div className="step">
-                    <div className="step-num">4</div>
-                    <div className="step-body">
-                      <div className="step-title">Pegás las filas nuevas en tu planilla</div>
-                      <div className="step-desc">Abrís el archivo de Ritto, selección todas las filas de datos (sin el encabezado), las copiás y las pegás al final de tu planilla. Las fórmulas que ya tenés en las columnas de al lado se aplican solas si las arrastrás hacia abajo.</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="tip-box">
-                  <strong>Tip:</strong> si tu planilla tiene fórmulas en columnas separadas (por ejemplo una que calcula el IVA), simplemente arrastrá esa fórmula hacia abajo para que cubra las filas nuevas. Los datos que trae Ritto no tocan esas columnas.
-                </div>
-              </div>
+              <button className="btn-go" onClick={() => window.location.href = '/settings'}>
+                Ir a configurar columnas →
+              </button>
+            </div>
+          </div>
 
-              <div className="card">
-                <div className="card-title">¿No tenés planilla todavía? Usá la que trae Ritto</div>
-                <div className="card-desc" style={{ marginBottom: 16 }}>
-                  Si arrancás de cero, Ritto ya viene con una plantilla básica lista. Descargás el XLS y ya tenés un archivo ordenado con estas columnas:
+          <div className={`section${active === 'tips' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">🚀</div>
+              <div className="card-title">Cómo sacarle el jugo a Ritto</div>
+              <div className="tip-list">
+                <div className="tip">
+                  <div className="tip-icon">⚡</div>
+                  <div className="tip-text"><strong>Usá XMLs del DGI siempre que puedas.</strong> Son instantáneos, gratuitos y exactos al 100%. Tu proveedor te los puede mandar por email.</div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                  {['Proveedor', 'RUT', 'Fecha', 'Nro. Documento', 'Tipo', 'Moneda', 'Neto', 'IVA Total', 'Total'].map((col) => (
-                    <span key={col} style={{ background: '#f0f0f2', borderRadius: 6, padding: '4px 10px', fontSize: 13, color: '#555' }}>{col}</span>
-                  ))}
+                <div className="tip">
+                  <div className="tip-icon">📦</div>
+                  <div className="tip-text"><strong>Subí varias facturas a la vez.</strong> Podés arrastrar hasta 10 archivos juntos y se procesan en paralelo.</div>
                 </div>
-                <div className="card-desc">
-                  Podés agregar tus propias fórmulas encima de eso — por ejemplo una columna que sume los totales del mes, o que marque las facturas en dólares. Ritto solo agrega filas de datos, no toca lo que vos agregues.
+                <div className="tip">
+                  <div className="tip-icon">🗓️</div>
+                  <div className="tip-text"><strong>Filtrá por mes antes de exportar.</strong> Si llevás un registro mensual, elegí el mes en el filtro y exportás solo ese período.</div>
+                </div>
+                <div className="tip">
+                  <div className="tip-icon">📸</div>
+                  <div className="tip-text"><strong>Las fotos funcionan, pero mejor con buena luz.</strong> Si la factura está arrugada o en sombra, la lectura puede fallar. Intentá con el PDF cuando sea posible.</div>
+                </div>
+                <div className="tip">
+                  <div className="tip-icon">🔁</div>
+                  <div className="tip-text"><strong>Ritto detecta duplicados.</strong> Si subís la misma factura dos veces te avisa. Así no te queda nada cargado doble.</div>
+                </div>
+                <div className="tip">
+                  <div className="tip-icon">⚙️</div>
+                  <div className="tip-text"><strong>Configurá las columnas una sola vez.</strong> Una vez que las tenés bien, cada exportación va a ser perfecta sin tocar nada.</div>
                 </div>
               </div>
-            </>
-          )}
+            </div>
+          </div>
+
         </div>
       </div>
     </>
