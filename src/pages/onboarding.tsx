@@ -45,10 +45,13 @@ export default function OnboardingPage() {
   async function finish(mapping: ExcelColumn[]) {
     if (!user) return;
     setSaving(true);
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     await supabase.from('profiles').upsert({
       id: user.id,
       excel_mapping: mapping,
       onboarding_complete: true,
+      subscription_status: 'trial',
+      trial_ends_at: trialEndsAt,
     });
     router.push('/app');
   }
