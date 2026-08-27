@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
-  pro: { title: 'Ritto Pro · 1 empresa', unit_price: 1 },
-  pyme: { title: 'Ritto Pyme · 5 cuentas', unit_price: 1 },
-  empresa: { title: 'Ritto Empresa · 20 cuentas', unit_price: 1 },
+  pro: { title: 'Ritto Pro · 1 empresa', unit_price: 10 },
+  pyme: { title: 'Ritto Pyme · 5 cuentas', unit_price: 10 },
+  empresa: { title: 'Ritto Empresa · 20 cuentas', unit_price: 10 },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
