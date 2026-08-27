@@ -18,9 +18,10 @@ export default function TerminosPage() {
 
       <div className="wrap">
         <a href="/" className="logo">ritto</a>
-        <a href="/" className="back">← Volver al inicio</a>
+        <br />
+        <a href="/" className="back">&larr; Volver al inicio</a>
         <h1>Términos y Condiciones</h1>
-        <p className="date">Última actualización: abril 2025</p>
+        <p className="date">Última actualización: agosto 2025</p>
 
         <h2>1. Aceptación</h2>
         <p>Al acceder o usar Ritto (ritto.lat) aceptás estos términos. Si no estás de acuerdo, no uses el servicio.</p>
@@ -59,7 +60,7 @@ export default function TerminosPage() {
         <p>Ritto no garantiza la exactitud al 100% de la extracción de datos por IA. Siempre revisá los datos antes de usarlos en declaraciones oficiales. No somos responsables de errores contables derivados del uso del servicio.</p>
 
         <h2>8. Cancelación</h2>
-        <p>Podés cancelar tu suscripción en cualquier momento desde la sección "Mi Plan". Seguirás teniendo acceso hasta el final del período pagado.</p>
+        <p>Podés cancelar tu suscripción en cualquier momento desde la sección "Mi Plan". Seguís teniendo acceso hasta el final del período pagado.</p>
 
         <h2>9. Cambios en los términos</h2>
         <p>Podemos actualizar estos términos. Te notificaremos por email con al menos 15 días de anticipación ante cambios materiales.</p>
