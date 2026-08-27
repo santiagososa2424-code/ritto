@@ -35,6 +35,7 @@ function fromDB(row: Record<string, unknown>): ExtractedInvoice {
     ivaTotal: row.iva_total as number | undefined,
     total: row.total as number | undefined,
     items: (row.items as InvoiceItem[]) ?? undefined,
+    warning: row.warning as string | undefined,
   };
 }
 
@@ -508,6 +509,7 @@ export default function AppPage() {
         .source-image { background: #f3e8ff; color: #6b21a8; }
         .status-processing { display: inline-flex; align-items: center; gap: 5px; color: var(--gray); font-size: 12px; }
         .status-done { background: var(--green-light); color: var(--green); border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; display: inline-block; }
+        .status-warn { background: #fef3c7; color: #92400e; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; display: inline-block; cursor: help; }
         .status-error { background: var(--red-light); color: var(--red); border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; display: inline-block; }
         .btn-remove { background: none; border: none; color: var(--gray); cursor: pointer; padding: 6px; border-radius: 4px; line-height: 1; font-size: 16px; }
         .btn-remove:active { color: var(--red); background: var(--red-light); }
@@ -840,7 +842,8 @@ export default function AppPage() {
                         </td>
                         <td>
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
-                          {inv.status === 'done' && <span className="status-done">Listo</span>}
+                          {inv.status === 'done' && !inv.warning && <span className="status-done">Listo</span>}
+                          {inv.status === 'done' && inv.warning && <span className="status-warn" title={`Revisar: ${inv.warning}`}>⚠ Revisar</span>}
                           {inv.status === 'error' && (
                             <span className="status-error" title={inv.error}>
                               Error{inv.error ? `: ${inv.error.slice(0, 60)}${inv.error.length > 60 ? '…' : ''}` : ''}
