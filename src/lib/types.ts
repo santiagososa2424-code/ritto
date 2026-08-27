@@ -63,4 +63,9 @@ export interface ExtractedInvoice {
   total?: number;
   items?: InvoiceItem[];
   error?: string;
+  warning?: string;
+}
+
+export function isCreditNote(tipoDocumento?: string): boolean {
+  return !!(tipoDocumento && /cr[eé]dito/i.test(tipoDocumento));
 }

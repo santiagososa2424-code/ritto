@@ -3,13 +3,22 @@ import type { ExtractedInvoice, InvoiceItem } from './types';
 
 const TIPO_CFE: Record<string, string> = {
   '101': 'e-Factura',
-  '102': 'e-Factura Exportación',
+  '102': 'e-Nota de Débito de e-Factura',
+  '103': 'e-Nota de Crédito de e-Factura',
   '111': 'e-Boleta Honorarios',
+  '112': 'e-Nota de Débito de e-Boleta Honorarios',
+  '113': 'e-Nota de Crédito de e-Boleta Honorarios',
   '181': 'e-Remito',
-  '182': 'e-Remito Exportación',
+  '182': 'e-Remito de Exportación',
+  '191': 'e-Factura de Exportación',
+  '192': 'e-Nota de Débito de e-Factura de Exportación',
+  '193': 'e-Nota de Crédito de e-Factura de Exportación',
   '201': 'e-Ticket',
+  '202': 'e-Nota de Débito de e-Ticket',
+  '203': 'e-Nota de Crédito de e-Ticket',
   '211': 'e-Boleta Honorarios Profesionales',
-  '301': 'e-Factura Crédito Exportación',
+  '212': 'e-Nota de Débito de e-Boleta Honorarios Profesionales',
+  '213': 'e-Nota de Crédito de e-Boleta Honorarios Profesionales',
 };
 
 function formatRUT(raw: string | number): string {
