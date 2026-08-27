@@ -63,7 +63,7 @@ export default function PlanPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
 
-  // Payment Brick state
+  // Payment form state
   const [brickPlan, setBrickPlan] = useState<string | null>(null);
   const [brickPreferenceId, setBrickPreferenceId] = useState<string | null>(null);
   const [brickAmount, setBrickAmount] = useState(0);
@@ -140,8 +140,9 @@ export default function PlanPage() {
     }
 
     let cancelled = false;
+    let cfInstance: any = null;
 
-    async function initBrick() {
+    async function initCardForm() {
       if (!(window as any).MercadoPago) {
         await new Promise<void>((resolve, reject) => {
           const s = document.createElement('script');
@@ -154,54 +155,91 @@ export default function PlanPage() {
       if (cancelled) return;
 
       const mp = new (window as any).MercadoPago(mpPublicKey, { locale: 'es-UY' });
-      const bricksBuilder = mp.bricks();
 
-      const instance = await bricksBuilder.create('payment', 'paymentBrick_container', {
-        initialization: { amount: brickAmount },
-        customization: {
-          paymentMethods: { creditCard: 'all', debitCard: 'all', ticket: 'none', bankTransfer: 'none', mercadoPago: 'none' },
+      const cf = mp.cardForm({
+        amount: String(brickAmount),
+        iframe: false,
+        form: {
+          id: 'form-checkout',
+          cardNumber: { id: 'form-checkout__cardNumber', placeholder: '1234 5678 9012 3456' },
+          expirationDate: { id: 'form-checkout__expirationDate', placeholder: 'MM/AA' },
+          securityCode: { id: 'form-checkout__securityCode', placeholder: 'CVV' },
+          cardholderName: { id: 'form-checkout__cardholderName', placeholder: 'Nombre como aparece en la tarjeta' },
+          issuer: { id: 'form-checkout__issuer' },
+          installments: { id: 'form-checkout__installments' },
+          identificationType: { id: 'form-checkout__identificationType' },
+          identificationNumber: { id: 'form-checkout__identificationNumber', placeholder: 'Número de documento' },
+          cardholderEmail: { id: 'form-checkout__cardholderEmail' },
         },
         callbacks: {
-          onReady: () => {},
-          onSubmit: async ({ formData }: any) => {
+          onFormMounted: (error: any) => {
+            if (error) setBrickError('Error al cargar el formulario. Recargá la página.');
+          },
+          onSubmit: async (event: any) => {
+            event.preventDefault();
             setBrickError('');
+            const {
+              paymentMethodId,
+              issuerId,
+              cardholderEmail,
+              amount,
+              token,
+              installments,
+              identificationNumber,
+              identificationType,
+            } = cf.getCardFormData();
             try {
               const res = await fetch('/api/payments/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ formData, userId: user!.id, plan: brickPlan }),
+                body: JSON.stringify({
+                  formData: {
+                    token,
+                    issuer_id: issuerId,
+                    payment_method_id: paymentMethodId,
+                    transaction_amount: Number(amount),
+                    installments: Number(installments),
+                    description: `Ritto ${brickPlan}`,
+                    payer: {
+                      email: cardholderEmail,
+                      identification: { type: identificationType, number: identificationNumber },
+                    },
+                  },
+                  userId: user!.id,
+                  plan: brickPlan,
+                }),
               });
               const result = await res.json();
               if (result.status === 'approved' || result.status === 'in_process') {
                 setStatus('active');
                 setBrickPreferenceId(null);
-                brickInstanceRef.current?.unmount();
-                brickInstanceRef.current = null;
               } else {
-                setBrickError('El pago no pudo procesarse. Verificá los datos de tu tarjeta e intentá de nuevo.');
+                setBrickError('El pago no pudo procesarse. Verificá los datos e intentá de nuevo.');
               }
             } catch {
               setBrickError('Error de conexión. Intentá de nuevo.');
             }
           },
           onError: (error: any) => {
-            console.error('Brick error:', error);
-            setBrickError('Error al cargar el formulario de pago.');
+            console.error('CardForm error:', error);
           },
         },
       });
 
       if (cancelled) {
-        instance?.unmount();
+        cf.unmount();
       } else {
-        brickInstanceRef.current = instance;
+        cfInstance = cf;
+        brickInstanceRef.current = { unmount: () => cf.unmount() };
       }
     }
 
-    initBrick();
+    initCardForm();
 
     return () => {
       cancelled = true;
+      cfInstance?.unmount();
+      brickInstanceRef.current = null;
     };
   }, [brickPreferenceId, brickAmount, brickPlan, user]);
 
@@ -274,6 +312,9 @@ export default function PlanPage() {
         .btn-close-brick { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 22px; line-height: 1; padding: 0 4px; }
         .btn-close-brick:hover { color: var(--dark); }
         .brick-error { color: #dc2626; font-size: 13px; margin-top: 12px; padding: 10px 12px; background: #fef2f2; border-radius: 8px; }
+        .cf-input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 14px; color: var(--dark); background: var(--white); outline: none; transition: border-color 0.15s; }
+        .cf-input:focus { border-color: #009ee3; }
+        .cf-input::placeholder { color: #aaa; }
         .active-state { text-align: center; padding: 10px 0; }
         .active-check { width: 52px; height: 52px; background: var(--green-light); border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; }
         .active-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
@@ -358,7 +399,22 @@ export default function PlanPage() {
                 <span className="brick-title">Completá tu pago</span>
                 <button className="btn-close-brick" onClick={() => { brickInstanceRef.current?.unmount(); brickInstanceRef.current = null; setBrickPreferenceId(null); setBrickError(''); }}>×</button>
               </div>
-              <div id="paymentBrick_container" />
+              <form id="form-checkout" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input type="text" id="form-checkout__cardNumber" placeholder="Número de tarjeta" className="cf-input" />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <input type="text" id="form-checkout__expirationDate" placeholder="MM/AA" className="cf-input" style={{ flex: 1 }} />
+                  <input type="text" id="form-checkout__securityCode" placeholder="CVV" className="cf-input" style={{ flex: 1 }} />
+                </div>
+                <input type="text" id="form-checkout__cardholderName" placeholder="Nombre en la tarjeta" className="cf-input" />
+                <input type="email" id="form-checkout__cardholderEmail" placeholder="Email" defaultValue={user.email ?? ''} className="cf-input" />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <select id="form-checkout__identificationType" className="cf-input" style={{ flex: '0 0 120px' }} />
+                  <input type="text" id="form-checkout__identificationNumber" placeholder="Número de documento" className="cf-input" style={{ flex: 1 }} />
+                </div>
+                <select id="form-checkout__issuer" style={{ display: 'none' }} />
+                <select id="form-checkout__installments" style={{ display: 'none' }} />
+                <button type="submit" className="btn-activate" style={{ marginBottom: 0 }}>Pagar · {brickPlan ? PLANS[brickPlan as keyof typeof PLANS]?.price : ''} UYU/mes</button>
+              </form>
               {brickError && <div className="brick-error">{brickError}</div>}
             </div>
           )}
