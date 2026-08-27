@@ -18,14 +18,17 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [sheetsNote, setSheetsNote] = useState(false);
 
+  const [hasTrial, setHasTrial] = useState(false);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
       setUser(data.user);
-      supabase.from('profiles').select('nombre, onboarding_complete').eq('id', data.user.id).single().then(({ data: p }) => {
+      supabase.from('profiles').select('nombre, onboarding_complete, trial_ends_at').eq('id', data.user.id).single().then(({ data: p }) => {
         if (!p) return;
         if (p.onboarding_complete === true) { router.replace('/app'); return; }
         if (p.nombre) setNombre(p.nombre);
+        if (p.trial_ends_at) setHasTrial(true);
       });
     });
   }, [router]);
@@ -45,14 +48,17 @@ export default function OnboardingPage() {
   async function finish(mapping: ExcelColumn[]) {
     if (!user) return;
     setSaving(true);
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    await supabase.from('profiles').upsert({
+    const updates: Record<string, unknown> = {
       id: user.id,
       excel_mapping: mapping,
       onboarding_complete: true,
-      subscription_status: 'trial',
-      trial_ends_at: trialEndsAt,
-    });
+    };
+    // Only set trial if not already set (avoid resetting days for slow users)
+    if (!hasTrial) {
+      updates.subscription_status = 'trial';
+      updates.trial_ends_at = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    }
+    await supabase.from('profiles').upsert(updates);
     router.push('/app');
   }
 

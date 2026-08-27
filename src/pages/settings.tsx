@@ -184,7 +184,7 @@ export default function SettingsPage() {
 
   async function removeMember(memberId: string) {
     setRemovingId(memberId);
-    await supabase.from('profiles').update({ organization_id: null, role: 'owner' }).eq('id', memberId);
+    await supabase.from('profiles').update({ organization_id: null, role: null }).eq('id', memberId);
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
     setRemovingId(null);
   }

@@ -74,6 +74,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   );
 
+  // Check if sheet already has data to avoid duplicating the header row
+  const checkRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const checkData = await checkRes.json();
+  const sheetHasData = checkData.values && checkData.values.length > 0;
+  const valuesToAppend = sheetHasData ? rows : [header, ...rows];
+
   const sheetsRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
@@ -82,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ values: [header, ...rows] }),
+      body: JSON.stringify({ values: valuesToAppend }),
     }
   );
 

@@ -3,19 +3,27 @@ import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+const PLAN_PRICES: Record<string, string> = {
+  pro: '$1.500',
+  pyme: '$5.000',
+  empresa: '$12.000',
+};
+
 export default function BlockedPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState('');
+  const [userPlan, setUserPlan] = useState<string>('pro');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
       setUser(data.user);
-      supabase.from('profiles').select('subscription_status, trial_ends_at').eq('id', data.user.id).single()
+      supabase.from('profiles').select('subscription_status, trial_ends_at, plan').eq('id', data.user.id).single()
         .then(({ data: p }) => {
           if (p?.subscription_status === 'active') router.replace('/app');
+          if (p?.plan) setUserPlan(p.plan);
         });
     });
   }, [router]);
@@ -28,7 +36,7 @@ export default function BlockedPage() {
       const res = await fetch('/api/payments/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'pro', email: user.email, userId: user.id }),
+        body: JSON.stringify({ plan: userPlan, email: user.email, userId: user.id }),
       });
       const data = await res.json();
       if (data.checkout_url) {
@@ -72,7 +80,7 @@ export default function BlockedPage() {
           Los 14 días de prueba gratuita llegaron a su fin. Elegí un plan para seguir usando Ritto — el primer cobro es dentro de un mes.
         </div>
         <button className="btn" disabled={paying} onClick={handleSubscribe}>
-          {paying ? 'Redirigiendo…' : 'Suscribirme ahora · $1.500/mes'}
+          {paying ? 'Redirigiendo…' : `Suscribirme ahora · ${PLAN_PRICES[userPlan] ?? '$1.500'}/mes`}
         </button>
         {error && <div className="err">{error}</div>}
         <div className="note">Pago seguro con MercadoPago · Cancelá cuando quieras</div>
