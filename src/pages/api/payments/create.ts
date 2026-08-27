@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!item || !email || !userId) return res.status(400).json({ error: 'Parámetros inválidos' });
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
-  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados' });
+  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Contactá soporte@ritto.lat' });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 
@@ -31,10 +31,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         frequency_type: 'months',
         transaction_amount: item.unit_price,
         currency_id: 'UYU',
-        free_trial: {
-          frequency: 14,
-          frequency_type: 'days',
-        },
       },
       back_url: `${siteUrl}/plan?subscribed=1`,
       payer_email: email,
@@ -44,7 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!mpRes.ok) {
     const detail = await mpRes.text();
-    return res.status(500).json({ error: 'Error MercadoPago', detail });
+    console.error('MercadoPago error:', detail);
+    return res.status(500).json({ error: 'Error al crear el pago con MercadoPago.', detail });
   }
 
   const data = await mpRes.json();

@@ -308,8 +308,10 @@ export default function AppPage() {
     const a = document.createElement('a');
     a.href = url;
     a.download = res.headers.get('Content-Disposition')?.split('filename=')[1] ?? 'facturas.xlsx';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     setDownloading(null);
   }
 

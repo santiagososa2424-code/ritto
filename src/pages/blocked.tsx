@@ -42,7 +42,7 @@ export default function BlockedPage() {
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        setError('No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
+        setError(data.error ?? 'No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
       }
     } catch {
       setError('Error de conexión. Intentá de nuevo.');
