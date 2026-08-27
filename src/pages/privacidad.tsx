@@ -19,9 +19,10 @@ export default function PrivacidadPage() {
 
       <div className="wrap">
         <a href="/" className="logo">ritto</a>
+        <br />
         <a href="/" className="back">← Volver al inicio</a>
         <h1>Política de Privacidad</h1>
-        <p className="date">Última actualización: abril 2025</p>
+        <p className="date">Última actualización: agosto 2025</p>
 
         <div className="highlight">
           <p><strong>Resumen:</strong> Tus facturas y datos fiscales son tuyos. Los almacenamos de forma segura solo para darte el servicio. No los vendemos ni compartimos con terceros salvo los proveedores técnicos necesarios para operar.</p>
@@ -48,9 +49,11 @@ export default function PrivacidadPage() {
 
         <h2>4. Terceros involucrados</h2>
         <ul>
-          <li><strong>Supabase</strong> — base de datos y autenticación. <a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Ver su política</a></li>
-          <li><strong>Google Gemini (AI)</strong> — procesamiento de imágenes y PDFs para extracción de datos. Los archivos se envían a la API de Google solo durante el procesamiento y no son usados para entrenamiento bajo los términos empresariales.</li>
-          <li><strong>Vercel</strong> — hosting de la aplicación. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noreferrer">Ver su política</a></li>
+          <li><strong>Supabase</strong> — base de datos y autenticación.</li>
+          <li><strong>Google Gemini (IA)</strong> — procesamiento de imágenes y PDFs. Los archivos se envían a la API de Google solo durante el procesamiento y no son usados para entrenamiento bajo los términos empresariales.</li>
+          <li><strong>Vercel</strong> — hosting de la aplicación.</li>
+          <li><strong>MercadoPago</strong> — procesamiento de pagos.</li>
+          <li><strong>Resend</strong> — envío de emails transaccionales.</li>
         </ul>
 
         <h2>5. Retención y eliminación</h2>
