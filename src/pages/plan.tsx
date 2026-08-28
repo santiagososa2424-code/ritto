@@ -52,6 +52,9 @@ const PLANS = {
   },
 };
 
+// Test amounts — revert to 1500 / 5000 / 12000 before going live
+const PLAN_AMOUNTS: Record<string, number> = { pro: 100, pyme: 100, empresa: 100 };
+
 export default function PlanPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -60,15 +63,22 @@ export default function PlanPage() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [empresa, setEmpresa] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
-  const [paying, setPaying] = useState(false);
-  const [payError, setPayError] = useState('');
 
-  // Payment form state
-  const [brickPlan, setBrickPlan] = useState<string | null>(null);
-  const [brickPreferenceId, setBrickPreferenceId] = useState<string | null>(null);
-  const [brickAmount, setBrickAmount] = useState(0);
-  const [brickError, setBrickError] = useState('');
-  const brickInstanceRef = useRef<{ unmount: () => void } | null>(null);
+  // Direct card tokenization
+  const [cardPlan, setCardPlan] = useState<string | null>(null);
+  const [cardAmount, setCardAmount] = useState(0);
+  const [cardLoading, setCardLoading] = useState(false);
+  const [cardError, setCardError] = useState('');
+  const mpRef = useRef<any>(null);
+
+  // Card form fields (controlled)
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [cardName, setCardName] = useState('') ;
+  const [cardEmail, setCardEmail] = useState('');
+  const [idType, setIdType] = useState('CI');
+  const [idNumber, setIdNumber] = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -97,52 +107,29 @@ export default function PlanPage() {
     }
   }, [router.query]);
 
-  async function handleActivate(key: string) {
+  function handleActivate(key: string) {
     if (!user) return;
-    setPaying(true);
-    setPayError('');
-    setBrickError('');
-    try {
-      const res = await fetch('/api/payments/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: key, email: user.email, userId: user.id }),
-      });
-      const data = await res.json();
-      if (data.preference_id) {
-        brickInstanceRef.current?.unmount();
-        brickInstanceRef.current = null;
-        setBrickPlan(key);
-        setBrickAmount(data.amount);
-        setBrickPreferenceId(data.preference_id);
-        setTimeout(() => {
-          document.getElementById('brick-section')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      } else if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-      } else {
-        setPayError(data.error || 'No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
-      }
-    } catch {
-      setPayError('Error de conexión. Intentá de nuevo.');
-    } finally {
-      setPaying(false);
-    }
+    setCardPlan(key);
+    setCardAmount(PLAN_AMOUNTS[key] ?? 100);
+    setCardError('');
+    setCardEmail(user.email ?? '');
+    setCardNumber('');
+    setExpiry('');
+    setCvv('');
+    setCardName('');
+    setIdNumber('');
+    setTimeout(() => {
+      document.getElementById('card-section')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   }
 
+  // Load MP SDK when card form is opened
   useEffect(() => {
-    if (!brickPreferenceId || !user) return;
-
+    if (!cardPlan) return;
     const mpPublicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
-    if (!mpPublicKey) {
-      setBrickError('Configuración de pagos pendiente. Contactá soporte@ritto.lat');
-      return;
-    }
+    if (!mpPublicKey) return;
 
-    let cancelled = false;
-    let cfInstance: any = null;
-
-    async function initCardForm() {
+    async function loadSDK() {
       if (!(window as any).MercadoPago) {
         await new Promise<void>((resolve, reject) => {
           const s = document.createElement('script');
@@ -152,96 +139,91 @@ export default function PlanPage() {
           document.head.appendChild(s);
         });
       }
-      if (cancelled) return;
-
-      const mp = new (window as any).MercadoPago(mpPublicKey, { locale: 'es-UY' });
-
-      const cf = mp.cardForm({
-        amount: String(brickAmount),
-        iframe: false,
-        form: {
-          id: 'form-checkout',
-          cardNumber: { id: 'form-checkout__cardNumber', placeholder: '1234 5678 9012 3456' },
-          expirationDate: { id: 'form-checkout__expirationDate', placeholder: 'MM/AA' },
-          securityCode: { id: 'form-checkout__securityCode', placeholder: 'CVV' },
-          cardholderName: { id: 'form-checkout__cardholderName', placeholder: 'Nombre como aparece en la tarjeta' },
-          issuer: { id: 'form-checkout__issuer' },
-          installments: { id: 'form-checkout__installments' },
-          identificationType: { id: 'form-checkout__identificationType' },
-          identificationNumber: { id: 'form-checkout__identificationNumber', placeholder: 'Número de documento' },
-          cardholderEmail: { id: 'form-checkout__cardholderEmail' },
-        },
-        callbacks: {
-          onFormMounted: (error: any) => {
-            if (error) setBrickError('Error al cargar el formulario. Recargá la página.');
-          },
-          onSubmit: async (event: any) => {
-            event.preventDefault();
-            setBrickError('');
-            const {
-              paymentMethodId,
-              issuerId,
-              cardholderEmail,
-              amount,
-              token,
-              installments,
-              identificationNumber,
-              identificationType,
-            } = cf.getCardFormData();
-            try {
-              const res = await fetch('/api/payments/process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  formData: {
-                    token,
-                    issuer_id: issuerId,
-                    payment_method_id: paymentMethodId,
-                    transaction_amount: Number(amount),
-                    installments: Number(installments),
-                    description: `Ritto ${brickPlan}`,
-                    payer: {
-                      email: cardholderEmail,
-                      identification: { type: identificationType, number: identificationNumber },
-                    },
-                  },
-                  userId: user!.id,
-                  plan: brickPlan,
-                }),
-              });
-              const result = await res.json();
-              if (result.status === 'approved' || result.status === 'in_process') {
-                setStatus('active');
-                setBrickPreferenceId(null);
-              } else {
-                setBrickError('El pago no pudo procesarse. Verificá los datos e intentá de nuevo.');
-              }
-            } catch {
-              setBrickError('Error de conexión. Intentá de nuevo.');
-            }
-          },
-          onError: (error: any) => {
-            console.error('CardForm error:', error);
-          },
-        },
-      });
-
-      if (cancelled) {
-        cf.unmount();
-      } else {
-        cfInstance = cf;
-        brickInstanceRef.current = { unmount: () => cf.unmount() };
-      }
+      mpRef.current = new (window as any).MercadoPago(mpPublicKey, { locale: 'es-UY' });
     }
 
-    initCardForm();
+    loadSDK();
+  }, [cardPlan]);
 
-    return () => {
-      cancelled = true;
-      cfInstance?.unmount();
-      brickInstanceRef.current = null;
-    };
-  }, [brickPreferenceId, brickAmount, brickPlan, user]);
+  async function handleCardSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || !cardPlan) return;
+    if (!mpRef.current) {
+      setCardError('Cargando procesador de pagos, intentá de nuevo en unos segundos.');
+      return;
+    }
+    setCardLoading(true);
+    setCardError('');
+
+    try {
+      const rawCardNumber = cardNumber.replace(/[\s-]/g, '');
+      const expParts = expiry.trim().split('/');
+      const expMonth = (expParts[0] ?? '').trim().padStart(2, '0');
+      const expYearShort = (expParts[1] ?? '').trim();
+      const expYear = expYearShort.length === 2 ? `20${expYearShort}` : expYearShort;
+
+      // Detect payment method from BIN
+      let paymentMethodId = '';
+      try {
+        const bin = rawCardNumber.slice(0, 6);
+        if (bin.length === 6) {
+          const methodsRes = await mpRef.current.getPaymentMethods({ bin });
+          paymentMethodId = methodsRes?.results?.[0]?.id ?? '';
+        }
+      } catch {
+        // non-fatal — server will attempt without it
+      }
+
+      // Tokenize card via MP (stays on our page, no redirect)
+      const tokenResult = await mpRef.current.createCardToken({
+        cardNumber: rawCardNumber,
+        cardholderName: cardName,
+        cardExpirationMonth: expMonth,
+        cardExpirationYear: expYear,
+        securityCode: cvv,
+        identificationType: idType,
+        identificationNumber: idNumber,
+      });
+
+      if (!tokenResult?.id) {
+        const cause = tokenResult?.cause?.[0];
+        setCardError(cause?.description ?? 'Datos de tarjeta inválidos. Verificá e intentá de nuevo.');
+        return;
+      }
+
+      const res = await fetch('/api/payments/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formData: {
+            token: tokenResult.id,
+            payment_method_id: paymentMethodId,
+            transaction_amount: cardAmount,
+            installments: 1,
+            description: `Ritto ${PLANS[cardPlan as keyof typeof PLANS]?.name}`,
+            payer: {
+              email: cardEmail,
+              identification: { type: idType, number: idNumber },
+            },
+          },
+          userId: user.id,
+          plan: cardPlan,
+        }),
+      });
+
+      const result = await res.json();
+      if (result.status === 'approved' || result.status === 'in_process') {
+        setStatus('active');
+        setCardPlan(null);
+      } else {
+        setCardError('El pago no pudo procesarse. Verificá los datos e intentá de nuevo.');
+      }
+    } catch (err: any) {
+      setCardError(err?.message ?? 'Error al procesar el pago. Intentá de nuevo.');
+    } finally {
+      setCardLoading(false);
+    }
+  }
 
   if (loading || !user) return null;
 
@@ -306,12 +288,12 @@ export default function PlanPage() {
         .cta-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
         .support-link { font-size: 13px; color: var(--gray); text-decoration: none; }
         .support-link:hover { color: var(--green); }
-        .brick-section { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
-        .brick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .brick-title { font-size: 16px; font-weight: 700; }
-        .btn-close-brick { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 22px; line-height: 1; padding: 0 4px; }
-        .btn-close-brick:hover { color: var(--dark); }
-        .brick-error { color: #dc2626; font-size: 13px; margin-top: 12px; padding: 10px 12px; background: #fef2f2; border-radius: 8px; }
+        .card-section { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .card-title { font-size: 16px; font-weight: 700; }
+        .btn-close-card { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 22px; line-height: 1; padding: 0 4px; }
+        .btn-close-card:hover { color: var(--dark); }
+        .card-error { color: #dc2626; font-size: 13px; margin-top: 12px; padding: 10px 12px; background: #fef2f2; border-radius: 8px; }
         .cf-input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 14px; color: var(--dark); background: var(--white); outline: none; transition: border-color 0.15s; }
         .cf-input:focus { border-color: #009ee3; }
         .cf-input::placeholder { color: #aaa; }
@@ -330,8 +312,7 @@ export default function PlanPage() {
         .op-feat { font-size: 12px; color: var(--gray); display: flex; align-items: center; gap: 6px; }
         .op-feat-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
         .btn-upgrade { display: inline-flex; align-items: center; background: #009ee3; color: #fff; padding: 10px 18px; border-radius: 8px; white-space: nowrap; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 700; transition: background 0.15s; flex-shrink: 0; border: none; cursor: pointer; }
-        .btn-upgrade:hover:not(:disabled) { background: #0080c0; }
-        .btn-upgrade:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-upgrade:hover { background: #0080c0; }
         @media (max-width: 480px) { .other-plan-card { flex-direction: column; align-items: flex-start; } .btn-upgrade { width: 100%; justify-content: center; } }
         @media (max-width: 768px) { .page-wrap { padding: 18px 16px 80px; } .page-title { font-size: 22px; } }
       `}</style>
@@ -393,29 +374,90 @@ export default function PlanPage() {
             </div>
           </div>
 
-          {brickPreferenceId && (
-            <div className="brick-section" id="brick-section">
-              <div className="brick-header">
-                <span className="brick-title">Completá tu pago</span>
-                <button className="btn-close-brick" onClick={() => { brickInstanceRef.current?.unmount(); brickInstanceRef.current = null; setBrickPreferenceId(null); setBrickError(''); }}>×</button>
+          {cardPlan && (
+            <div className="card-section" id="card-section">
+              <div className="card-header">
+                <span className="card-title">Completá tu pago</span>
+                <button className="btn-close-card" onClick={() => { setCardPlan(null); setCardError(''); }}>×</button>
               </div>
-              <form id="form-checkout" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <input type="text" id="form-checkout__cardNumber" placeholder="Número de tarjeta" className="cf-input" />
+              <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input
+                  type="text"
+                  placeholder="Número de tarjeta"
+                  className="cf-input"
+                  value={cardNumber}
+                  onChange={e => setCardNumber(e.target.value)}
+                  maxLength={19}
+                  required
+                  autoComplete="cc-number"
+                />
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <input type="text" id="form-checkout__expirationDate" placeholder="MM/AA" className="cf-input" style={{ flex: 1 }} />
-                  <input type="text" id="form-checkout__securityCode" placeholder="CVV" className="cf-input" style={{ flex: 1 }} />
+                  <input
+                    type="text"
+                    placeholder="MM/AA"
+                    className="cf-input"
+                    value={expiry}
+                    onChange={e => setExpiry(e.target.value)}
+                    maxLength={5}
+                    style={{ flex: 1 }}
+                    required
+                    autoComplete="cc-exp"
+                  />
+                  <input
+                    type="text"
+                    placeholder="CVV"
+                    className="cf-input"
+                    value={cvv}
+                    onChange={e => setCvv(e.target.value)}
+                    maxLength={4}
+                    style={{ flex: 1 }}
+                    required
+                    autoComplete="cc-csc"
+                  />
                 </div>
-                <input type="text" id="form-checkout__cardholderName" placeholder="Nombre en la tarjeta" className="cf-input" />
-                <input type="email" id="form-checkout__cardholderEmail" placeholder="Email" defaultValue={user.email ?? ''} className="cf-input" />
+                <input
+                  type="text"
+                  placeholder="Nombre como aparece en la tarjeta"
+                  className="cf-input"
+                  value={cardName}
+                  onChange={e => setCardName(e.target.value)}
+                  required
+                  autoComplete="cc-name"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  className="cf-input"
+                  value={cardEmail}
+                  onChange={e => setCardEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <select id="form-checkout__identificationType" className="cf-input" style={{ flex: '0 0 120px' }} />
-                  <input type="text" id="form-checkout__identificationNumber" placeholder="Número de documento" className="cf-input" style={{ flex: 1 }} />
+                  <select
+                    className="cf-input"
+                    value={idType}
+                    onChange={e => setIdType(e.target.value)}
+                    style={{ flex: '0 0 130px' }}
+                  >
+                    <option value="CI">CI</option>
+                    <option value="PASS">Pasaporte</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Número de documento"
+                    className="cf-input"
+                    value={idNumber}
+                    onChange={e => setIdNumber(e.target.value)}
+                    style={{ flex: 1 }}
+                    required
+                  />
                 </div>
-                <select id="form-checkout__issuer" style={{ display: 'none' }} />
-                <select id="form-checkout__installments" style={{ display: 'none' }} />
-                <button type="submit" className="btn-activate" style={{ marginBottom: 0 }}>Pagar · {brickPlan ? PLANS[brickPlan as keyof typeof PLANS]?.price : ''} UYU/mes</button>
+                <button type="submit" className="btn-activate" disabled={cardLoading} style={{ marginBottom: 0 }}>
+                  {cardLoading ? 'Procesando…' : `Pagar · ${PLANS[cardPlan as keyof typeof PLANS]?.price} UYU/mes`}
+                </button>
               </form>
-              {brickError && <div className="brick-error">{brickError}</div>}
+              {cardError && <div className="card-error">{cardError}</div>}
             </div>
           )}
 
@@ -424,17 +466,12 @@ export default function PlanPage() {
               <div className="trial-note">
                 ✓ 14 días de prueba gratis · sin tarjeta hasta que venza el trial
               </div>
-              <button className="btn-activate" disabled={paying} onClick={() => handleActivate(planKey)}>
-                {paying ? 'Cargando…' : (
-                  <>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
-                    </svg>
-                    Suscribirme · {plan.price}/mes
-                  </>
-                )}
+              <button className="btn-activate" onClick={() => handleActivate(planKey)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+                Suscribirme · {plan.price}/mes
               </button>
-              {payError && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{payError}</div>}
               <div className="mp-note">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 Pago seguro con MercadoPago · Cancelá cuando quieras
@@ -474,7 +511,7 @@ export default function PlanPage() {
                       ))}
                     </div>
                   </div>
-                  <button className="btn-upgrade" disabled={paying} onClick={() => handleActivate(key)}>
+                  <button className="btn-upgrade" onClick={() => handleActivate(key)}>
                     {isActive ? 'Cambiar' : 'Contratar'}
                   </button>
                 </div>
