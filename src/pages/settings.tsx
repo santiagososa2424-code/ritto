@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [savingMapping, setSavingMapping] = useState(false);
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [savingSheet, setSavingSheet] = useState(false);
+  const [sheetMsg, setSheetMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -221,18 +222,23 @@ export default function SettingsPage() {
   async function saveSheetUrl() {
     if (!user) return;
     setSavingSheet(true);
-    setError('');
+    setSheetMsg(null);
     try {
       const res = await fetch('/api/sheets/save-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, sheetUrl: googleSheetUrl }),
       });
-      const data = await res.json();
-      if (!res.ok) setError(data.error ?? 'Error al guardar la URL.');
-      else { setSuccess('URL guardada correctamente'); setTimeout(() => setSuccess(''), 4000); }
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (!res.ok) {
+        setSheetMsg({ type: 'err', text: (data.error as string) ?? `Error ${res.status} al guardar la URL.` });
+      } else {
+        setSheetMsg({ type: 'ok', text: 'URL guardada correctamente ✓' });
+        setTimeout(() => setSheetMsg(null), 6000);
+      }
     } catch {
-      setError('Error de conexión al guardar.');
+      setSheetMsg({ type: 'err', text: 'Error de conexión. Revisá tu internet.' });
     }
     setSavingSheet(false);
   }
@@ -470,6 +476,11 @@ export default function SettingsPage() {
                   </button>
                 )}
               </div>
+              {sheetMsg && (
+                <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: sheetMsg.type === 'ok' ? 'var(--green-light)' : 'var(--red-light)', color: sheetMsg.type === 'ok' ? 'var(--green)' : 'var(--red)' }}>
+                  {sheetMsg.text}
+                </div>
+              )}
             </div>
 
             {googleConnected && googleSheetUrl && (
