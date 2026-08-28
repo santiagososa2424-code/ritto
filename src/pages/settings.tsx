@@ -101,8 +101,15 @@ export default function SettingsPage() {
       setGoogleConnected(true);
       setTimeout(() => setSuccess(''), 4000);
     }
-    if (router.query.error === 'google_denied' || router.query.error === 'google_token') {
-      setError('No se pudo conectar con Google. Intentá de nuevo.');
+    if (router.query.error === 'google_denied') {
+      setError('Cancelaste la autorización de Google. Intentá de nuevo.');
+    }
+    if (router.query.error === 'google_token') {
+      const detail = router.query.detail ? ` (${router.query.detail})` : '';
+      setError(`No se pudo conectar con Google${detail}. Revisá las credenciales en Vercel.`);
+    }
+    if (router.query.error === 'google_not_configured') {
+      setError('Google no está configurado en el servidor. Falta agregar GOOGLE_CLIENT_ID y GOOGLE_REDIRECT_URI en Vercel.');
     }
   }, [router.query]);
 
@@ -215,9 +222,18 @@ export default function SettingsPage() {
     if (!user) return;
     setSavingSheet(true);
     setError('');
-    const { error: err } = await supabase.from('profiles').update({ google_sheet_id: googleSheetUrl || null }).eq('id', user.id);
-    if (err) setError('Error al guardar.');
-    else { setSuccess('URL guardada'); setTimeout(() => setSuccess(''), 3000); }
+    try {
+      const res = await fetch('/api/sheets/save-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, sheetUrl: googleSheetUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) setError(data.error ?? 'Error al guardar la URL.');
+      else { setSuccess('URL guardada correctamente'); setTimeout(() => setSuccess(''), 4000); }
+    } catch {
+      setError('Error de conexión al guardar.');
+    }
     setSavingSheet(false);
   }
 
