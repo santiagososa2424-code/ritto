@@ -221,6 +221,18 @@ export default function SettingsPage() {
     setSavingSheet(false);
   }
 
+  async function disconnectGoogle() {
+    if (!user) return;
+    await supabase.from('profiles').update({
+      google_access_token: null,
+      google_refresh_token: null,
+      google_token_expires_at: null,
+    }).eq('id', user.id);
+    setGoogleConnected(false);
+    setSuccess('Google desconectado');
+    setTimeout(() => setSuccess(''), 3000);
+  }
+
   async function cancelInvite(inviteId: string) {
     await supabase.from('org_invites').delete().eq('id', inviteId);
     setInvites((prev) => prev.filter((i) => i.id !== inviteId));
@@ -398,38 +410,57 @@ export default function SettingsPage() {
                 <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Conectado</span>
               )}
             </div>
-            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
-              {googleConnected
-                ? 'Tu cuenta de Google está conectada. Pegá la URL de tu planilla y usá el botón "Exportar a Google Sheets" en Facturas para mandar las filas directamente.'
-                : 'Conectá tu cuenta de Google y pegá la URL de tu planilla. Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada.'}
-            </p>
-            <div className="field">
-              <label>URL de tu Google Sheet</label>
+
+            {!googleConnected && (
+              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#0369a1', marginBottom: 6 }}>Paso 1 — Conectá tu cuenta de Google</p>
+                <p style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6 }}>
+                  Hacé clic en "Conectar con Google" y autorizá el acceso. Solo se pide permiso para escribir en Sheets — Ritto no puede leer ni modificar tus otros archivos.
+                </p>
+                <button
+                  type="button"
+                  className="btn-save"
+                  style={{ marginTop: 12 }}
+                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
+                >
+                  Conectar con Google →
+                </button>
+              </div>
+            )}
+
+            <div style={{ background: googleConnected ? 'var(--bg)' : '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 16, opacity: googleConnected ? 1 : 0.6 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>{googleConnected ? 'URL de tu Google Sheet' : 'Paso 2 — URL de tu Google Sheet'}</p>
+              <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 10, lineHeight: 1.6 }}>
+                Abrí tu planilla en Google Sheets y copiá la dirección de la barra del navegador. Se ve así:<br />
+                <span style={{ fontFamily: 'monospace', fontSize: 11, background: '#e2e8f0', borderRadius: 4, padding: '2px 6px', display: 'inline-block', marginTop: 4, wordBreak: 'break-all' }}>
+                  https://docs.google.com/spreadsheets/d/<strong>TU_ID</strong>/edit
+                </span>
+              </p>
               <input
                 type="text"
                 value={googleSheetUrl}
                 onChange={(e) => setGoogleSheetUrl(e.target.value)}
                 placeholder="https://docs.google.com/spreadsheets/d/..."
+                disabled={!googleConnected}
+                style={{ width: '100%', padding: '10px 13px', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'Figtree, sans-serif', fontSize: 14, outline: 'none', marginBottom: 10 }}
               />
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet}>
-                {savingSheet ? 'Guardando…' : 'Guardar URL'}
-              </button>
-              {googleConnected ? (
-                <button type="button" className="btn-save" style={{ background: '#dcfce7', color: '#166534', cursor: 'default' }} disabled>
-                  ✓ Google conectado
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet || !googleConnected}>
+                  {savingSheet ? 'Guardando…' : 'Guardar URL'}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-save"
-                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
-                >
-                  Conectar con Google →
-                </button>
-              )}
+                {googleConnected && (
+                  <button type="button" onClick={disconnectGoogle} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                    Desconectar Google
+                  </button>
+                )}
+              </div>
             </div>
+
+            {googleConnected && googleSheetUrl && (
+              <p style={{ fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                ✓ Todo listo. Usá "Exportar a Google Sheets" en la pantalla de Facturas.
+              </p>
+            )}
           </div>
 
           <form onSubmit={changePassword}>
