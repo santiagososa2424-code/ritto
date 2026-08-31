@@ -42,10 +42,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    let googleEmail: string | null = null;
+    try {
+      const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const profileData = await profileRes.json();
+      googleEmail = profileData.email ?? null;
+    } catch (_) {}
+
     const { error: dbErr } = await supabase.from('profiles').update({
       google_access_token: tokens.access_token,
       google_refresh_token: tokens.refresh_token ?? null,
       google_token_expires_at: new Date(Date.now() + (tokens.expires_in as number) * 1000).toISOString(),
+      ...(googleEmail ? { google_email: googleEmail } : {}),
     }).eq('id', userId as string);
 
     if (dbErr) {
