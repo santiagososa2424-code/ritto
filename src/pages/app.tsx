@@ -68,6 +68,7 @@ export default function AppPage() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [sheetsError, setSheetsError] = useState('');
+  const [sheetsRange, setSheetsRange] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -327,6 +328,8 @@ export default function AppPage() {
         body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setSheetsRange(data.updatedRange ?? '');
         setSheetsStatus('ok');
       } else {
         const data = await res.json();
@@ -339,7 +342,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); }, 5000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); }, 8000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -650,6 +653,20 @@ export default function AppPage() {
                 </span>
               </button>
             </div>
+            {sheetsStatus === 'ok' && (
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                ✓ Datos enviados.{' '}
+                <a
+                  href={googleSheetId.startsWith('http') ? googleSheetId : `https://docs.google.com/spreadsheets/d/${googleSheetId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#166534', textDecoration: 'underline' }}
+                >
+                  Abrir planilla →
+                </a>
+                {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
+              </div>
+            )}
             {sheetsError && (
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
                 Google Sheets: {sheetsError}
