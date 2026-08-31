@@ -66,6 +66,7 @@ export default function AppPage() {
   const [excelMapping, setExcelMapping] = useState<ExcelColumn[]>(DEFAULT_COLUMNS);
   const [googleSheetId, setGoogleSheetId] = useState('');
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
   const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [sheetsError, setSheetsError] = useState('');
   const [sheetsRange, setSheetsRange] = useState('');
@@ -97,7 +98,7 @@ export default function AppPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, mp_subscription_id')
+        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, google_email, mp_subscription_id')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
@@ -119,6 +120,7 @@ export default function AppPage() {
           if (p.empresa) setEmpresa(p.empresa);
           if (p.google_sheet_id) setGoogleSheetId(p.google_sheet_id as string);
           if (p.google_access_token) setGoogleConnected(true);
+          if (p.google_email) setGoogleEmail(p.google_email as string);
         });
     });
   }, [router]);
@@ -654,17 +656,24 @@ export default function AppPage() {
               </button>
             </div>
             {sheetsStatus === 'ok' && (
-              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                ✓ Datos enviados.{' '}
-                <a
-                  href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; return `https://docs.google.com/spreadsheets/d/${id}/edit`; })()}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: '#166534', textDecoration: 'underline' }}
-                >
-                  Abrir planilla →
-                </a>
-                {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  ✓ Datos enviados.{' '}
+                  <a
+                    href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#166534', textDecoration: 'underline' }}
+                  >
+                    Abrir planilla →
+                  </a>
+                  {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
+                </div>
+                {googleEmail && (
+                  <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400 }}>
+                    Cuenta conectada: {googleEmail}
+                  </div>
+                )}
               </div>
             )}
             {sheetsError && (
