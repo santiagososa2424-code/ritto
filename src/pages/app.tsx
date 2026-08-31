@@ -657,7 +657,7 @@ export default function AppPage() {
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
                 ✓ Datos enviados.{' '}
                 <a
-                  href={googleSheetId.startsWith('http') ? googleSheetId : `https://docs.google.com/spreadsheets/d/${googleSheetId}`}
+                  href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; return `https://docs.google.com/spreadsheets/d/${id}/edit`; })()}
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: '#166534', textDecoration: 'underline' }}
