@@ -68,6 +68,7 @@ export default function AppPage() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [sheetsError, setSheetsError] = useState('');
+  const [sheetsRange, setSheetsRange] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -327,6 +328,8 @@ export default function AppPage() {
         body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setSheetsRange(data.updatedRange ?? '');
         setSheetsStatus('ok');
       } else {
         const data = await res.json();
@@ -339,7 +342,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); }, 5000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); }, 8000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -422,7 +425,7 @@ export default function AppPage() {
         .page-wrap { padding: 28px 28px 80px; max-width: 1340px; }
         .main-layout { display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: start; }
         .right-col { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 28px; }
-        .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
+        .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 12px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--dark); line-height: 1.1; }
         .page-sub { font-size: 13px; color: var(--gray); margin-top: 3px; }
         .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
@@ -634,7 +637,9 @@ export default function AppPage() {
                 style={{
                   background: sheetsStatus === 'ok' ? '#166534' : sheetsStatus === 'error' ? '#dc2626' : googleConnected && googleSheetId ? '#1a7a59' : 'var(--gray)',
                 }}
-                onClick={() => { exportToSheets(filteredDone); }}
+                onClick={() => {
+                  exportToSheets(filteredDone);
+                }}
                 disabled={filteredDone.length === 0 || sheetsStatus === 'loading'}
                 title={!googleConnected ? 'Conectá tu Google en Configuración' : !googleSheetId ? 'Configurá la URL de tu planilla en Configuración' : 'Exportar a Google Sheets'}
               >
@@ -648,8 +653,22 @@ export default function AppPage() {
                 </span>
               </button>
             </div>
+            {sheetsStatus === 'ok' && (
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                ✓ Datos enviados.{' '}
+                <a
+                  href={googleSheetId.startsWith('http') ? googleSheetId : `https://docs.google.com/spreadsheets/d/${googleSheetId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#166534', textDecoration: 'underline' }}
+                >
+                  Abrir planilla →
+                </a>
+                {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
+              </div>
+            )}
             {sheetsError && (
-              <div style={{ width: '100%', marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
                 Google Sheets: {sheetsError}
               </div>
             )}
@@ -881,7 +900,10 @@ export default function AppPage() {
                               <button
                                 className="btn-dl"
                                 style={{ marginLeft: 4 }}
-                                onClick={(e) => { e.stopPropagation(); exportToSheets([inv]); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  exportToSheets([inv]);
+                                }}
                                 title={!googleConnected ? 'Conectá Google en Configuración' : !googleSheetId ? 'Configurá tu planilla en Configuración' : 'Enviar a Google Sheets'}
                               >
                                 GS
@@ -1006,7 +1028,9 @@ export default function AppPage() {
                       {inv.status === 'done' && (
                         <>
                           <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>Descargar Excel</button>
-                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => { exportToSheets([inv]); }}>Para Google Sheets</button>
+                          <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => {
+                            exportToSheets([inv]);
+                          }}>Para Google Sheets</button>
                         </>
                       )}
                       {inv.status === 'error' && fileMapRef.current.has(inv.id) && (
