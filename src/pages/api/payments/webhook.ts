@@ -27,6 +27,39 @@ function verifySignature(req: NextApiRequest): boolean {
   return expected === v1;
 }
 
+async function createOrgForOwner(userId: string, plan: string) {
+  const { data: existingMember } = await supabaseAdmin
+    .from('organization_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('role', 'owner')
+    .maybeSingle();
+
+  if (existingMember) return;
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('empresa')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .insert({ owner_id: userId, name: profile?.empresa ?? 'Mi Empresa', plan })
+    .select('id')
+    .single();
+
+  if (!org) return;
+
+  await supabaseAdmin.from('profiles').update({ org_id: org.id }).eq('id', userId);
+  await supabaseAdmin.from('organization_members').insert({
+    org_id: org.id,
+    user_id: userId,
+    role: 'owner',
+    status: 'active',
+  });
+}
+
 export const config = { api: { bodyParser: true } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -55,6 +88,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subscription_status: 'active',
           mp_subscription_id: data.id,
         }).eq('id', userId);
+        if (plan === 'pyme' || plan === 'empresa') {
+          await createOrgForOwner(userId, plan);
+        }
       } else if (sub.status === 'cancelled' || sub.status === 'paused') {
         await supabaseAdmin.from('profiles').update({
           subscription_status: 'blocked',
@@ -77,6 +113,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           plan,
           subscription_status: 'active',
         }).eq('id', userId);
+        if (plan === 'pyme' || plan === 'empresa') {
+          await createOrgForOwner(userId, plan);
+        }
       }
     }
   } catch {

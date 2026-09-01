@@ -612,7 +612,7 @@ export default function AppPage() {
         @media (max-width: 640px) { .btn-camera { display: inline-flex; } }
       `}</style>
 
-      <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} showOrg={planKey === 'pyme' || planKey === 'empresa'} />
 
       <div className="with-sidebar">
         <div className="page-wrap">
