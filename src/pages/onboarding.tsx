@@ -16,7 +16,7 @@ export default function OnboardingPage() {
       supabase.from('profiles')
         .select('nombre, onboarding_complete, trial_ends_at')
         .eq('id', data.user.id)
-        .single()
+        .maybeSingle()
         .then(({ data: p }) => {
           if (!p) return;
           if (p.onboarding_complete === true) { router.replace('/app'); return; }
@@ -28,13 +28,16 @@ export default function OnboardingPage() {
   async function start() {
     if (!user) return;
     setSaving(true);
-    const updates: Record<string, unknown> = { onboarding_complete: true };
-    const { data: p } = await supabase.from('profiles').select('trial_ends_at').eq('id', user.id).single();
+    const { data: p } = await supabase.from('profiles').select('trial_ends_at').eq('id', user.id).maybeSingle();
+    const upsertData: Record<string, unknown> = {
+      id: user.id,
+      onboarding_complete: true,
+    };
     if (!p?.trial_ends_at) {
-      updates.subscription_status = 'trial';
-      updates.trial_ends_at = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      upsertData.subscription_status = 'trial';
+      upsertData.trial_ends_at = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     }
-    await supabase.from('profiles').update(updates).eq('id', user.id);
+    await supabase.from('profiles').upsert(upsertData);
     router.push('/app');
   }
 
@@ -88,7 +91,7 @@ export default function OnboardingPage() {
             </div>
             <div className="step">
               <div className="step-num">3</div>
-              <div className="step-text"><strong>Exportá</strong> — descargá un Excel o envíá los datos directo a tu Google Sheets con un clic.</div>
+              <div className="step-text"><strong>Exportá</strong> — descargá un Excel o enviá los datos directo a tu Google Sheets con un clic.</div>
             </div>
           </div>
           <div className="tip">

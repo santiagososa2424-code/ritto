@@ -97,7 +97,7 @@ export default function AppPage() {
       if (!data.user) { router.replace('/login'); return; }
 
       // Check onboarding first — separate query so a missing column elsewhere can't block this
-      const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).single();
+      const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).maybeSingle();
       if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
 
       setUser(data.user);
