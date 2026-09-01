@@ -103,7 +103,7 @@ export default function AppPage() {
         .single()
         .then(({ data: p }) => {
           if (!p) return;
-          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
+          if (!p.onboarding_complete) { router.replace('/onboarding'); return; }
           const isBlocked = p.subscription_status === 'blocked';
           const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
           if (isBlocked || trialExpired) { router.replace('/blocked'); return; }
