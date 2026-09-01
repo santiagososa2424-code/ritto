@@ -13,6 +13,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.redirect('/settings?error=google_not_configured');
   }
 
+  const returnTo = req.query.returnTo as string | undefined;
+  const state = returnTo ? `${userId}:${returnTo}` : userId;
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -20,7 +23,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     scope: SCOPE,
     access_type: 'offline',
     prompt: 'consent',
-    state: userId,
+    state,
   });
 
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);

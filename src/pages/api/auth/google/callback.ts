@@ -2,11 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { code, state: userId, error } = req.query;
+  const { code, state: rawState, error } = req.query;
 
-  if (error || !code || !userId) {
+  if (error || !code || !rawState) {
     return res.redirect(`/settings?error=google_denied&detail=${encodeURIComponent(String(error ?? 'missing_code'))}`);
   }
+
+  const [userId, returnTo] = (rawState as string).split(':');
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -63,7 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.redirect(`/settings?error=google_token&detail=${encodeURIComponent(dbErr.message)}`);
     }
 
-    res.redirect('/settings?google=connected');
+    const successUrl = returnTo === 'onboarding' ? '/onboarding?google=connected' : '/settings?google=connected';
+    res.redirect(successUrl);
   } catch (e) {
     console.error('[google callback] exception:', e);
     res.redirect('/settings?error=google_token&detail=exception');
