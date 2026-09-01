@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia' | 'dashboard' | 'beneficios';
+type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia' | 'dashboard' | 'beneficios' | 'org';
 
 interface SidebarProps {
   active: ActivePage;
@@ -9,9 +9,10 @@ interface SidebarProps {
   empresa?: string;
   trialDaysLeft?: number | null;
   planName?: string;
+  showOrg?: boolean;
 }
 
-export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, planName }: SidebarProps) {
+export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, planName, showOrg }: SidebarProps) {
   const router = useRouter();
 
   async function signOut() {
@@ -67,6 +68,17 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
         </svg>
       ),
     },
+    ...(showOrg ? [{
+      id: 'org' as const,
+      label: 'Mi Organización',
+      path: '/org',
+      icon: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+      ),
+    }] : []),
     {
       id: 'plan' as const,
       label: 'Mi Plan',
