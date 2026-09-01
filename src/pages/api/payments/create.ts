@@ -1,10 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-// TEST — revert to 1500/5000/12000 before going live
 const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
-  pro: { title: 'Ritto Pro · 1 empresa', unit_price: 100 },
-  pyme: { title: 'Ritto Pyme · 5 cuentas', unit_price: 100 },
-  empresa: { title: 'Ritto Empresa · 20 cuentas', unit_price: 100 },
+  pro: { title: 'Ritto Pro · 1 empresa', unit_price: 1500 },
+  pyme: { title: 'Ritto Pyme · 5 cuentas', unit_price: 5000 },
+  empresa: { title: 'Ritto Empresa · 20 cuentas', unit_price: 12000 },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,6 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 
+  // Using Checkout Pro (preference) instead of preapproval to avoid debit card CVV tokenization bug
   const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
     method: 'POST',
     headers: {
