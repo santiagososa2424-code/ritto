@@ -93,8 +93,13 @@ export default function AppPage() {
   const PAGE_SIZE = 20;
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
+
+      // Check onboarding first — separate query so a missing column elsewhere can't block this
+      const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).single();
+      if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
+
       setUser(data.user);
       supabase
         .from('profiles')
