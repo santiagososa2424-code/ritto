@@ -35,6 +35,7 @@ interface Invite {
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState('');
   const [profile, setProfile] = useState<Profile>({ nombre: '', empresa: '', rut: '', telefono: '' });
   const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>(DEFAULT_COLUMNS.map((c) => ({ ...c })));
   const [savingMapping, setSavingMapping] = useState(false);
@@ -60,9 +61,11 @@ export default function SettingsPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.replace('/login'); return; }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { router.replace('/login'); return; }
+      const data = { user: session.user };
       setUser(data.user);
+      setAccessToken(session.access_token);
       supabase.from('profiles').select('*').eq('id', data.user.id).single().then(({ data: p }) => {
         if (p) {
           setProfile({
@@ -226,8 +229,8 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/sheets/save-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, sheetUrl: googleSheetUrl }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ sheetUrl: googleSheetUrl }),
       });
       let data: Record<string, unknown> = {};
       try { data = await res.json(); } catch { /* non-JSON response */ }

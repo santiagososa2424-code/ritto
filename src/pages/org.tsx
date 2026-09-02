@@ -12,9 +12,27 @@ interface Member {
   email: string;
   role: string;
   status: string;
-  invite_token: string | null;
+  invite_url: string | null;
   user_id: string | null;
   profile?: { nombre?: string; empresa?: string } | null;
+}
+
+interface MemberViewItem {
+  id: string;
+  role: string;
+  status: string;
+  name: string | null;
+}
+
+interface PanelMember {
+  memberId: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  invoiceCount: number;
+  invoiceTotal: number;
+  lastInvoiceDate: string | null;
 }
 
 interface Org {
@@ -26,8 +44,11 @@ interface Org {
 export default function OrgPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState('');
+  const [isOwner, setIsOwner] = useState(false);
   const [org, setOrg] = useState<Org | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [memberView, setMemberView] = useState<MemberViewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -38,12 +59,17 @@ export default function OrgPage() {
   const [empresa, setEmpresa] = useState<string | undefined>();
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [planName, setPlanName] = useState<string | undefined>();
+  const [panelData, setPanelData] = useState<PanelMember[]>([]);
+  const [panelLoading, setPanelLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.replace('/login'); return; }
-      setUser(data.user);
-      supabase.from('profiles').select('empresa, plan, trial_ends_at, subscription_status').eq('id', data.user.id).single()
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { router.replace('/login'); return; }
+      setUser(session.user);
+      setAccessToken(session.access_token);
+      const token = session.access_token;
+
+      supabase.from('profiles').select('empresa, plan, trial_ends_at, subscription_status').eq('id', session.user.id).single()
         .then(({ data: p }) => {
           if (!p) return;
           if (p.empresa) setEmpresa(p.empresa);
@@ -52,33 +78,55 @@ export default function OrgPage() {
             setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / 86400000)));
           }
         });
-      fetch(`/api/org/members?userId=${data.user.id}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.org) { setOrg(d.org); setMembers(d.members ?? []); }
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
+
+      // Try owner view first; fall back to member view
+      const ownerRes = await fetch('/api/org/members', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (ownerRes.ok) {
+        const d = await ownerRes.json();
+        setIsOwner(true);
+        if (d.org) { setOrg(d.org); setMembers(d.members ?? []); }
+        setPanelLoading(true);
+        fetch('/api/org/leader-panel', { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(pd => { if (pd) setPanelData(pd.panel ?? []); })
+          .finally(() => setPanelLoading(false));
+      } else {
+        // Try member view (non-owner)
+        const memberRes = await fetch('/api/org/member-view', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (memberRes.ok) {
+          const d = await memberRes.json();
+          if (d.org) { setOrg(d.org); setMemberView(d.members ?? []); }
+        }
+      }
+      setLoading(false);
     });
   }, [router]);
 
+  async function loadMembers(token: string) {
+    const res = await fetch('/api/org/members', { headers: { Authorization: `Bearer ${token}` } });
+    const d = await res.json();
+    if (d.org) { setOrg(d.org); setMembers(d.members ?? []); }
+  }
+
   async function sendInvite() {
-    if (!user || !inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
     setInviteUrl('');
     const res = await fetch('/api/org/invite', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, email: inviteEmail.trim() }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ email: inviteEmail.trim() }),
     });
     const d = await res.json();
     if (res.ok) {
       setInviteUrl(d.invite_url);
       setInviteEmail('');
-      // Refresh members
-      fetch(`/api/org/members?userId=${user.id}`)
-        .then(r => r.json()).then(d => { if (d.org) { setOrg(d.org); setMembers(d.members ?? []); } });
+      loadMembers(accessToken);
     } else {
       setInviteError(d.error ?? 'Error al invitar');
     }
@@ -86,12 +134,11 @@ export default function OrgPage() {
   }
 
   async function removeMember(memberId: string) {
-    if (!user) return;
     setRemoving(memberId);
     await fetch('/api/org/remove', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, memberId }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ memberId }),
     });
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
     setRemoving(null);
@@ -106,7 +153,6 @@ export default function OrgPage() {
   const maxSeats = org ? (PLAN_SEATS[org.plan] ?? 5) : 5;
   const activeCount = members.filter((m) => m.status === 'active').length;
   const pendingCount = members.filter((m) => m.status === 'pending').length;
-  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://ritto.lat';
 
   if (!user) return null;
 
@@ -152,6 +198,7 @@ export default function OrgPage() {
         .btn-copy-sm { background: none; border: 1px solid var(--border); color: var(--green); padding: 2px 8px; border-radius: 5px; font-family: 'Figtree', sans-serif; font-size: 11px; cursor: pointer; white-space: nowrap; }
         .empty-state { text-align: center; padding: 30px; color: var(--gray); font-size: 14px; }
         .plan-chip { background: var(--green-light); color: var(--green); border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .member-only-badge { background: #eff6ff; color: #1d4ed8; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600; }
       `}</style>
 
       <Sidebar active="org" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} showOrg />
@@ -159,7 +206,9 @@ export default function OrgPage() {
       <div className="with-sidebar">
         <div className="page-wrap">
           <h1 className="page-title">Mi Organización</h1>
-          <p className="page-sub">Gestioná las cuentas de tu equipo y los accesos.</p>
+          <p className="page-sub">
+            {isOwner ? 'Gestioná las cuentas de tu equipo y los accesos.' : 'Tu organización y compañeros de equipo.'}
+          </p>
 
           {loading ? (
             <div style={{ color: 'var(--gray)', fontSize: 14, padding: 20 }}>Cargando…</div>
@@ -171,9 +220,9 @@ export default function OrgPage() {
                 <div>Activá un plan Pyme o Empresa para gestionar múltiples cuentas.</div>
               </div>
             </div>
-          ) : (
+          ) : isOwner ? (
             <>
-              {/* Org summary */}
+              {/* Owner view — full management */}
               <div className="card">
                 <div className="card-title">
                   {org.name}
@@ -189,7 +238,6 @@ export default function OrgPage() {
                   <span className="seat-label">{activeCount + pendingCount}/{maxSeats} asientos</span>
                 </div>
 
-                {/* Invite form */}
                 {activeCount + pendingCount < maxSeats ? (
                   <>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Invitar nueva sucursal</div>
@@ -226,7 +274,6 @@ export default function OrgPage() {
                 )}
               </div>
 
-              {/* Members list */}
               <div className="card">
                 <div className="card-title" style={{ marginBottom: 16 }}>Cuentas del equipo</div>
                 {members.length === 0 ? (
@@ -236,17 +283,16 @@ export default function OrgPage() {
                     {members.map((m) => {
                       const initials = (m.profile?.nombre || m.email).slice(0, 2).toUpperCase();
                       const displayName = m.profile?.nombre || m.profile?.empresa || m.email;
-                      const pendingInviteUrl = `${siteUrl}/join?token=${m.invite_token}`;
                       return (
                         <div key={m.id} className="member-row">
                           <div className="member-avatar">{initials}</div>
                           <div className="member-info">
                             <div className="member-name">{displayName}</div>
                             <div className="member-email">{m.email}</div>
-                            {m.status === 'pending' && m.invite_token && (
+                            {m.status === 'pending' && m.invite_url && (
                               <div className="pending-link">
                                 Link pendiente:
-                                <button className="btn-copy-sm" onClick={() => copyToClipboard(pendingInviteUrl, m.id)}>
+                                <button className="btn-copy-sm" onClick={() => copyToClipboard(m.invite_url!, m.id)}>
                                   {copied === m.id ? '¡Copiado!' : 'Copiar link'}
                                 </button>
                               </div>
@@ -270,7 +316,78 @@ export default function OrgPage() {
                   </div>
                 )}
               </div>
+
+              <div className="card">
+                <div className="card-title" style={{ marginBottom: 4 }}>Panel de Sucursales</div>
+                <div className="card-sub">Resumen de facturas por cuenta del equipo.</div>
+                {panelLoading ? (
+                  <div style={{ color: 'var(--gray)', fontSize: 13 }}>Cargando…</div>
+                ) : panelData.length === 0 ? (
+                  <div className="empty-state">Sin datos de facturas todavía</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1.5px solid var(--border)' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--gray)' }}>Cuenta</th>
+                          <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--gray)' }}>Email</th>
+                          <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, color: 'var(--gray)' }}>Facturas</th>
+                          <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, color: 'var(--gray)' }}>Total acumulado</th>
+                          <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--gray)' }}>Última factura</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {panelData.map((m) => (
+                          <tr key={m.memberId} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '10px 10px' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--dark)' }}>{m.name}</div>
+                              {m.role === 'owner' && <span style={{ fontSize: 10, color: 'var(--green)', fontWeight: 700 }}>LÍDER</span>}
+                            </td>
+                            <td style={{ padding: '10px 10px', color: 'var(--gray)' }}>{m.email}</td>
+                            <td style={{ padding: '10px 10px', textAlign: 'right', fontWeight: 600 }}>{m.invoiceCount}</td>
+                            <td style={{ padding: '10px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>
+                              {m.invoiceTotal > 0 ? `$${m.invoiceTotal.toLocaleString('es-UY')}` : '—'}
+                            </td>
+                            <td style={{ padding: '10px 10px', color: 'var(--gray)' }}>{m.lastInvoiceDate ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
+          ) : (
+            /* Member view — read-only */
+            <div className="card">
+              <div className="card-title">
+                {org.name}
+                <span className="plan-chip">Plan {PLAN_LABEL[org.plan] ?? org.plan}</span>
+                <span className="member-only-badge">Miembro</span>
+              </div>
+              <div className="card-sub" style={{ marginBottom: 20 }}>Sos parte de esta organización.</div>
+              <div className="card-title" style={{ marginBottom: 12, fontSize: 13 }}>Compañeros de equipo</div>
+              {memberView.length === 0 ? (
+                <div className="empty-state">Sin otros miembros activos</div>
+              ) : (
+                <div className="member-list">
+                  {memberView.map((m) => {
+                    const initials = (m.name ?? 'U').slice(0, 2).toUpperCase();
+                    return (
+                      <div key={m.id} className="member-row">
+                        <div className="member-avatar">{initials}</div>
+                        <div className="member-info">
+                          <div className="member-name">{m.name ?? 'Usuario'}</div>
+                        </div>
+                        <span className={`status-badge ${m.role === 'owner' ? 'status-owner' : 'status-active'}`}>
+                          {m.role === 'owner' ? 'Líder' : 'Activo'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
