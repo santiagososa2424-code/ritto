@@ -538,6 +538,26 @@ export default function AppPage() {
         .btn-dl:disabled { opacity: 0.4; cursor: not-allowed; }
         .empty-state { padding: 44px 20px; text-align: center; color: var(--gray); font-size: 14px; line-height: 1.7; }
 
+        /* Getting started guide */
+        .getting-started { padding: 28px 28px 32px; }
+        .gs-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--dark); margin-bottom: 20px; }
+        .gs-steps { display: flex; flex-direction: column; gap: 0; }
+        .gs-step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--bg); }
+        .gs-step:last-child { border-bottom: none; }
+        .gs-num { width: 32px; height: 32px; background: var(--green-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--green); flex-shrink: 0; margin-top: 2px; }
+        .gs-content { flex: 1; }
+        .gs-step-title { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 4px; }
+        .gs-step-desc { font-size: 13px; color: var(--gray); line-height: 1.5; margin-bottom: 10px; }
+        .gs-btn { display: inline-block; background: var(--green); color: #fff; border: none; padding: 8px 14px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+        .gs-btn:hover { opacity: 0.9; }
+        @media (max-width: 560px) {
+          .getting-started { padding: 20px 16px 24px; }
+          .gs-title { font-size: 17px; margin-bottom: 14px; }
+          .gs-num { width: 28px; height: 28px; font-size: 12px; }
+          .gs-step-title { font-size: 13px; }
+          .gs-step-desc { font-size: 12px; }
+        }
+
         /* Right panel */
         .rp-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
         .rp-title { font-size: 13px; font-weight: 700; color: var(--dark); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
@@ -813,12 +833,34 @@ export default function AppPage() {
                     <div>Probá seleccionando otro mes o "Todas las fechas".</div>
                   </>
                 ) : (
-                  <>
-                    <div style={{ fontSize: 36, marginBottom: 10 }}>📂</div>
-                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
-                    <div>Usá el área de arriba para subir XMLs, PDFs o fotos.</div>
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#bbb' }}>Los XML de DGI son instantáneos y 100% exactos.</div>
-                  </>
+                  <div className="getting-started">
+                    <div className="gs-title">Primeros pasos</div>
+                    <div className="gs-steps">
+                      <div className="gs-step">
+                        <div className="gs-num">1</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Configurá tus columnas de exportación</div>
+                          <div className="gs-step-desc">Definí cómo querés que se llamen las columnas en tu Excel o Google Sheets para que coincidan con tu planilla.</div>
+                          <a href="/settings" className="gs-btn">Ir a Configuración →</a>
+                        </div>
+                      </div>
+                      <div className="gs-step">
+                        <div className="gs-num">2</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Subí tu primera factura</div>
+                          <div className="gs-step-desc">Arrastrá o seleccioná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
+                          <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
+                        </div>
+                      </div>
+                      <div className="gs-step">
+                        <div className="gs-num">3</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
+                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o enviá los datos directo a tu planilla con un clic.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
