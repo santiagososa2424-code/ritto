@@ -57,6 +57,7 @@ function getMonthOptions(invoices: ExtractedInvoice[]): { value: string; label: 
 export default function AppPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState('');
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
   const [dragging, setDragging] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -66,7 +67,10 @@ export default function AppPage() {
   const [excelMapping, setExcelMapping] = useState<ExcelColumn[]>(DEFAULT_COLUMNS);
   const [googleSheetId, setGoogleSheetId] = useState('');
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
   const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [sheetsError, setSheetsError] = useState('');
+  const [sheetsRange, setSheetsRange] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -90,17 +94,24 @@ export default function AppPage() {
   const PAGE_SIZE = 20;
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.replace('/login'); return; }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { router.replace('/login'); return; }
+      const data = { user: session.user };
+
+      // Check onboarding first — separate query so a missing column elsewhere can't block this
+      const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).maybeSingle();
+      if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
+
       setUser(data.user);
+      setAccessToken(session.access_token);
       supabase
         .from('profiles')
-        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, mp_subscription_id')
+        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, google_email, mp_subscription_id')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
           if (!p) return;
-          if (p.onboarding_complete === false) { router.replace('/onboarding'); return; }
+          if (!p.onboarding_complete) { router.replace('/onboarding'); return; }
           const isBlocked = p.subscription_status === 'blocked';
           const trialExpired = p.subscription_status === 'trial' && p.trial_ends_at && new Date(p.trial_ends_at) < new Date();
           if (isBlocked || trialExpired) { router.replace('/blocked'); return; }
@@ -117,6 +128,7 @@ export default function AppPage() {
           if (p.empresa) setEmpresa(p.empresa);
           if (p.google_sheet_id) setGoogleSheetId(p.google_sheet_id as string);
           if (p.google_access_token) setGoogleConnected(true);
+          if (p.google_email) setGoogleEmail(p.google_email as string);
         });
     });
   }, [router]);
@@ -194,8 +206,8 @@ export default function AppPage() {
     try {
       const res = await fetch('/api/invoices/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: id, userId: user.id, updates: editFields }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ invoiceId: id, updates: editFields }),
       });
       if (res.ok) {
         setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, ...editFields } as ExtractedInvoice : inv));
@@ -318,26 +330,29 @@ export default function AppPage() {
   async function exportToSheets(invoiceList: ExtractedInvoice[]) {
     if (!user) return;
     setSheetsStatus('loading');
+    setSheetsError('');
     try {
       const res = await fetch('/api/sheets/append', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ invoices: invoiceList, mapping: excelMapping }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setSheetsRange(data.updatedRange ?? '');
         setSheetsStatus('ok');
       } else {
         const data = await res.json();
-        if (data.error === 'Google account not connected' || data.error === 'No Google Sheet URL configured') {
-          window.location.href = '/settings';
-          return;
-        }
+        console.error('[exportToSheets] API error:', data);
+        setSheetsError(data.error ?? `Error ${res.status}`);
         setSheetsStatus('error');
       }
-    } catch {
+    } catch (e) {
+      console.error('[exportToSheets] fetch error:', e);
+      setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => setSheetsStatus('idle'), 3000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); }, 8000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -526,6 +541,26 @@ export default function AppPage() {
         .btn-dl:disabled { opacity: 0.4; cursor: not-allowed; }
         .empty-state { padding: 44px 20px; text-align: center; color: var(--gray); font-size: 14px; line-height: 1.7; }
 
+        /* Getting started guide */
+        .getting-started { padding: 28px 28px 32px; }
+        .gs-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--dark); margin-bottom: 20px; }
+        .gs-steps { display: flex; flex-direction: column; gap: 0; }
+        .gs-step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--bg); }
+        .gs-step:last-child { border-bottom: none; }
+        .gs-num { width: 32px; height: 32px; background: var(--green-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--green); flex-shrink: 0; margin-top: 2px; }
+        .gs-content { flex: 1; }
+        .gs-step-title { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 4px; }
+        .gs-step-desc { font-size: 13px; color: var(--gray); line-height: 1.5; margin-bottom: 10px; }
+        .gs-btn { display: inline-block; background: var(--green); color: #fff; border: none; padding: 8px 14px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+        .gs-btn:hover { opacity: 0.9; }
+        @media (max-width: 560px) {
+          .getting-started { padding: 20px 16px 24px; }
+          .gs-title { font-size: 17px; margin-bottom: 14px; }
+          .gs-num { width: 28px; height: 28px; font-size: 12px; }
+          .gs-step-title { font-size: 13px; }
+          .gs-step-desc { font-size: 12px; }
+        }
+
         /* Right panel */
         .rp-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
         .rp-title { font-size: 13px; font-weight: 700; color: var(--dark); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
@@ -605,7 +640,7 @@ export default function AppPage() {
         @media (max-width: 640px) { .btn-camera { display: inline-flex; } }
       `}</style>
 
-      <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} />
+      <Sidebar active="facturas" userEmail={user.email} empresa={empresa} trialDaysLeft={trialDaysLeft} planName={planName} showOrg={planKey === 'pyme' || planKey === 'empresa'} />
 
       <div className="with-sidebar">
         <div className="page-wrap">
@@ -633,7 +668,6 @@ export default function AppPage() {
                   background: sheetsStatus === 'ok' ? '#166534' : sheetsStatus === 'error' ? '#dc2626' : googleConnected && googleSheetId ? '#1a7a59' : 'var(--gray)',
                 }}
                 onClick={() => {
-                  if (!googleConnected || !googleSheetId) { window.location.href = '/settings'; return; }
                   exportToSheets(filteredDone);
                 }}
                 disabled={filteredDone.length === 0 || sheetsStatus === 'loading'}
@@ -649,6 +683,32 @@ export default function AppPage() {
                 </span>
               </button>
             </div>
+            {sheetsStatus === 'ok' && (
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  ✓ Datos enviados.{' '}
+                  <a
+                    href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#166534', textDecoration: 'underline' }}
+                  >
+                    Abrir planilla →
+                  </a>
+                  {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
+                </div>
+                {googleEmail && (
+                  <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400 }}>
+                    Cuenta conectada: {googleEmail}
+                  </div>
+                )}
+              </div>
+            )}
+            {sheetsError && (
+              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
+                Google Sheets: {sheetsError}
+              </div>
+            )}
           </div>
 
           <div className="main-layout">
@@ -693,7 +753,7 @@ export default function AppPage() {
               </svg>
             </div>
             <h2>Subí tus facturas</h2>
-            <p>Tocá para seleccionar o arrastrá — procesamos varios a la vez</p>
+            <p>Tocá para seleccionar o arrastrar — procesamos varios a la vez</p>
             <div className="upload-types">
               <span className="type-pill xml">XML · CFE Digital</span>
               <span className="type-pill">PDF</span>
@@ -776,12 +836,34 @@ export default function AppPage() {
                     <div>Probá seleccionando otro mes o "Todas las fechas".</div>
                   </>
                 ) : (
-                  <>
-                    <div style={{ fontSize: 36, marginBottom: 10 }}>📂</div>
-                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
-                    <div>Usá el área de arriba para subir XMLs, PDFs o fotos.</div>
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#bbb' }}>Los XML de DGI son instantáneos y 100% exactos.</div>
-                  </>
+                  <div className="getting-started">
+                    <div className="gs-title">Primeros pasos</div>
+                    <div className="gs-steps">
+                      <div className="gs-step">
+                        <div className="gs-num">1</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Configurá tus columnas de exportación</div>
+                          <div className="gs-step-desc">Definí cómo querés que se llamen las columnas en tu Excel o Google Sheets para que coincidan con tu planilla.</div>
+                          <a href="/settings" className="gs-btn">Ir a Configuración →</a>
+                        </div>
+                      </div>
+                      <div className="gs-step">
+                        <div className="gs-num">2</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Subí tu primera factura</div>
+                          <div className="gs-step-desc">Arrastrar o seleccioná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
+                          <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
+                        </div>
+                      </div>
+                      <div className="gs-step">
+                        <div className="gs-num">3</div>
+                        <div className="gs-content">
+                          <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
+                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o envía los datos directo a tu planilla con un clic.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
@@ -879,7 +961,6 @@ export default function AppPage() {
                                 style={{ marginLeft: 4 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!googleConnected || !googleSheetId) { window.location.href = '/settings'; return; }
                                   exportToSheets([inv]);
                                 }}
                                 title={!googleConnected ? 'Conectá Google en Configuración' : !googleSheetId ? 'Configurá tu planilla en Configuración' : 'Enviar a Google Sheets'}
@@ -1007,7 +1088,6 @@ export default function AppPage() {
                         <>
                           <button className="btn-dl" disabled={downloading === inv.id} onClick={() => downloadExcel([inv], inv.id)}>Descargar Excel</button>
                           <button className="btn-dl" style={{ background: '#f0f0f0', color: '#555' }} onClick={() => {
-                            if (!googleConnected || !googleSheetId) { window.location.href = '/settings'; return; }
                             exportToSheets([inv]);
                           }}>Para Google Sheets</button>
                         </>
