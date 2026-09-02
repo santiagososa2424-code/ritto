@@ -20,18 +20,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('role', 'owner')
     .maybeSingle();
 
-  if (!ownerMember) return res.status(403).json({ error: 'No sos el dueño de ninguna organización' });
+  let orgId = ownerMember?.org_id;
+
+  if (!orgId) {
+    const { data: ownedOrg } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+    orgId = ownedOrg?.id;
+  }
+
+  if (!orgId) return res.status(403).json({ error: 'No sos el dueño de ninguna organización' });
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
     .select('id, name, plan')
-    .eq('id', ownerMember.org_id)
+    .eq('id', orgId)
     .single();
 
   const { data: members } = await supabaseAdmin
     .from('organization_members')
     .select('id, email, role, status, user_id, invite_token')
-    .eq('org_id', ownerMember.org_id)
+    .eq('org_id', orgId)
     .neq('status', 'removed')
     .order('created_at');
 
