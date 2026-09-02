@@ -53,10 +53,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!invoicesByUser[inv.user_id]) {
         invoicesByUser[inv.user_id] = { count: 0, total: 0, lastDate: null };
       }
-      invoicesByUser[inv.user_id].count++;
-      invoicesByUser[inv.user_id].total += inv.total ?? 0;
-      if (inv.fecha && (!invoicesByUser[inv.user_id].lastDate || inv.fecha > invoicesByUser[inv.user_id].lastDate)) {
-        invoicesByUser[inv.user_id].lastDate = inv.fecha;
+      const entry = invoicesByUser[inv.user_id];
+      entry.count++;
+      entry.total += inv.total ?? 0;
+      if (inv.fecha) {
+        const prev = entry.lastDate;
+        if (!prev || inv.fecha > prev) entry.lastDate = inv.fecha;
       }
     }
   }
