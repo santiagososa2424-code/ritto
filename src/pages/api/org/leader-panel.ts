@@ -20,12 +20,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('role', 'owner')
     .maybeSingle();
 
-  if (!ownerMember) return res.status(403).json({ error: 'Solo el dueño puede ver este panel' });
+  let orgId = ownerMember?.org_id;
+
+  if (!orgId) {
+    const { data: ownedOrg } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+    orgId = ownedOrg?.id;
+  }
+
+  if (!orgId) return res.status(403).json({ error: 'Solo el dueño puede ver este panel' });
 
   const { data: members } = await supabaseAdmin
     .from('organization_members')
     .select('id, email, role, user_id')
-    .eq('org_id', ownerMember.org_id)
+    .eq('org_id', orgId)
     .eq('status', 'active')
     .order('created_at');
 
