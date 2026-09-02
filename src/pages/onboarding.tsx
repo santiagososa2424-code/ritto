@@ -65,7 +65,18 @@ export default function OnboardingPage() {
         .tip { background: #e6f4ef; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #0a5c44; margin-bottom: 24px; line-height: 1.5; }
         .btn { width: 100%; background: #0a7c59; color: #fff; border: none; padding: 15px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        @media (max-width: 560px) { .card { padding: 28px 20px; } }
+        @media (max-width: 560px) {
+          .page { padding: 20px 12px; justify-content: flex-start; padding-top: 32px; }
+          .logo { margin-bottom: 20px; }
+          .card { padding: 24px 18px; border-radius: 16px; }
+          .card-title { font-size: 22px; }
+          .card-sub { font-size: 14px; margin-bottom: 20px; }
+          .icon-wrap { width: 52px; height: 52px; margin-bottom: 18px; }
+          .steps { gap: 12px; margin-bottom: 20px; }
+          .step-text { font-size: 13px; }
+          .tip { font-size: 12px; margin-bottom: 18px; }
+          .btn { padding: 14px; font-size: 14px; }
+        }
       `}</style>
       <div className="page">
         <div className="logo">ritto</div>
