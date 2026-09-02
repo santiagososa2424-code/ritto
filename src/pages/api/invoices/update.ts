@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUser } from '../../../lib/auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,14 +24,16 @@ const FIELD_MAP: Record<string, string> = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { invoiceId, userId, updates } = req.body as {
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { invoiceId, updates } = req.body as {
     invoiceId: string;
-    userId: string;
     updates: Record<string, unknown>;
   };
 
-  if (!invoiceId || !userId || !updates) {
-    return res.status(400).json({ error: 'invoiceId, userId y updates son requeridos' });
+  if (!invoiceId || !updates) {
+    return res.status(400).json({ error: 'invoiceId y updates son requeridos' });
   }
 
   const dbUpdates: Record<string, unknown> = {};
@@ -51,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .from('invoices')
     .update(dbUpdates)
     .eq('id', invoiceId)
-    .eq('user_id', userId);
+    .eq('user_id', user.id);
 
   if (error) return res.status(500).json({ error: error.message });
 

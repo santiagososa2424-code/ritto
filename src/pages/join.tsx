@@ -9,7 +9,7 @@ export default function JoinPage() {
   const [orgName, setOrgName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [userId, setUserId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -19,9 +19,9 @@ export default function JoinPage() {
         if (d.error) { setState('error'); setErrorMsg(d.error); return; }
         setOrgName(d.orgName);
         setInviteEmail(d.email ?? '');
-        const { data } = await supabase.auth.getUser();
-        if (data.user) {
-          setUserId(data.user.id);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          setAccessToken(sessionData.session.access_token);
           setState('ready');
         } else {
           setState('needsLogin');
@@ -31,12 +31,12 @@ export default function JoinPage() {
   }, [token]);
 
   async function accept() {
-    if (!userId || !token) return;
+    if (!accessToken || !token) return;
     setState('accepting');
     const res = await fetch('/api/org/accept', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, userId }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ token }),
     });
     if (res.ok) {
       setState('success');

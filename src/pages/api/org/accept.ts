@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUser } from '../../../lib/auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,12 +10,15 @@ const supabaseAdmin = createClient(
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { token, userId } = req.body as { token: string; userId: string };
-  if (!token || !userId) return res.status(400).json({ error: 'token y userId requeridos' });
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { token } = req.body as { token: string };
+  if (!token) return res.status(400).json({ error: 'token requerido' });
 
   const { data: invite } = await supabaseAdmin
     .from('organization_members')
-    .select('id, org_id, status')
+    .select('id, org_id, status, email')
     .eq('invite_token', token)
     .maybeSingle();
 
@@ -22,11 +26,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (invite.status === 'active') return res.status(400).json({ error: 'Esta invitación ya fue aceptada' });
   if (invite.status === 'removed') return res.status(400).json({ error: 'Invitación cancelada' });
 
-  // Check user isn't already in another org
+  if (invite.email && user.email && invite.email.toLowerCase() !== user.email.toLowerCase()) {
+    return res.status(403).json({ error: 'Esta invitación es para otro email' });
+  }
+
   const { data: existingMembership } = await supabaseAdmin
     .from('organization_members')
     .select('id')
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -40,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   await supabaseAdmin
     .from('organization_members')
-    .update({ user_id: userId, status: 'active', invite_token: null })
+    .update({ user_id: user.id, status: 'active', invite_token: null })
     .eq('id', invite.id);
 
   await supabaseAdmin
@@ -49,8 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       org_id: invite.org_id,
       subscription_status: 'active',
       plan: org?.plan ?? 'pyme',
+      onboarding_complete: true,
     })
-    .eq('id', userId);
+    .eq('id', user.id);
 
   return res.status(200).json({ ok: true });
 }

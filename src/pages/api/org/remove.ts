@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUser } from '../../../lib/auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,13 +10,16 @@ const supabaseAdmin = createClient(
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { userId, memberId } = req.body as { userId: string; memberId: string };
-  if (!userId || !memberId) return res.status(400).json({ error: 'userId y memberId requeridos' });
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { memberId } = req.body as { memberId: string };
+  if (!memberId) return res.status(400).json({ error: 'memberId requerido' });
 
   const { data: ownerMember } = await supabaseAdmin
     .from('organization_members')
     .select('org_id')
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .eq('role', 'owner')
     .maybeSingle();
 

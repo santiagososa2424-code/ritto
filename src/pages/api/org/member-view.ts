@@ -13,53 +13,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const user = await getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'No autorizado' });
 
-  const { data: ownerMember } = await supabaseAdmin
+  const { data: membership } = await supabaseAdmin
     .from('organization_members')
-    .select('org_id')
+    .select('org_id, role, status')
     .eq('user_id', user.id)
-    .eq('role', 'owner')
+    .eq('status', 'active')
     .maybeSingle();
 
-  if (!ownerMember) return res.status(403).json({ error: 'No sos el dueño de ninguna organización' });
+  if (!membership) return res.status(404).json({ error: 'No sos miembro de ninguna organización' });
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
     .select('id, name, plan')
-    .eq('id', ownerMember.org_id)
+    .eq('id', membership.org_id)
     .single();
 
   const { data: members } = await supabaseAdmin
     .from('organization_members')
-    .select('id, email, role, status, user_id, invite_token')
-    .eq('org_id', ownerMember.org_id)
-    .neq('status', 'removed')
+    .select('id, role, status, user_id')
+    .eq('org_id', membership.org_id)
+    .eq('status', 'active')
     .order('created_at');
 
-  const activeUserIds = (members ?? [])
-    .filter((m) => m.user_id && m.status === 'active')
-    .map((m) => m.user_id);
-
+  const memberUserIds = (members ?? []).filter((m) => m.user_id).map((m) => m.user_id);
   let profiles: Record<string, { nombre?: string; empresa?: string }> = {};
-  if (activeUserIds.length > 0) {
+  if (memberUserIds.length > 0) {
     const { data: profileRows } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, empresa')
-      .in('id', activeUserIds);
+      .in('id', memberUserIds);
     for (const p of profileRows ?? []) {
       profiles[p.id] = { nombre: p.nombre, empresa: p.empresa };
     }
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
   const membersOut = (members ?? []).map((m) => ({
     id: m.id,
-    email: m.email,
     role: m.role,
     status: m.status,
-    user_id: m.user_id,
-    invite_url: m.status === 'pending' && m.invite_token ? `${siteUrl}/join?token=${m.invite_token}` : null,
-    profile: m.user_id ? profiles[m.user_id] : null,
+    name: m.user_id ? (profiles[m.user_id]?.nombre || profiles[m.user_id]?.empresa || null) : null,
   }));
 
-  return res.status(200).json({ org, members: membersOut });
+  return res.status(200).json({ org, members: membersOut, myRole: membership.role });
 }

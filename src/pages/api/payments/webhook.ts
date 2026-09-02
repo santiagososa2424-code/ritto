@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 
 function verifySignature(req: NextApiRequest): boolean {
   const secret = process.env.MP_WEBHOOK_SECRET;
-  if (!secret) return true;
+  if (!secret) return false;
 
   const xSignature = req.headers['x-signature'] as string | undefined;
   const xRequestId = req.headers['x-request-id'] as string | undefined;
@@ -57,6 +57,7 @@ async function createOrgForOwner(userId: string, plan: string) {
     user_id: userId,
     role: 'owner',
     status: 'active',
+    sucursal_name: '',
   });
 }
 

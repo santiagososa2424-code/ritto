@@ -8,7 +8,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   res.json({
     ok: hasGemini && hasSupabaseUrl && hasSupabaseKey,
     gemini_key_set: hasGemini,
-    gemini_key_prefix: hasGemini ? process.env.GEMINI_API_KEY!.slice(0, 6) + '...' : null,
     supabase_url_set: hasSupabaseUrl,
     supabase_key_set: hasSupabaseKey,
     node_env: process.env.NODE_ENV,

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { getAuthUser } from '../../../lib/auth';
 
 const PLAN_SEATS: Record<string, number> = { pyme: 5, empresa: 20 };
 
@@ -12,13 +13,18 @@ const supabaseAdmin = createClient(
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { userId, email } = req.body as { userId: string; email: string };
-  if (!userId || !email) return res.status(400).json({ error: 'userId y email requeridos' });
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { email } = req.body as { email: string };
+  if (!email) return res.status(400).json({ error: 'email requerido' });
+
+  const normalizedEmail = email.toLowerCase().trim().slice(0, 254);
 
   const { data: ownerMember } = await supabaseAdmin
     .from('organization_members')
     .select('org_id')
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .eq('role', 'owner')
     .maybeSingle();
 
@@ -48,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .from('organization_members')
     .select('id')
     .eq('org_id', orgId)
-    .eq('email', email.toLowerCase())
+    .eq('email', normalizedEmail)
     .neq('status', 'removed')
     .maybeSingle();
 
@@ -57,10 +63,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const token = randomUUID();
   await supabaseAdmin.from('organization_members').insert({
     org_id: orgId,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     role: 'member',
     status: 'pending',
     invite_token: token,
+    sucursal_name: '',
   });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';

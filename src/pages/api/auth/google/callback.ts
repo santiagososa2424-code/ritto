@@ -8,7 +8,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.redirect(`/settings?error=google_denied&detail=${encodeURIComponent(String(error ?? 'missing_code'))}`);
   }
 
-  const [userId, returnTo] = (rawState as string).split(':');
+  const parts = (rawState as string).split(':');
+  const userId = parts[0];
+  const nonce = parts[1];
+  const returnTo = parts[2];
+
+  const cookieNonce = req.cookies['g_nonce'];
+  if (!cookieNonce || cookieNonce !== nonce) {
+    return res.redirect('/settings?error=google_csrf');
+  }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -17,6 +25,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!clientId || !clientSecret || !redirectUri) {
     return res.redirect('/settings?error=google_not_configured');
   }
+
+  // Clear nonce cookie immediately
+  res.setHeader('Set-Cookie', 'g_nonce=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
 
   try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
