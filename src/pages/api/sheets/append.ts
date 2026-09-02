@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExcelColumn } from '../../../lib/types';
 import { DEFAULT_COLUMNS } from '../../../lib/types';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUser } from '../../../lib/auth';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -26,14 +27,16 @@ async function refreshAccessToken(rt: string): Promise<string | null> {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { invoices, userId, mapping } = req.body as {
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { invoices, mapping } = req.body as {
     invoices: Record<string, unknown>[];
-    userId: string;
     mapping?: ExcelColumn[];
   };
 
-  if (!invoices?.length || !userId) {
-    return res.status(400).json({ error: 'invoices and userId are required' });
+  if (!invoices?.length) {
+    return res.status(400).json({ error: 'invoices es requerido' });
   }
 
   const supabase = createClient(
@@ -44,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: profile } = await supabase
     .from('profiles')
     .select('google_access_token, google_refresh_token, google_token_expires_at, google_sheet_id')
-    .eq('id', userId)
+    .eq('id', user.id)
     .single();
 
   if (!profile?.google_access_token) {
@@ -60,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const newToken = await refreshAccessToken(profile.google_refresh_token as string);
     if (newToken) {
       accessToken = newToken;
-      await supabase.from('profiles').update({ google_access_token: newToken }).eq('id', userId);
+      await supabase.from('profiles').update({ google_access_token: newToken }).eq('id', user.id);
     }
   }
 
@@ -74,7 +77,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   );
 
-  // Check if sheet already has data to avoid duplicating the header row
   const checkRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
