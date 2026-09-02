@@ -26,10 +26,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (invite.status === 'active') return res.status(400).json({ error: 'Esta invitación ya fue aceptada' });
   if (invite.status === 'removed') return res.status(400).json({ error: 'Invitación cancelada' });
 
+  // Verify the authenticated user's email matches the invite (optional but recommended)
   if (invite.email && user.email && invite.email.toLowerCase() !== user.email.toLowerCase()) {
     return res.status(403).json({ error: 'Esta invitación es para otro email' });
   }
 
+  // Check user isn't already in another org
   const { data: existingMembership } = await supabaseAdmin
     .from('organization_members')
     .select('id')
