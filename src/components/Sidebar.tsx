@@ -106,6 +106,16 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
   const mobileIcons = [
     ...items,
     {
+      id: 'soporte' as const,
+      label: 'Soporte',
+      path: '',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+      ),
+    },
+    {
       id: 'logout' as const,
       label: 'Salir',
       path: '',
@@ -265,7 +275,7 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
           <button
             key={item.id}
             className={`bn-item${active === item.id ? ' bn-active' : ''}`}
-            onClick={() => item.id === 'logout' ? signOut() : router.push(item.path)}
+            onClick={() => item.id === 'logout' ? signOut() : item.id === 'soporte' ? window.open('mailto:soporte@ritto.lat', '_blank') : router.push(item.path)}
           >
             {item.icon}
             <span>{item.label}</span>
