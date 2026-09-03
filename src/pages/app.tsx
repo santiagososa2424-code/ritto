@@ -57,7 +57,6 @@ function getMonthOptions(invoices: ExtractedInvoice[]): { value: string; label: 
 export default function AppPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState('');
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
   const [dragging, setDragging] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -94,16 +93,14 @@ export default function AppPage() {
   const PAGE_SIZE = 20;
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { router.replace('/login'); return; }
-      const data = { user: session.user };
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { router.replace('/login'); return; }
 
       // Check onboarding first — separate query so a missing column elsewhere can't block this
       const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).maybeSingle();
       if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
 
       setUser(data.user);
-      setAccessToken(session.access_token);
       supabase
         .from('profiles')
         .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, google_email, mp_subscription_id')
@@ -177,7 +174,7 @@ export default function AppPage() {
       const res = await fetch('/api/extract', { method: 'POST', body: formData });
       let data: ExtractedInvoice;
       try { data = await res.json(); }
-      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
       const merged = { ...data, id };
       setInvoices((prev) => prev.map((inv) => inv.id === id ? merged : inv));
       if (merged.status === 'done') { await saveInvoice(merged); setMonthlyUsed((n) => n + 1); }
@@ -206,8 +203,8 @@ export default function AppPage() {
     try {
       const res = await fetch('/api/invoices/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ invoiceId: id, updates: editFields }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: id, userId: user.id, updates: editFields }),
       });
       if (res.ok) {
         setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, ...editFields } as ExtractedInvoice : inv));
@@ -256,7 +253,7 @@ export default function AppPage() {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
         let data: ExtractedInvoice;
         try { data = await res.json(); }
-        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
@@ -334,8 +331,8 @@ export default function AppPage() {
     try {
       const res = await fetch('/api/sheets/append', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ invoices: invoiceList, mapping: excelMapping }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -706,7 +703,12 @@ export default function AppPage() {
             )}
             {sheetsError && (
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
-                Google Sheets: {sheetsError}
+                {sheetsError.toLowerCase().includes('not connected') || sheetsError.toLowerCase().includes('no configurad') || sheetsError.toLowerCase().includes('google account')
+                  ? <>Conectá tu cuenta de Google en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> antes de exportar.</>
+                  : sheetsError.toLowerCase().includes('url') || sheetsError.toLowerCase().includes('sheet')
+                  ? <>Revisá la URL de tu planilla en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
+                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos a soporte@ritto.lat</>
+                }
               </div>
             )}
           </div>
@@ -753,7 +755,7 @@ export default function AppPage() {
               </svg>
             </div>
             <h2>Subí tus facturas</h2>
-            <p>Tocá para seleccionar o arrastrar — procesamos varios a la vez</p>
+            <p>Tocá para seleccionar o arrastrá — procesamos varios a la vez</p>
             <div className="upload-types">
               <span className="type-pill xml">XML · CFE Digital</span>
               <span className="type-pill">PDF</span>
@@ -851,7 +853,7 @@ export default function AppPage() {
                         <div className="gs-num">2</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Subí tu primera factura</div>
-                          <div className="gs-step-desc">Arrastrar o seleccioná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
+                          <div className="gs-step-desc">Arrastrá o selecioná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
                           <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
                         </div>
                       </div>
@@ -859,7 +861,8 @@ export default function AppPage() {
                         <div className="gs-num">3</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
-                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o envía los datos directo a tu planilla con un clic.</div>
+                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o enviá los datos directo a tu planilla con un clic. Para Google Sheets, primero conectá tu cuenta en Configuración.</div>
+                          <a href="/settings" className="gs-btn" style={{ marginTop: 8 }}>Conectar Google Sheets →</a>
                         </div>
                       </div>
                     </div>
