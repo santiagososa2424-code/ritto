@@ -24,6 +24,70 @@ async function refreshAccessToken(rt: string): Promise<string | null> {
   return data.access_token ?? null;
 }
 
+function normalize(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\b(s\.?a\.?s?\.?|s\.?r\.?l\.?|s\.?a\.?|ltda\.?|inc\.?|corp\.?|co\.?)\b/gi, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findMatchingTab(provider: string, tabs: string[]): string | null {
+  const np = normalize(provider);
+  if (!np) return null;
+  for (const tab of tabs) {
+    if (normalize(tab) === np) return tab;
+  }
+  for (const tab of tabs) {
+    const nt = normalize(tab);
+    if (nt && (np.includes(nt) || nt.includes(np))) return tab;
+  }
+  return null;
+}
+
+async function ensureTab(sheetId: string, tabName: string, accessToken: string, existing: string[]): Promise<void> {
+  if (existing.includes(tabName)) return;
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] }),
+  });
+}
+
+async function appendToTab(
+  sheetId: string,
+  tabName: string,
+  rows: (string | number)[][],
+  header: string[],
+  accessToken: string,
+): Promise<{ ok: boolean; updatedRange?: string }> {
+  const enc = encodeURIComponent(tabName);
+  const checkRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:Z1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const checkData = await checkRes.json();
+  const hasHeader = checkData.values && checkData.values.length > 0;
+  const values = hasHeader ? rows : [header, ...rows];
+
+  const r = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values }),
+    },
+  );
+  if (!r.ok) return { ok: false };
+  const result = await r.json();
+  return { ok: true, updatedRange: result.updates?.updatedRange };
+}
+
+const FALLBACK_TAB = 'Ritto - Sin clasificar';
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -35,13 +99,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     mapping?: ExcelColumn[];
   };
 
-  if (!invoices?.length) {
-    return res.status(400).json({ error: 'invoices es requerido' });
-  }
+  if (!invoices?.length) return res.status(400).json({ error: 'invoices es requerido' });
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
   const { data: profile } = await supabase
@@ -50,12 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('id', user.id)
     .single();
 
-  if (!profile?.google_access_token) {
-    return res.status(403).json({ error: 'Google account not connected' });
-  }
-  if (!profile.google_sheet_id) {
-    return res.status(400).json({ error: 'No Google Sheet URL configured' });
-  }
+  if (!profile?.google_access_token) return res.status(403).json({ error: 'Google account not connected' });
+  if (!profile.google_sheet_id) return res.status(400).json({ error: 'No Google Sheet URL configured' });
 
   let accessToken = profile.google_access_token as string;
   const expiresAt = profile.google_token_expires_at ? new Date(profile.google_token_expires_at as string) : null;
@@ -70,38 +128,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const sheetId = extractSheetId(profile.google_sheet_id as string);
   const columns: ExcelColumn[] = mapping?.length ? mapping : DEFAULT_COLUMNS;
   const header = columns.map((c) => c.label);
-  const rows = invoices.map((inv) =>
-    columns.map((col) => {
-      const v = inv[col.field];
-      return v == null ? '' : typeof v === 'number' ? v : String(v);
-    })
-  );
 
-  const checkRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+  const metaRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  const checkData = await checkRes.json();
-  const sheetHasData = checkData.values && checkData.values.length > 0;
-  const valuesToAppend = sheetHasData ? rows : [header, ...rows];
+  if (!metaRes.ok) return res.status(500).json({ error: 'No se pudieron obtener las pestañas de la planilla' });
+  const meta = await metaRes.json();
+  const existingTabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
-  const sheetsRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ values: valuesToAppend }),
-    }
-  );
-
-  if (!sheetsRes.ok) {
-    const err = await sheetsRes.json();
-    return res.status(500).json({ error: 'Google Sheets error', details: err });
+  const groups: Record<string, Record<string, unknown>[]> = {};
+  for (const inv of invoices) {
+    const provider = typeof inv.proveedor === 'string' ? inv.proveedor : '';
+    const tab = (provider && findMatchingTab(provider, existingTabs)) || FALLBACK_TAB;
+    if (!groups[tab]) groups[tab] = [];
+    groups[tab].push(inv);
   }
 
-  const result = await sheetsRes.json();
-  return res.status(200).json({ ok: true, rowsAdded: rows.length, updatedRange: result.updates?.updatedRange });
+  let totalRows = 0;
+  const writtenTabs: string[] = [];
+
+  for (const [tabName, tabInvoices] of Object.entries(groups)) {
+    const rows = tabInvoices.map((inv) =>
+      columns.map((col) => {
+        const v = inv[col.field];
+        return v == null ? '' : typeof v === 'number' ? v : String(v);
+      }),
+    );
+    await ensureTab(sheetId, tabName, accessToken, existingTabs);
+    const result = await appendToTab(sheetId, tabName, rows, header, accessToken);
+    if (result.ok) {
+      totalRows += rows.length;
+      writtenTabs.push(tabName);
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    rowsAdded: totalRows,
+    tabs: writtenTabs,
+    updatedRange: writtenTabs.join(', '),
+  });
 }
