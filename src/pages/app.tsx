@@ -36,6 +36,7 @@ function fromDB(row: Record<string, unknown>): ExtractedInvoice {
     total: row.total as number | undefined,
     items: (row.items as InvoiceItem[]) ?? undefined,
     warning: row.warning as string | undefined,
+    exportedAt: row.exported_at as string | undefined,
   };
 }
 
@@ -80,6 +81,7 @@ export default function AppPage() {
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showArchived, setShowArchived] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<Partial<ExtractedInvoice>>({});
@@ -96,7 +98,6 @@ export default function AppPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
 
-      // Check onboarding first — separate query so a missing column elsewhere can't block this
       const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).maybeSingle();
       if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
 
@@ -329,15 +330,25 @@ export default function AppPage() {
     setSheetsStatus('loading');
     setSheetsError('');
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/sheets/append', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
       });
       if (res.ok) {
         const data = await res.json();
         setSheetsRange(data.updatedRange ?? '');
         setSheetsStatus('ok');
+        const exportedAt = new Date().toISOString();
+        const idsToMark = invoiceList.filter((inv) => inv.status === 'done').map((inv) => inv.id);
+        if (idsToMark.length > 0) {
+          await supabase.from('invoices').update({ exported_at: exportedAt }).in('id', idsToMark);
+          setInvoices((prev) => prev.map((inv) => idsToMark.includes(inv.id) ? { ...inv, exportedAt } : inv));
+        }
       } else {
         const data = await res.json();
         console.error('[exportToSheets] API error:', data);
@@ -388,7 +399,10 @@ export default function AppPage() {
   const monthPct = monthLimit ? Math.min(100, (monthlyUsed / monthLimit) * 100) : 0;
   const monthRemaining = monthLimit !== null ? Math.max(0, monthLimit - monthlyUsed) : null;
 
+  const archivedCount = invoices.filter((inv) => inv.status === 'done' && inv.exportedAt).length;
+
   const filteredInvoices = invoices
+    .filter((inv) => showArchived ? inv.status === 'done' && !!inv.exportedAt : !inv.exportedAt)
     .filter((inv) => filterMonth === 'all' || inv.fecha?.startsWith(filterMonth))
     .filter((inv) => {
       if (!search) return true;
@@ -631,6 +645,9 @@ export default function AppPage() {
         /* Confidence badge */
         .badge-ai { background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-left: 4px; }
         .badge-nc { background: #fee2e2; color: #991b1b; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+        .badge-exported { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; }
+        .btn-archive-toggle { background: none; border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; font-family: 'Figtree', sans-serif; font-size: 13px; color: var(--gray); cursor: pointer; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+        .btn-archive-toggle.active { background: var(--green-light); color: var(--green); border-color: var(--green); font-weight: 600; }
 
         /* Camera button (mobile only) */
         .btn-camera { display: none; margin-top: 10px; background: none; border: 1.5px solid var(--border); color: var(--gray); padding: 8px 16px; border-radius: 8px; font-family: 'Figtree', sans-serif; font-size: 13px; cursor: pointer; align-items: center; gap: 6px; }
@@ -802,10 +819,19 @@ export default function AppPage() {
 
           <div className="section-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="section-title">Historial de facturas</span>
-              {done.length > 0 && <span className="count-badge">{done.length}</span>}
+              <span className="section-title">{showArchived ? 'Facturas archivadas' : 'Historial de facturas'}</span>
+              {!showArchived && done.length > 0 && <span className="count-badge">{done.filter(i => !i.exportedAt).length}</span>}
+              {showArchived && <span className="count-badge">{archivedCount}</span>}
             </div>
             <div className="section-right">
+              {archivedCount > 0 && (
+                <button
+                  className={`btn-archive-toggle${showArchived ? ' active' : ''}`}
+                  onClick={() => { setShowArchived((v) => !v); setPage(0); }}
+                >
+                  {showArchived ? '← Volver a activas' : `Archivadas (${archivedCount})`}
+                </button>
+              )}
               <div className="search-wrap">
                 <span className="search-icon">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9b9b9b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -853,7 +879,7 @@ export default function AppPage() {
                         <div className="gs-num">2</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Subí tu primera factura</div>
-                          <div className="gs-step-desc">Arrastrá o selecioná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
+                          <div className="gs-step-desc">Arrastrá o seleccióná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
                           <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
                         </div>
                       </div>
@@ -929,8 +955,9 @@ export default function AppPage() {
                         </td>
                         <td>
                           {inv.status === 'processing' && <span className="status-processing"><div className="spinner" />…</span>}
-                          {inv.status === 'done' && !inv.warning && <span className="status-done">Listo</span>}
-                          {inv.status === 'done' && inv.warning && <span className="status-warn" title={`Revisar: ${inv.warning}`}>⚠ Revisar</span>}
+                          {inv.status === 'done' && inv.exportedAt && <span className="badge-exported" title={`Exportada el ${new Date(inv.exportedAt).toLocaleDateString('es-UY')}`}>Exportada</span>}
+                          {inv.status === 'done' && !inv.exportedAt && !inv.warning && <span className="status-done">Listo</span>}
+                          {inv.status === 'done' && !inv.exportedAt && inv.warning && <span className="status-warn" title={`Revisar: ${inv.warning}`}>⚠ Revisar</span>}
                           {inv.status === 'error' && (
                             <span className="status-error" title={inv.error}>
                               Error{inv.error ? `: ${inv.error.slice(0, 60)}${inv.error.length > 60 ? '…' : ''}` : ''}
@@ -1079,6 +1106,7 @@ export default function AppPage() {
                         {inv.total != null ? `${inv.moneda ?? 'UYU'} ${fmt(inv.total)}` : '—'}
                         {inv.status === 'processing' && <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 2 }}>Procesando…</div>}
                         {inv.status === 'error' && <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }} title={inv.error}>Error</div>}
+                        {inv.exportedAt && <div style={{ fontSize: 11, color: '#166534', marginTop: 2, fontWeight: 600 }}>Exportada</div>}
                       </div>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--gray)', display: 'flex', gap: 8, alignItems: 'center' }}>
