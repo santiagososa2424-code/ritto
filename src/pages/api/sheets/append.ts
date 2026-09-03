@@ -35,6 +35,27 @@ function normalize(name: string): string {
     .trim();
 }
 
+const COLUMN_ALIASES: Record<string, string[]> = {
+  proveedor: ['empresa', 'supplier', 'vendedor', 'emisor', 'razon social', 'comercio', 'nombre', 'compania', 'distribuidor', 'proveedor'],
+  rut: ['rut emisor', 'cuit', 'nit', 'id fiscal', 'identificacion fiscal', 'documento', 'ruc', 'rut proveedor'],
+  fecha: ['fecha factura', 'fecha emision', 'fecha de emision', 'date', 'fecha comprobante', 'fecha doc', 'fecha documento'],
+  'nro documento': ['numero', 'n', 'factura n', 'numero factura', 'nro factura', 'nro doc', 'comprobante', 'numero comprobante', 'nro comprobante'],
+  tipo: ['tipo documento', 'tipo comprobante', 'tipo doc', 'tipo de documento'],
+  moneda: ['currency', 'divisa', 'tipo moneda', 'tipo de moneda'],
+  neto: ['subtotal', 'base imponible', 'monto neto', 'neto gravado', 'base', 'importe neto'],
+  'iva total': ['iva', 'impuesto', 'impuestos', 'tax', 'total iva', 'imp'],
+  total: ['monto', 'importe', 'monto total', 'valor total', 'precio total', 'total factura', 'total comprobante', 'amount', 'total a pagar'],
+};
+
+function resolveColumnAlias(normalizedHeader: string): string {
+  for (const [canonical, aliases] of Object.entries(COLUMN_ALIASES)) {
+    if (normalizedHeader === canonical || aliases.some((a) => normalizedHeader === a || normalizedHeader.includes(a) || a.includes(normalizedHeader))) {
+      return canonical;
+    }
+  }
+  return normalizedHeader;
+}
+
 function findMatchingTab(provider: string, tabs: string[]): string | null {
   const np = normalize(provider);
   if (!np) return null;
@@ -76,8 +97,8 @@ async function appendToTab(
 
   let values: (string | number)[][];
   if (existingHeaders.length > 0) {
-    const normalizedExisting = existingHeaders.map((h) => normalize(String(h)));
-    const normalizedOurs = header.map((h) => normalize(String(h)));
+    const normalizedExisting = existingHeaders.map((h) => resolveColumnAlias(normalize(String(h))));
+    const normalizedOurs = header.map((h) => resolveColumnAlias(normalize(String(h))));
     const matchCount = normalizedOurs.filter((h) => normalizedExisting.includes(h)).length;
     if (matchCount > 0) {
       // Remap data to existing column positions
