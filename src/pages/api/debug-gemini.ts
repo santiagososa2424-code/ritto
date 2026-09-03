@@ -6,10 +6,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!key) return res.json({ ok: false, error: 'GEMINI_API_KEY no configurada' });
 
   try {
-    const model = new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-3.6-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: 'Respondé solo con: ok' }] }],
-      generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
     });
     const text = result.response.text();
     return res.json({ ok: true, response: text });
