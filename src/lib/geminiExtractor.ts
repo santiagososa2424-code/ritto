@@ -5,7 +5,7 @@ import type { ExtractedInvoice } from './types';
 function getModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY no configurada en el servidor');
-  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.5-flash' });
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.0-flash' });
 }
 
 const PROMPT = `Sos un sistema experto en extracción de datos de comprobantes fiscales uruguayos (CFE - Comprobantes Fiscales Electrónicos).
@@ -71,12 +71,10 @@ interface ValidationResult {
 function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
   const errors: string[] = [];
 
-  // Items array must exist and have at least 1 item
   if (!data.items || data.items.length === 0) {
     errors.push('items vacío');
   }
 
-  // Total consistency: neto + ivaTotal ≈ total (within 1% or 1 currency unit)
   const neto = Number(data.neto ?? 0);
   const ivaTotal = Number(data.ivaTotal ?? 0);
   const total = Number(data.total ?? 0);
@@ -84,13 +82,12 @@ function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
   if (total > 0 && neto > 0) {
     const computed = neto + ivaTotal;
     const diff = Math.abs(computed - total);
-    const tolerance = Math.max(1, total * 0.01); // 1 unit or 1%, whichever is bigger
+    const tolerance = Math.max(1, total * 0.01);
     if (diff > tolerance) {
       errors.push(`totales no cuadran: neto(${neto}) + iva(${ivaTotal}) = ${computed}, pero total=${total}`);
     }
   }
 
-  // RUT format check: XX.XXX.XXX-X
   if (data.rut && data.rut.trim() !== '') {
     const rutPattern = /^\d{1,2}\.\d{3}\.\d{3}-\d$/;
     if (!rutPattern.test(data.rut.trim())) {
@@ -98,7 +95,6 @@ function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
     }
   }
 
-  // Date format check: YYYY-MM-DD
   if (data.fecha && data.fecha.trim() !== '') {
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     if (!datePattern.test(data.fecha.trim())) {
@@ -123,9 +119,6 @@ function parseResponse(text: string): Partial<ExtractedInvoice> {
 async function callGemini(parts: Part[]): Promise<string> {
   const result = await getModel().generateContent({
     contents: [{ role: 'user', parts }],
-    generationConfig: {
-      thinkingConfig: { thinkingBudget: 0 }, // disable thinking = faster
-    } as any,
   });
   return result.response.text();
 }
@@ -147,23 +140,19 @@ function buildRetryParts(parts: Part[], errors: string[]): Part[] {
 }
 
 async function extractWithRetry(parts: Part[]): Promise<Partial<ExtractedInvoice> & { _validationWarning?: string }> {
-  // First attempt — let real API errors (auth, quota, etc.) propagate immediately
   const rawText = await callGemini(parts);
 
-  // Try parsing — only retry if JSON is invalid
   let extracted: Partial<ExtractedInvoice>;
   try {
     extracted = parseResponse(rawText);
   } catch {
-    // JSON parse failed — retry once with explicit instruction
     const retryText = await callGemini(buildRetryParts(parts, ['JSON inválido — respondé SOLO con JSON, sin texto adicional']));
-    extracted = parseResponse(retryText); // if this also fails, let it throw
+    extracted = parseResponse(retryText);
   }
 
   const validation = validateExtraction(extracted);
   if (validation.valid) return extracted;
 
-  // Validation failed — retry once with specific error context
   const retryParts: Part[] = [
     ...parts.slice(0, -1),
     { text: parts[parts.length - 1].text + RETRY_PROMPT_SUFFIX(validation.errors) },
@@ -174,15 +163,12 @@ async function extractWithRetry(parts: Part[]): Promise<Partial<ExtractedInvoice
     const retriedText = await callGemini(retryParts);
     retried = parseResponse(retriedText);
   } catch {
-    // If retry also fails, return original with warning
     return { ...extracted, _validationWarning: validation.errors.join('; ') };
   }
 
   const retryValidation = validateExtraction(retried);
   if (retryValidation.valid) return retried;
 
-  // Both attempts failed validation — return best attempt with warning
-  // Prefer retry result if it has fewer errors
   const best = retryValidation.errors.length <= validation.errors.length ? retried : extracted;
   const worstErrors = retryValidation.errors.length <= validation.errors.length
     ? retryValidation.errors
