@@ -38,9 +38,11 @@ function normalize(name: string): string {
 function findMatchingTab(provider: string, tabs: string[]): string | null {
   const np = normalize(provider);
   if (!np) return null;
+  // exact match first
   for (const tab of tabs) {
     if (normalize(tab) === np) return tab;
   }
+  // partial match: one contains the other
   for (const tab of tabs) {
     const nt = normalize(tab);
     if (nt && (np.includes(nt) || nt.includes(np))) return tab;
@@ -129,6 +131,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const columns: ExcelColumn[] = mapping?.length ? mapping : DEFAULT_COLUMNS;
   const header = columns.map((c) => c.label);
 
+  // Get existing tabs
   const metaRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -137,6 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const meta = await metaRes.json();
   const existingTabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
+  // Group invoices by target tab
   const groups: Record<string, Record<string, unknown>[]> = {};
   for (const inv of invoices) {
     const provider = typeof inv.proveedor === 'string' ? inv.proveedor : '';
@@ -145,6 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     groups[tab].push(inv);
   }
 
+  // Write each group to its tab
   let totalRows = 0;
   const writtenTabs: string[] = [];
 

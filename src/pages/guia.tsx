@@ -73,6 +73,13 @@ export default function GuiaPage() {
         .tip-text { font-size: 14px; color: var(--gray); line-height: 1.6; }
         .tip-text strong { color: var(--dark); }
 
+        .badge-soon {
+          display: inline-block; background: #f3e8ff; color: #6b21a8;
+          border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.3px; margin-left: 8px;
+          vertical-align: middle;
+        }
+
         .highlight {
           background: var(--green-light); border-left: 3px solid var(--green);
           border-radius: 0 8px 8px 0; padding: 12px 14px; margin-top: 12px;
@@ -164,7 +171,7 @@ export default function GuiaPage() {
                 <div className="step">
                   <div className="step-num">1</div>
                   <div className="step-content">
-                    <div className="step-title">Seleccioná las facturas</div>
+                    <div className="step-title">Selecioná las facturas</div>
                     <div className="step-desc">Podés filtrar por mes si querés exportar solo un período.</div>
                   </div>
                 </div>
@@ -186,7 +193,7 @@ export default function GuiaPage() {
                   <div className="step-num">4</div>
                   <div className="step-content">
                     <div className="step-title">Copiá las filas de Ritto</div>
-                    <div className="step-desc">Seleccioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
+                    <div className="step-desc">Selecioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
                   </div>
                 </div>
               </div>
@@ -351,7 +358,7 @@ export default function GuiaPage() {
               <div className="card-icon">🔴</div>
               <div className="card-title">"Acceso bloqueado: ritto solo se puede usar dentro de su organización"</div>
               <div className="card-text">
-                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribínos a soporte@ritto.lat</strong> indicando tu email y lo resolvemos en minutos.
+                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribinos a soporte@ritto.lat</strong> indicando tu email y lo resolvemos en minutos.
               </div>
             </div>
 
@@ -400,7 +407,7 @@ export default function GuiaPage() {
               <div className="card-icon">📧</div>
               <div className="card-title">¿Otro problema?</div>
               <div className="card-text">
-                Escribínos a <strong>soporte@ritto.lat</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
+                Escribinos a <strong>soporte@ritto.lat</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
               </div>
             </div>
           </div>
