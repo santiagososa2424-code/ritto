@@ -60,6 +60,13 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
+  const [loadingStructure, setLoadingStructure] = useState(false);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [savingSheetMapping, setSavingSheetMapping] = useState(false);
+  const [mappingMsg, setMappingMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [structureLoaded, setStructureLoaded] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { router.replace('/login'); return; }
@@ -84,6 +91,9 @@ export default function SettingsPage() {
           }
           if (p.google_sheet_id) setGoogleSheetUrl(p.google_sheet_id);
           if (p.google_access_token) setGoogleConnected(true);
+          if (p.sheet_column_mapping && typeof p.sheet_column_mapping === 'object') {
+            setColumnMapping(p.sheet_column_mapping as Record<string, string>);
+          }
           if (p.trial_ends_at && p.subscription_status === 'trial') {
             const days = Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
             setTrialDaysLeft(days);
@@ -219,6 +229,86 @@ export default function SettingsPage() {
     if (err) setError('Error al guardar la plantilla.');
     else { setSuccess('Plantilla guardada'); setTimeout(() => setSuccess(''), 3000); }
     setSavingMapping(false);
+  }
+
+  const MAPPING_FIELDS = [
+    { value: 'proveedor', label: 'Proveedor / Empresa' },
+    { value: 'rut', label: 'RUT / CUIT / ID fiscal' },
+    { value: 'fecha', label: 'Fecha' },
+    { value: 'nroDocumento', label: 'Nro. de documento' },
+    { value: 'tipoDocumento', label: 'Tipo de comprobante' },
+    { value: 'moneda', label: 'Moneda' },
+    { value: 'neto', label: 'Neto (sin IVA)' },
+    { value: 'ivaTotal', label: 'IVA Total' },
+    { value: 'total', label: 'Total' },
+  ];
+
+  function guessMapping(headers: string[]): Record<string, string> {
+    function norm(s: string) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ''); }
+    const GUESSES: Record<string, string[]> = {
+      proveedor: ['proveedor','empresa','nombre','razon','emisor','comercio','distribuidor','supplier','vendedor'],
+      rut: ['rut','cuit','nit','documento','fiscal','ruc'],
+      fecha: ['fecha','date'],
+      nroDocumento: ['numero','nro','factura','comprobante','n'],
+      tipoDocumento: ['tipo'],
+      moneda: ['moneda','currency','divisa'],
+      neto: ['neto','subtotal','base','importe'],
+      ivaTotal: ['iva','impuesto','tax'],
+      total: ['total','monto','importe','amount'],
+    };
+    const result: Record<string, string> = {};
+    for (const [field, aliases] of Object.entries(GUESSES)) {
+      const match = headers.find((h) => aliases.some((a) => norm(h).includes(a) || a.includes(norm(h))));
+      if (match) result[field] = match;
+    }
+    return result;
+  }
+
+  async function detectColumns() {
+    if (!user) return;
+    setLoadingStructure(true);
+    setMappingMsg(null);
+    try {
+      const res = await fetch('/api/sheets/structure', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMappingMsg({ type: 'err', text: data.error ?? 'No se pudo leer la planilla.' });
+        return;
+      }
+      const headers: string[] = data.sampleHeaders ?? [];
+      setSheetHeaders(headers);
+      setStructureLoaded(true);
+      setColumnMapping((prev) => ({ ...guessMapping(headers), ...Object.fromEntries(Object.entries(prev).filter(([, v]) => v)) }));
+    } catch {
+      setMappingMsg({ type: 'err', text: 'Error de conexión.' });
+    } finally {
+      setLoadingStructure(false);
+    }
+  }
+
+  async function saveSheetMapping() {
+    if (!user) return;
+    setSavingSheetMapping(true);
+    setMappingMsg(null);
+    try {
+      const res = await fetch('/api/sheets/save-mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ mapping: columnMapping }),
+      });
+      if (res.ok) {
+        setMappingMsg({ type: 'ok', text: '✓ Mapeo guardado. Ritto ya sabe dónde poner cada dato en tu planilla.' });
+      } else {
+        const d = await res.json();
+        setMappingMsg({ type: 'err', text: d.error ?? 'Error al guardar.' });
+      }
+    } catch {
+      setMappingMsg({ type: 'err', text: 'Error de conexión.' });
+    } finally {
+      setSavingSheetMapping(false);
+    }
   }
 
   async function saveSheetUrl() {
@@ -486,9 +576,62 @@ export default function SettingsPage() {
             </div>
 
             {googleConnected && googleSheetUrl && (
-              <p style={{ fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                ✓ Todo listo. Usá "Exportar a Google Sheets" en la pantalla de Facturas.
-              </p>
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Paso 3 — Configurar columnas (opcional)</p>
+                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Ritto ya detecta columnas automáticamente. Si tu planilla usa nombres distintos (ej: "Empresa" en vez de "Proveedor"), podés configurarlo acá para que sea exacto.
+                </p>
+                {!structureLoaded ? (
+                  <button
+                    type="button"
+                    className="btn-save"
+                    style={{ background: '#0369a1' }}
+                    onClick={detectColumns}
+                    disabled={loadingStructure}
+                  >
+                    {loadingStructure ? 'Leyendo planilla…' : 'Detectar columnas de mi planilla'}
+                  </button>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 10 }}>
+                      Columnas encontradas en tu planilla. Seleccióná cuál corresponde a cada campo de Ritto (dejá en blanco si no querés incluirlo):
+                    </p>
+                    <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+                      {MAPPING_FIELDS.map((f) => (
+                        <div key={f.value} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, width: 180, flexShrink: 0 }}>{f.label}</span>
+                          <select
+                            style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, background: 'var(--white)', color: 'var(--dark)', outline: 'none' }}
+                            value={columnMapping[f.value] ?? ''}
+                            onChange={(e) => setColumnMapping((prev) => ({ ...prev, [f.value]: e.target.value }))}
+                          >
+                            <option value="">— no incluir —</option>
+                            {sheetHeaders.map((h) => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <button type="button" className="btn-save" onClick={saveSheetMapping} disabled={savingSheetMapping}>
+                        {savingSheetMapping ? 'Guardando…' : 'Guardar configuración'}
+                      </button>
+                      <button type="button" onClick={detectColumns} disabled={loadingStructure} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                        {loadingStructure ? 'Leyendo…' : 'Volver a detectar'}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {mappingMsg && (
+                  <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: mappingMsg.type === 'ok' ? 'var(--green-light)' : 'var(--red-light)', color: mappingMsg.type === 'ok' ? 'var(--green)' : 'var(--red)' }}>
+                    {mappingMsg.text}
+                  </div>
+                )}
+                {Object.values(columnMapping).some(Boolean) && !structureLoaded && (
+                  <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 8 }}>✓ Mapeo guardado anteriormente</p>
+                )}
+              </div>
             )}
           </div>
 
