@@ -35,11 +35,13 @@ interface Invite {
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState('');
   const [profile, setProfile] = useState<Profile>({ nombre: '', empresa: '', rut: '', telefono: '' });
   const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>(DEFAULT_COLUMNS.map((c) => ({ ...c })));
   const [savingMapping, setSavingMapping] = useState(false);
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [savingSheet, setSavingSheet] = useState(false);
+  const [sheetMsg, setSheetMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,9 +61,11 @@ export default function SettingsPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.replace('/login'); return; }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { router.replace('/login'); return; }
+      const data = { user: session.user };
       setUser(data.user);
+      setAccessToken(session.access_token);
       supabase.from('profiles').select('*').eq('id', data.user.id).single().then(({ data: p }) => {
         if (p) {
           setProfile({
@@ -101,8 +105,14 @@ export default function SettingsPage() {
       setGoogleConnected(true);
       setTimeout(() => setSuccess(''), 4000);
     }
-    if (router.query.error === 'google_denied' || router.query.error === 'google_token') {
-      setError('No se pudo conectar con Google. Intentá de nuevo.');
+    if (router.query.error === 'google_denied') {
+      setError('Cancelaste la autorización de Google. Intentá de nuevo.');
+    }
+    if (router.query.error === 'google_token') {
+      setError('No se pudo conectar con Google. Intentá de nuevo o escribinos a soporte@ritto.lat si el problema persiste.');
+    }
+    if (router.query.error === 'google_not_configured') {
+      setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a soporte@ritto.lat y lo resolvemos en minutos.');
     }
   }, [router.query]);
 
@@ -214,11 +224,37 @@ export default function SettingsPage() {
   async function saveSheetUrl() {
     if (!user) return;
     setSavingSheet(true);
-    setError('');
-    const { error: err } = await supabase.from('profiles').update({ google_sheet_id: googleSheetUrl || null }).eq('id', user.id);
-    if (err) setError('Error al guardar.');
-    else { setSuccess('URL guardada'); setTimeout(() => setSuccess(''), 3000); }
+    setSheetMsg(null);
+    try {
+      const res = await fetch('/api/sheets/save-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ sheetUrl: googleSheetUrl }),
+      });
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (!res.ok) {
+        setSheetMsg({ type: 'err', text: (data.error as string) ?? `Error ${res.status} al guardar la URL.` });
+      } else {
+        setSheetMsg({ type: 'ok', text: 'URL guardada correctamente ✓' });
+        setTimeout(() => setSheetMsg(null), 6000);
+      }
+    } catch {
+      setSheetMsg({ type: 'err', text: 'Error de conexión. Revisá tu internet.' });
+    }
     setSavingSheet(false);
+  }
+
+  async function disconnectGoogle() {
+    if (!user) return;
+    await supabase.from('profiles').update({
+      google_access_token: null,
+      google_refresh_token: null,
+      google_token_expires_at: null,
+    }).eq('id', user.id);
+    setGoogleConnected(false);
+    setSuccess('Google desconectado');
+    setTimeout(() => setSuccess(''), 3000);
   }
 
   async function cancelInvite(inviteId: string) {
@@ -305,7 +341,6 @@ export default function SettingsPage() {
           {success && <div className="success-bar">✓ {success}</div>}
           {error && <div className="error-bar">{error}</div>}
 
-          {/* Profile */}
           <form onSubmit={save}>
             <div className="card">
               <div className="card-title">Datos personales</div>
@@ -344,7 +379,6 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Excel mapping */}
           <div className="card">
             <div className="card-title">Plantilla de Excel</div>
             <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
@@ -377,7 +411,7 @@ export default function SettingsPage() {
                     <option key={f.value} value={f.value}>{f.label}</option>
                   ))}
                 </select>
-                <button className="col-remove" type="button" onClick={() => removeColumn(col.id)}>×</button>
+                <button className="col-remove" type="button" onClick={() => removeColumn(col.id)}>&times;</button>
               </div>
             ))}
 
@@ -393,7 +427,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Google Sheets */}
           <div className="card">
             <div className="card-title">
               <span>Google Sheets</span>
@@ -401,41 +434,64 @@ export default function SettingsPage() {
                 <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Conectado</span>
               )}
             </div>
-            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
-              {googleConnected
-                ? 'Tu cuenta de Google está conectada. Pegá la URL de tu planilla y usá el botón "Exportar a Google Sheets" en Facturas para mandar las filas directamente.'
-                : 'Conectá tu cuenta de Google y pegá la URL de tu planilla. Ritto va a mandar las filas directamente ahí, sin que tengas que descargar nada.'}
-            </p>
-            <div className="field">
-              <label>URL de tu Google Sheet</label>
+
+            {!googleConnected && (
+              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#0369a1', marginBottom: 6 }}>Paso 1 — Conectá tu cuenta de Google</p>
+                <p style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6 }}>
+                  Hacé clic en "Conectar con Google" y autorizá el acceso. Solo se pide permiso para escribir en Sheets — Ritto no puede leer ni modificar tus otros archivos.
+                </p>
+                <button
+                  type="button"
+                  className="btn-save"
+                  style={{ marginTop: 12 }}
+                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
+                >
+                  Conectar con Google →
+                </button>
+              </div>
+            )}
+
+            <div style={{ background: googleConnected ? 'var(--bg)' : '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 16, opacity: googleConnected ? 1 : 0.6 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>{googleConnected ? 'URL de tu Google Sheet' : 'Paso 2 — URL de tu Google Sheet'}</p>
+              <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 10, lineHeight: 1.6 }}>
+                Abrí tu planilla en Google Sheets y copiá la dirección de la barra del navegador. Se ve así:<br />
+                <span style={{ fontFamily: 'monospace', fontSize: 11, background: '#e2e8f0', borderRadius: 4, padding: '2px 6px', display: 'inline-block', marginTop: 4, wordBreak: 'break-all' }}>
+                  https://docs.google.com/spreadsheets/d/<strong>TU_ID</strong>/edit
+                </span>
+              </p>
               <input
                 type="text"
                 value={googleSheetUrl}
                 onChange={(e) => setGoogleSheetUrl(e.target.value)}
                 placeholder="https://docs.google.com/spreadsheets/d/..."
+                disabled={!googleConnected}
+                style={{ width: '100%', padding: '10px 13px', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'Figtree, sans-serif', fontSize: 14, outline: 'none', marginBottom: 10 }}
               />
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet}>
-                {savingSheet ? 'Guardando…' : 'Guardar URL'}
-              </button>
-              {googleConnected ? (
-                <button type="button" className="btn-save" style={{ background: '#dcfce7', color: '#166534', cursor: 'default' }} disabled>
-                  ✓ Google conectado
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button type="button" className="btn-save" onClick={saveSheetUrl} disabled={savingSheet || !googleConnected}>
+                  {savingSheet ? 'Guardando…' : 'Guardar URL'}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-save"
-                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
-                >
-                  Conectar con Google →
-                </button>
+                {googleConnected && (
+                  <button type="button" onClick={disconnectGoogle} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                    Desconectar Google
+                  </button>
+                )}
+              </div>
+              {sheetMsg && (
+                <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: sheetMsg.type === 'ok' ? 'var(--green-light)' : 'var(--red-light)', color: sheetMsg.type === 'ok' ? 'var(--green)' : 'var(--red)' }}>
+                  {sheetMsg.text}
+                </div>
               )}
             </div>
+
+            {googleConnected && googleSheetUrl && (
+              <p style={{ fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                ✓ Todo listo. Usá "Exportar a Google Sheets" en la pantalla de Facturas.
+              </p>
+            )}
           </div>
 
-          {/* Password */}
           <form onSubmit={changePassword}>
             <div className="card">
               <div className="card-title">Cambiar contraseña</div>
@@ -457,7 +513,6 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Team management */}
           {isMultiUserPlan && isOwner && (
             <div className="card">
               <div className="card-title">
@@ -526,7 +581,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Account actions */}
           <div className="card">
             <div className="card-title">Cuenta</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
