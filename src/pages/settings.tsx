@@ -109,11 +109,10 @@ export default function SettingsPage() {
       setError('Cancelaste la autorización de Google. Intentá de nuevo.');
     }
     if (router.query.error === 'google_token') {
-      const detail = router.query.detail ? ` (${router.query.detail})` : '';
-      setError(`No se pudo conectar con Google${detail}. Revisá las credenciales en Vercel.`);
+      setError('No se pudo conectar con Google. Intentá de nuevo o escribinos a soporte@ritto.lat si el problema persiste.');
     }
     if (router.query.error === 'google_not_configured') {
-      setError('Google no está configurado en el servidor. Falta agregar GOOGLE_CLIENT_ID y GOOGLE_REDIRECT_URI en Vercel.');
+      setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a soporte@ritto.lat y lo resolvemos en minutos.');
     }
   }, [router.query]);
 
