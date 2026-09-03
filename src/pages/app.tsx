@@ -96,7 +96,6 @@ export default function AppPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
 
-      // Check onboarding first — separate query so a missing column elsewhere can't block this
       const { data: ob } = await supabase.from('profiles').select('onboarding_complete').eq('id', data.user.id).maybeSingle();
       if (!ob || !ob.onboarding_complete) { router.replace('/onboarding'); return; }
 
@@ -174,7 +173,7 @@ export default function AppPage() {
       const res = await fetch('/api/extract', { method: 'POST', body: formData });
       let data: ExtractedInvoice;
       try { data = await res.json(); }
-      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+      catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
       const merged = { ...data, id };
       setInvoices((prev) => prev.map((inv) => inv.id === id ? merged : inv));
       if (merged.status === 'done') { await saveInvoice(merged); setMonthlyUsed((n) => n + 1); }
@@ -253,7 +252,7 @@ export default function AppPage() {
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
         let data: ExtractedInvoice;
         try { data = await res.json(); }
-        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: `Timeout (${res.status}) — intentá con un archivo más pequeño` }; }
+        catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
@@ -329,9 +328,13 @@ export default function AppPage() {
     setSheetsStatus('loading');
     setSheetsError('');
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/sheets/append', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
       });
       if (res.ok) {
@@ -703,7 +706,12 @@ export default function AppPage() {
             )}
             {sheetsError && (
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
-                Google Sheets: {sheetsError}
+                {sheetsError.toLowerCase().includes('not connected') || sheetsError.toLowerCase().includes('no configurad') || sheetsError.toLowerCase().includes('google account')
+                  ? <>Conectá tu cuenta de Google en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> antes de exportar.</>
+                  : sheetsError.toLowerCase().includes('url') || sheetsError.toLowerCase().includes('sheet')
+                  ? <>Revisá la URL de tu planilla en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
+                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos a soporte@ritto.lat</>
+                }
               </div>
             )}
           </div>
@@ -856,7 +864,8 @@ export default function AppPage() {
                         <div className="gs-num">3</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
-                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o envíá los datos directo a tu planilla con un clic.</div>
+                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o enviá los datos directo a tu planilla con un clic. Para Google Sheets, primero conectá tu cuenta en Configuración.</div>
+                          <a href="/settings" className="gs-btn" style={{ marginTop: 8 }}>Conectar Google Sheets →</a>
                         </div>
                       </div>
                     </div>
