@@ -59,11 +59,9 @@ function resolveColumnAlias(normalizedHeader: string): string {
 function findMatchingTab(provider: string, tabs: string[]): string | null {
   const np = normalize(provider);
   if (!np) return null;
-  // exact match first
   for (const tab of tabs) {
     if (normalize(tab) === np) return tab;
   }
-  // partial match: one contains the other
   for (const tab of tabs) {
     const nt = normalize(tab);
     if (nt && (np.includes(nt) || nt.includes(np))) return tab;
@@ -101,7 +99,6 @@ async function appendToTab(
     const normalizedOurs = header.map((h) => resolveColumnAlias(normalize(String(h))));
     const matchCount = normalizedOurs.filter((h) => normalizedExisting.includes(h)).length;
     if (matchCount > 0) {
-      // Remap data to existing column positions
       const remappedRows = rows.map((row) =>
         existingHeaders.map((_, colIdx) => {
           const ourIdx = normalizedOurs.findIndex((h) => h === normalizedExisting[colIdx]);
@@ -110,7 +107,6 @@ async function appendToTab(
       );
       values = remappedRows;
     } else {
-      // No column names match — append with Ritto's own headers so data is always visible
       values = [header, ...rows];
     }
   } else {
@@ -131,11 +127,12 @@ async function appendToTab(
 }
 
 const FALLBACK_TAB = 'Ritto - Sin clasificar';
+const NUMERIC_SIGN_FIELDS = new Set(['neto', 'iva10', 'iva22', 'ivaTotal', 'total']);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const user = await getAuthUser(req);  
+  const user = await getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'No autorizado' });
 
   const { invoices, mapping } = req.body as {
@@ -173,7 +170,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const columns: ExcelColumn[] = mapping?.length ? mapping : DEFAULT_COLUMNS;
   const header = columns.map((c) => c.label);
 
-  // Get existing tabs
   const metaRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -182,7 +178,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const meta = await metaRes.json();
   const existingTabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
-  // Group invoices by target tab
   const groups: Record<string, Record<string, unknown>[]> = {};
   for (const inv of invoices) {
     const provider = typeof inv.proveedor === 'string' ? inv.proveedor : '';
@@ -191,17 +186,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     groups[tab].push(inv);
   }
 
-  // Write each group to its tab
   let totalRows = 0;
   const writtenTabs: string[] = [];
 
   for (const [tabName, tabInvoices] of Object.entries(groups)) {
-    const rows = tabInvoices.map((inv) =>
-      columns.map((col) => {
+    const rows = tabInvoices.map((inv) => {
+      const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
+      return columns.map((col) => {
         const v = inv[col.field];
-        return v == null ? '' : typeof v === 'number' ? v : String(v);
-      }),
-    );
+        if (v == null) return '';
+        if (typeof v === 'number' && isNC && NUMERIC_SIGN_FIELDS.has(col.field)) return -v;
+        return typeof v === 'number' ? v : String(v);
+      });
+    });
     await ensureTab(sheetId, tabName, accessToken, existingTabs);
     const result = await appendToTab(sheetId, tabName, rows, header, accessToken);
     if (result.ok) {
