@@ -119,7 +119,6 @@ function parseResponse(text: string): Partial<ExtractedInvoice> {
 async function callGemini(parts: Part[]): Promise<string> {
   const result = await getModel().generateContent({
     contents: [{ role: 'user', parts }],
-    generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
   });
   return result.response.text();
 }
