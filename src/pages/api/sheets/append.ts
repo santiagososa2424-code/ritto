@@ -68,12 +68,26 @@ async function appendToTab(
 ): Promise<{ ok: boolean; updatedRange?: string }> {
   const enc = encodeURIComponent(tabName);
   const checkRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:Z1`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   const checkData = await checkRes.json();
-  const hasHeader = checkData.values && checkData.values.length > 0;
-  const values = hasHeader ? rows : [header, ...rows];
+  const existingHeaders: string[] = checkData.values?.[0] ?? [];
+
+  let values: (string | number)[][];
+  if (existingHeaders.length > 0) {
+    const normalizedExisting = existingHeaders.map((h) => normalize(String(h)));
+    const normalizedOurs = header.map((h) => normalize(String(h)));
+    const remappedRows = rows.map((row) =>
+      existingHeaders.map((_, colIdx) => {
+        const ourIdx = normalizedOurs.findIndex((h) => h === normalizedExisting[colIdx]);
+        return ourIdx >= 0 ? row[ourIdx] : '';
+      }),
+    );
+    values = remappedRows;
+  } else {
+    values = [header, ...rows];
+  }
 
   const r = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
