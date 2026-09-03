@@ -5,7 +5,7 @@ import type { ExtractedInvoice } from './types';
 function getModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY no configurada en el servidor');
-  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-3.6-flash' });
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
 const PROMPT = `Sos un sistema experto en extracción de datos de comprobantes fiscales uruguayos (CFE - Comprobantes Fiscales Electrónicos).
@@ -119,6 +119,7 @@ function parseResponse(text: string): Partial<ExtractedInvoice> {
 async function callGemini(parts: Part[]): Promise<string> {
   const result = await getModel().generateContent({
     contents: [{ role: 'user', parts }],
+    generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
   });
   return result.response.text();
 }
