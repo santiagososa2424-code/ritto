@@ -35,6 +35,27 @@ function normalize(name: string): string {
     .trim();
 }
 
+const COLUMN_ALIASES: Record<string, string[]> = {
+  proveedor: ['empresa', 'supplier', 'vendedor', 'emisor', 'razon social', 'comercio', 'nombre', 'compania', 'distribuidor', 'proveedor'],
+  rut: ['rut emisor', 'cuit', 'nit', 'id fiscal', 'identificacion fiscal', 'documento', 'ruc', 'rut proveedor'],
+  fecha: ['fecha factura', 'fecha emision', 'fecha de emision', 'date', 'fecha comprobante', 'fecha doc', 'fecha documento'],
+  'nro documento': ['numero', 'n', 'factura n', 'numero factura', 'nro factura', 'nro doc', 'comprobante', 'numero comprobante', 'nro comprobante'],
+  tipo: ['tipo documento', 'tipo comprobante', 'tipo doc', 'tipo de documento'],
+  moneda: ['currency', 'divisa', 'tipo moneda', 'tipo de moneda'],
+  neto: ['subtotal', 'base imponible', 'monto neto', 'neto gravado', 'base', 'importe neto'],
+  'iva total': ['iva', 'impuesto', 'impuestos', 'tax', 'total iva', 'imp'],
+  total: ['monto', 'importe', 'monto total', 'valor total', 'precio total', 'total factura', 'total comprobante', 'amount', 'total a pagar'],
+};
+
+function resolveColumnAlias(normalizedHeader: string): string {
+  for (const [canonical, aliases] of Object.entries(COLUMN_ALIASES)) {
+    if (normalizedHeader === canonical || aliases.some((a) => normalizedHeader === a || normalizedHeader.includes(a) || a.includes(normalizedHeader))) {
+      return canonical;
+    }
+  }
+  return normalizedHeader;
+}
+
 function findMatchingTab(provider: string, tabs: string[]): string | null {
   const np = normalize(provider);
   if (!np) return null;
@@ -66,12 +87,31 @@ async function appendToTab(
 ): Promise<{ ok: boolean; updatedRange?: string }> {
   const enc = encodeURIComponent(tabName);
   const checkRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:Z1`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   const checkData = await checkRes.json();
-  const hasHeader = checkData.values && checkData.values.length > 0;
-  const values = hasHeader ? rows : [header, ...rows];
+  const existingHeaders: string[] = checkData.values?.[0] ?? [];
+
+  let values: (string | number)[][];
+  if (existingHeaders.length > 0) {
+    const normalizedExisting = existingHeaders.map((h) => resolveColumnAlias(normalize(String(h))));
+    const normalizedOurs = header.map((h) => resolveColumnAlias(normalize(String(h))));
+    const matchCount = normalizedOurs.filter((h) => normalizedExisting.includes(h)).length;
+    if (matchCount > 0) {
+      const remappedRows = rows.map((row) =>
+        existingHeaders.map((_, colIdx) => {
+          const ourIdx = normalizedOurs.findIndex((h) => h === normalizedExisting[colIdx]);
+          return ourIdx >= 0 ? row[ourIdx] : '';
+        }),
+      );
+      values = remappedRows;
+    } else {
+      values = [header, ...rows];
+    }
+  } else {
+    values = [header, ...rows];
+  }
 
   const r = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
@@ -108,7 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('google_access_token, google_refresh_token, google_token_expires_at, google_sheet_id')
+    .select('google_access_token, google_refresh_token, google_token_expires_at, google_sheet_id, sheet_column_mapping')
     .eq('id', user.id)
     .single();
 
@@ -126,7 +166,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const sheetId = extractSheetId(profile.google_sheet_id as string);
-  const columns: ExcelColumn[] = mapping?.length ? mapping : DEFAULT_COLUMNS;
+  let columns: ExcelColumn[] = mapping?.length ? mapping : DEFAULT_COLUMNS;
+
+  // If the user has a saved column mapping (rittoField → sheetColumnHeader),
+  // rename our column labels so they match the sheet's actual headers exactly.
+  const savedMapping = profile.sheet_column_mapping as Record<string, string> | null | undefined;
+  if (savedMapping && Object.keys(savedMapping).length > 0) {
+    columns = columns.map((col) => ({
+      ...col,
+      label: savedMapping[col.field] ?? col.label,
+    }));
+  }
+
   const header = columns.map((c) => c.label);
 
   const metaRes = await fetch(
@@ -148,13 +199,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let totalRows = 0;
   const writtenTabs: string[] = [];
 
+  const NUMERIC_SIGN_FIELDS = new Set(['neto', 'iva10', 'iva22', 'ivaTotal', 'total']);
+
   for (const [tabName, tabInvoices] of Object.entries(groups)) {
-    const rows = tabInvoices.map((inv) =>
-      columns.map((col) => {
+    const rows = tabInvoices.map((inv) => {
+      const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
+      return columns.map((col) => {
         const v = inv[col.field];
-        return v == null ? '' : typeof v === 'number' ? v : String(v);
-      }),
-    );
+        if (v == null) return '';
+        if (typeof v === 'number' && isNC && NUMERIC_SIGN_FIELDS.has(col.field)) return -v;
+        return typeof v === 'number' ? v : String(v);
+      });
+    });
     await ensureTab(sheetId, tabName, accessToken, existingTabs);
     const result = await appendToTab(sheetId, tabName, rows, header, accessToken);
     if (result.ok) {

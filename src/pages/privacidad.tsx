@@ -20,8 +20,8 @@ export default function PrivacidadPage() {
       <div className="wrap">
         <a href="/" className="logo">ritto</a>
         <br />
-        <a href="/" className="back">← Volver al inicio</a>
-        <h1>Política de Privacidad</h1>
+        <a href="/" className="back">&larr; Volver al inicio</a>
+        <h1>Pol&iacute;tica de Privacidad</h1>
         <p className="date">Última actualización: agosto 2025</p>
 
         <div className="highlight">

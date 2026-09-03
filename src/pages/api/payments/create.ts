@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+// TEST — revert to 1500/5000/12000 before going live
 const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
   pro: { title: 'Ritto Pro · 1 empresa', unit_price: 100 },
   pyme: { title: 'Ritto Pyme · 5 cuentas', unit_price: 100 },
@@ -18,23 +19,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 
-  const mpRes = await fetch('https://api.mercadopago.com/preapproval', {
+  // Using Checkout Pro (preference) instead of preapproval to avoid debit card CVV tokenization bug
+  const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
-      reason: item.title,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: item.unit_price,
-        currency_id: 'UYU',
-      },
-      back_url: `${siteUrl}/plan?subscribed=1`,
-      payer_email: email,
+      items: [
+        {
+          title: item.title,
+          quantity: 1,
+          unit_price: item.unit_price,
+          currency_id: 'UYU',
+        },
+      ],
+      payer: { email },
       external_reference: `${plan}|${userId}`,
+      back_urls: {
+        success: `${siteUrl}/plan?subscribed=1`,
+        failure: `${siteUrl}/plan?payment_failed=1`,
+        pending: `${siteUrl}/plan?subscribed=1`,
+      },
+      auto_return: 'approved',
+      notification_url: `${siteUrl}/api/payments/webhook`,
     }),
   });
 
