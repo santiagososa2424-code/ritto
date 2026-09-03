@@ -78,13 +78,20 @@ async function appendToTab(
   if (existingHeaders.length > 0) {
     const normalizedExisting = existingHeaders.map((h) => normalize(String(h)));
     const normalizedOurs = header.map((h) => normalize(String(h)));
-    const remappedRows = rows.map((row) =>
-      existingHeaders.map((_, colIdx) => {
-        const ourIdx = normalizedOurs.findIndex((h) => h === normalizedExisting[colIdx]);
-        return ourIdx >= 0 ? row[ourIdx] : '';
-      }),
-    );
-    values = remappedRows;
+    const matchCount = normalizedOurs.filter((h) => normalizedExisting.includes(h)).length;
+    if (matchCount > 0) {
+      // Remap data to existing column positions
+      const remappedRows = rows.map((row) =>
+        existingHeaders.map((_, colIdx) => {
+          const ourIdx = normalizedOurs.findIndex((h) => h === normalizedExisting[colIdx]);
+          return ourIdx >= 0 ? row[ourIdx] : '';
+        }),
+      );
+      values = remappedRows;
+    } else {
+      // No column names match — append with Ritto's own headers so data is always visible
+      values = [header, ...rows];
+    }
   } else {
     values = [header, ...rows];
   }
