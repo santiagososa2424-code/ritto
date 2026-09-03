@@ -195,13 +195,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let totalRows = 0;
   const writtenTabs: string[] = [];
 
+  const NUMERIC_SIGN_FIELDS = new Set(['neto', 'iva10', 'iva22', 'ivaTotal', 'total']);
+
   for (const [tabName, tabInvoices] of Object.entries(groups)) {
-    const rows = tabInvoices.map((inv) =>
-      columns.map((col) => {
+    const rows = tabInvoices.map((inv) => {
+      const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
+      return columns.map((col) => {
         const v = inv[col.field];
-        return v == null ? '' : typeof v === 'number' ? v : String(v);
-      }),
-    );
+        if (v == null) return '';
+        if (typeof v === 'number' && isNC && NUMERIC_SIGN_FIELDS.has(col.field)) return -v;
+        return typeof v === 'number' ? v : String(v);
+      });
+    });
     await ensureTab(sheetId, tabName, accessToken, existingTabs);
     const result = await appendToTab(sheetId, tabName, rows, header, accessToken);
     if (result.ok) {
