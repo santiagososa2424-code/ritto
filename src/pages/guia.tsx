@@ -8,6 +8,7 @@ const sections = [
   { id: 'sheets', label: 'Conectar Google Sheets' },
   { id: 'columnas', label: 'Configurar columnas' },
   { id: 'tips', label: 'Sacarle el jugo' },
+  { id: 'problemas', label: 'Problemas frecuentes' },
 ];
 
 export default function GuiaPage() {
@@ -72,13 +73,6 @@ export default function GuiaPage() {
         .tip-text { font-size: 14px; color: var(--gray); line-height: 1.6; }
         .tip-text strong { color: var(--dark); }
 
-        .badge-soon {
-          display: inline-block; background: #f3e8ff; color: #6b21a8;
-          border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.3px; margin-left: 8px;
-          vertical-align: middle;
-        }
-
         .highlight {
           background: var(--green-light); border-left: 3px solid var(--green);
           border-radius: 0 8px 8px 0; padding: 12px 14px; margin-top: 12px;
@@ -117,7 +111,6 @@ export default function GuiaPage() {
             ))}
           </div>
 
-          {/* ── EMPEZAR ── */}
           <div className={`section${active === 'empezar' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">📄</div>
@@ -160,7 +153,6 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* ── EXCEL ── */}
           <div className={`section${active === 'excel' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">📊</div>
@@ -204,39 +196,38 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* ── SHEETS ── */}
           <div className={`section${active === 'sheets' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🟢</div>
-              <div className="card-title">Conectar Google Sheets <span className="badge-soon">Próximamente</span></div>
+              <div className="card-title">Conectar Google Sheets</div>
               <div className="card-text">
-                Con Google Sheets conectado, no tenés que descargar ni copiar nada. Exportás desde Ritto y las filas aparecen solas al final de tu hoja, sin tocar nada más.
+                Con Google Sheets conectado, no tenés que descargar ni copiar nada. Exportás desde Ritto y las filas aparecen solas en tu planilla automáticamente.
               </div>
               <div className="steps" style={{ marginTop: 16 }}>
                 <div className="step">
                   <div className="step-num">1</div>
                   <div className="step-content">
                     <div className="step-title">Conectás tu cuenta de Google</div>
-                    <div className="step-desc">En Configuración, tocás "Conectar con Google" y le das permiso a Ritto para editar tu planilla.</div>
+                    <div className="step-desc">En Configuración, tocás "Conectar con Google" y le das permiso a Ritto para escribir en tu planilla. Ritto solo puede escribir en Sheets — no puede ver ni modificar tus otros archivos.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">2</div>
                   <div className="step-content">
                     <div className="step-title">Pegás el link de tu planilla</div>
-                    <div className="step-desc">Abrís tu Google Sheets, copiás la URL de arriba y la pegás en el campo "URL de tu Google Sheet" en Configuración.</div>
+                    <div className="step-desc">Abrís tu Google Sheets, copiás la URL completa de la barra del navegador y la pegás en el campo "URL de tu Google Sheet" en Configuración. Guardás.</div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
                     <div className="step-title">Exportás con un clic</div>
-                    <div className="step-desc">Cada vez que procesás facturas, tocás "Exportar a Google Sheets" y las filas se agregan automáticamente al final de tu hoja. Listo.</div>
+                    <div className="step-desc">Procesás tus facturas, tocás "Exportar a Google Sheets" y los datos se agregan solos. No tenés que abrir la planilla para nada.</div>
                   </div>
                 </div>
               </div>
               <div className="highlight">
-                🕐 Esta función estará disponible muy pronto. Podés dejar guardada la URL de tu planilla en Configuración ya mismo, para que cuando esté lista quede todo configurado.
+                💡 <strong>Si tu planilla tiene una pestaña por proveedor</strong> (ej: una pestaña "FINESA", otra "MALMO"), Ritto detecta el proveedor de cada factura y escribe en la pestaña correcta automáticamente. Si no encuentra la pestaña, la factura va a una hoja llamada "Ritto - Sin clasificar".
               </div>
               <button className="btn-go" onClick={() => window.location.href = '/settings'}>
                 Ir a Configuración →
@@ -244,7 +235,6 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* ── COLUMNAS ── */}
           <div className={`section${active === 'columnas' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🗂️</div>
@@ -323,7 +313,6 @@ export default function GuiaPage() {
             </div>
           </div>
 
-          {/* ── TIPS ── */}
           <div className={`section${active === 'tips' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🚀</div>
@@ -353,6 +342,65 @@ export default function GuiaPage() {
                   <div className="tip-icon">⚙️</div>
                   <div className="tip-text"><strong>Configurá las columnas una sola vez.</strong> Una vez que las tenés bien, cada exportación va a ser perfecta sin tocar nada.</div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={`section${active === 'problemas' ? ' visible' : ''}`}>
+            <div className="card">
+              <div className="card-icon">🔴</div>
+              <div className="card-title">"Acceso bloqueado: ritto solo se puede usar dentro de su organización"</div>
+              <div className="card-text">
+                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribínos a soporte@ritto.lat</strong> indicando tu email y lo resolvemos en minutos.
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-icon">⚠️</div>
+              <div className="card-title">La factura se procesó pero los datos están mal</div>
+              <div className="card-text">
+                Pasa cuando la imagen está borrosa, con poca luz, o el PDF tiene texto como imagen (escaneado). Podés corregir los datos manualmente tocando el ícono ✏️ al lado de la factura. Para evitarlo: usá XMLs del DGI cuando sea posible, o PDFs digitales en lugar de fotos.
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-icon">🔁</div>
+              <div className="card-title">Error al exportar a Google Sheets</div>
+              <div className="card-text">
+                Si aparece un error al exportar, verificá:
+              </div>
+              <div className="tip-list" style={{ marginTop: 12 }}>
+                <div className="tip">
+                  <div className="tip-icon">1️⃣</div>
+                  <div className="tip-text">Que hayas conectado tu cuenta de Google en Configuración (aparece el chip "Conectado").</div>
+                </div>
+                <div className="tip">
+                  <div className="tip-icon">2️⃣</div>
+                  <div className="tip-text">Que hayas guardado la URL de tu planilla en Configuración. Tiene que ser la URL completa, no solo el ID.</div>
+                </div>
+                <div className="tip">
+                  <div className="tip-icon">3️⃣</div>
+                  <div className="tip-text">Que la planilla sea tuya o que te hayan dado permiso de edición. Ritto no puede escribir en planillas de solo lectura.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-icon">📋</div>
+              <div className="card-title">El Excel exportado tiene columnas distintas a mi planilla</div>
+              <div className="card-text">
+                Configurá la plantilla de columnas en Configuración → Plantilla de Excel. Podés poner exactamente los mismos nombres que tiene tu planilla. Ver sección "Configurar columnas" para el paso a paso.
+              </div>
+              <button className="btn-go" onClick={() => window.location.href = '/settings'}>
+                Ir a configurar columnas →
+              </button>
+            </div>
+
+            <div className="card">
+              <div className="card-icon">📧</div>
+              <div className="card-title">¿Otro problema?</div>
+              <div className="card-text">
+                Escribínos a <strong>soporte@ritto.lat</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
               </div>
             </div>
           </div>
