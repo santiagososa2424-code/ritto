@@ -284,7 +284,11 @@ export default function SettingsPage() {
       const headers: string[] = data.sampleHeaders ?? [];
       setSheetHeaders(headers);
       setStructureLoaded(true);
-      setColumnMapping((prev) => ({ ...guessMapping(headers), ...Object.fromEntries(Object.entries(prev).filter(([, v]) => v)) }));
+      setColumnMapping((prev) => {
+        const guessed = guessMapping(headers);
+        const kept = Object.fromEntries(Object.entries(prev).filter(([, v]) => v && headers.includes(v)));
+        return { ...guessed, ...kept };
+      });
     } catch {
       setMappingMsg({ type: 'err', text: 'Error de conexión.' });
     } finally {
@@ -600,11 +604,11 @@ export default function SettingsPage() {
                   </button>
                 ) : (
                   <>
-                    <p style={{ fontSize: 13, color: 'var(--dark)', fontWeight: 600, marginBottom: 4 }}>
-                      Encontramos {sheetHeaders.length} columna{sheetHeaders.length !== 1 ? 's' : ''} en tu planilla.
-                    </p>
-                    <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
-                      Para cada dato que Ritto escribe, elegí <strong>cuál columna de tu planilla</strong> le corresponde. Si no tenés esa columna, dejá "— no la tengo —" y Ritto la saltea.
+                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1d4ed8', marginBottom: 12, lineHeight: 1.5 }}>
+                      <strong>Cómo funciona:</strong> A la izquierda están los datos que Ritto puede escribir. A la derecha, las columnas de TU planilla. Si tu planilla tiene una columna para ese dato, seleccionála. Si no tenés esa columna, dejá "— no escribir —" y Ritto la saltea. No tenés que llenar todo — solo los que aplican a tu planilla.
+                    </div>
+                    <p style={{ fontSize: 13, color: 'var(--dark)', fontWeight: 600, marginBottom: 12 }}>
+                      Encontramos {sheetHeaders.length} columna{sheetHeaders.length !== 1 ? 's' : ''} en total entre todas las pestañas de tu planilla.
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '0 8px', marginBottom: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: 6, borderBottom: '2px solid var(--border)' }}>Ritto escribe este dato…</span>
@@ -617,11 +621,11 @@ export default function SettingsPage() {
                           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--dark)' }}>{f.label}</span>
                           <span style={{ color: '#aaa', fontSize: 14, textAlign: 'center' }}>→</span>
                           <select
-                            style={{ border: '1px solid var(--border)', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, background: columnMapping[f.value] ? '#f0fdf4' : 'var(--white)', color: columnMapping[f.value] ? '#166534' : 'inherit', outline: 'none', cursor: 'pointer', width: '100%' }}
+                            style={{ border: `1px solid ${columnMapping[f.value] ? '#86efac' : 'var(--border)'}`, borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, background: columnMapping[f.value] ? '#f0fdf4' : 'var(--white)', color: columnMapping[f.value] ? '#166534' : 'inherit', outline: 'none', cursor: 'pointer', width: '100%' }}
                             value={columnMapping[f.value] ?? ''}
                             onChange={(e) => setColumnMapping((prev) => ({ ...prev, [f.value]: e.target.value }))}
                           >
-                            <option value="">— no la tengo —</option>
+                            <option value="">— no escribir —</option>
                             {sheetHeaders.map((h) => (
                               <option key={h} value={h}>{h}</option>
                             ))}
@@ -630,7 +634,7 @@ export default function SettingsPage() {
                       ))}
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
-                      Las otras columnas de tu planilla que no asignaste acá (como "Mes pagado", "Estado", fórmulas, etc.) Ritto las deja exactamente como están.
+                      Las columnas que dejás en "— no escribir —" y las que no aparecen en este listado (como "Mes", "Pendiente", fórmulas, etc.) Ritto las ignora completamente — quedan tal como están.
                     </p>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                       <button type="button" className="btn-save" onClick={saveSheetMapping} disabled={savingSheetMapping}>
