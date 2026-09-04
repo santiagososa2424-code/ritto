@@ -40,8 +40,8 @@ async function refreshAccessToken(rt: string): Promise<string | null> {
 
 interface SheetStructure {
   tabs: string[];
-  tabHeaderMap: Record<string, string[]>;       // all headers (for building the write row)
-  tabWritableHeaders: Record<string, string[]>; // non-formula headers only (for Gemini prompt)
+  tabHeaderMap: Record<string, string[]>;
+  tabWritableHeaders: Record<string, string[]>;
 }
 
 async function fetchTabHeaders(
@@ -88,7 +88,6 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
 
-  // Read up to 50 tabs (increased from 15)
   await Promise.all(
     tabs.slice(0, 50).map(async (tab) => {
       const result = await fetchTabHeaders(sheetId, tab, accessToken);
@@ -195,8 +194,6 @@ async function appendRow(
   row: (string | number)[],
   accessToken: string,
 ): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
-  // Read column A to find the actual last row with data (avoids offset bug where
-  // append writes to row 500+ because of formatted-but-empty cells).
   let nextRow = 2;
   const colARes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, 'A:A')}`,
@@ -205,7 +202,7 @@ async function appendRow(
   if (colARes.ok) {
     const colAData = await colARes.json();
     const filled = (colAData.values ?? []).length;
-    nextRow = Math.max(filled + 1, 2); // always below header row
+    nextRow = Math.max(filled + 1, 2);
   }
 
   const r = await fetch(
@@ -227,7 +224,6 @@ async function appendRow(
   return { ok: true, status: r.status, targetRow: nextRow };
 }
 
-// Fallback: simple alias-based column matching (used when Gemini is unavailable)
 const FIELD_ALIASES: Record<string, string[]> = {
   proveedor: ['proveedor', 'empresa', 'supplier', 'vendedor', 'emisor', 'razon social', 'nombre', 'comercio', 'distribuidor'],
   rut: ['rut', 'cuit', 'nit', 'id fiscal', 'identificacion fiscal', 'ruc', 'rut proveedor', 'rut emisor'],
@@ -369,7 +365,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
       }
 
-      // If headers not cached (tab > 50), fetch on demand
       if (!tabHeaderMap[tabName] && existingTabs.includes(tabName)) {
         const result = await fetchTabHeaders(sheetId, tabName, accessToken);
         if (result) {
@@ -399,6 +394,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const val = datosFila[col];
         return val == null ? '' : val;
       });
+
+      // Don't write a row where every cell is empty (fallback had no alias matches)
+      const hasData = row.some((v) => v !== '' && v != null);
+      if (!hasData) {
+        debugEntry.appendError = 'skipped_empty_row';
+        invoiceDebug.push(debugEntry);
+        continue;
+      }
 
       debugEntry.rowAttempted = true;
       const result = await appendRow(sheetId, tabName, row, accessToken);
