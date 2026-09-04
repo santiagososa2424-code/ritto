@@ -7,6 +7,22 @@ function extractSheetId(urlOrId: string): string {
   return match ? match[1] : urlOrId;
 }
 
+// Properly quotes a tab name for the Sheets API range (handles spaces and special chars)
+function sheetRange(tab: string, range: string): string {
+  const quoted = `'${tab.replace(/'/g, "''")}'`;
+  return encodeURIComponent(`${quoted}!${range}`);
+}
+
+// Match Gemini's returned tab name against the actual tab list (case-insensitive)
+function resolveTab(geminiTab: string, existingTabs: string[]): string | null {
+  const norm = (s: string) => s.trim().toLowerCase();
+  return (
+    existingTabs.find((t) => norm(t) === norm(geminiTab)) ??
+    existingTabs.find((t) => norm(t).includes(norm(geminiTab)) || norm(geminiTab).includes(norm(t))) ??
+    null
+  );
+}
+
 async function refreshAccessToken(rt: string): Promise<string | null> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -41,11 +57,9 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   const tabWritableHeaders: Record<string, string[]> = {};
 
   for (const tab of tabs.slice(0, 15)) {
-    const enc = encodeURIComponent(tab);
-
     const [row1Res, row2Res] = await Promise.all([
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`, { headers: { Authorization: `Bearer ${accessToken}` } }),
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A2:ZZ2?valueRenderOption=FORMULA`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A1:ZZ1')}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A2:ZZ2')}?valueRenderOption=FORMULA`, { headers: { Authorization: `Bearer ${accessToken}` } }),
     ]);
 
     if (!row1Res.ok) continue;
@@ -148,9 +162,8 @@ async function appendRow(
   row: (string | number)[],
   accessToken: string,
 ): Promise<boolean> {
-  const enc = encodeURIComponent(tabName);
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, 'A1')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -283,7 +296,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (useGemini) {
         const gm = geminiMappings.find((m) => m.index === i) ?? geminiMappings[i];
-        tabName = gm?.pestana_destino || findBestTab(existingTabs) || FALLBACK_TAB;
+        const geminiTab = gm?.pestana_destino ?? '';
+        tabName = (geminiTab && resolveTab(geminiTab, existingTabs)) || findBestTab(existingTabs) || FALLBACK_TAB;
         datosFila = gm?.datos_fila ?? {};
       } else {
         const provider = typeof inv.proveedor === 'string' ? inv.proveedor : undefined;
