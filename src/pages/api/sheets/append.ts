@@ -75,13 +75,14 @@ ${JSON.stringify({ pestañas_disponibles: sheetStructure }, null, 2)}
 FACTURAS A PROCESAR:
 ${JSON.stringify(invoices.map((inv, i) => ({ index: i, ...inv })), null, 2)}
 
-REGLAS:
-1. Elegí la pestaña más adecuada para cada factura: si es una compra/gasto (el usuario es Receptor/comprador), usá pestañas de gastos o proveedores. Si es una venta (usuario es Emisor), usá pestañas de ventas o clientes.
-2. Mapeá cada campo al nombre EXACTO de la columna de esa pestaña. Si ninguna columna coincide con un campo, no lo incluyas.
-3. Si una columna no tiene dato, usá null.
-4. Fechas en formato YYYY-MM-DD. Montos sin símbolo de moneda, solo número.
-5. Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos van negativos.
-6. Si ninguna pestaña aplica claramente, usá la primera pestaña disponible.
+REGLAS (en orden de prioridad):
+1. PRIORIDAD MÁXIMA — Si el nombre del proveedor/emisor de la factura coincide con el nombre de una pestaña (exacto o parcialmente, ignorando mayúsculas/acentos), usá ESA pestaña. Ejemplo: proveedor "Loazzolo S.A." → pestaña "Loazzolo".
+2. Si no hay coincidencia por proveedor, elegí por tipo: compra/gasto → pestaña de gastos/proveedores; venta → pestaña de ventas/clientes.
+3. Mapeá cada campo al nombre EXACTO de la columna de esa pestaña. Si ninguna columna coincide con un campo, no lo incluyas.
+4. Si una columna no tiene dato, usá null.
+5. Fechas en formato YYYY-MM-DD. Montos sin símbolo de moneda, solo número.
+6. Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos van negativos.
+7. Si ninguna pestaña aplica, usá la primera pestaña disponible.
 
 Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
 [
@@ -192,7 +193,14 @@ function fallbackMapInvoice(
   return result;
 }
 
-function findBestTab(tabs: string[]): string {
+function findBestTab(tabs: string[], providerName?: string): string {
+  if (providerName) {
+    const np = normStr(providerName);
+    for (const tab of tabs) {
+      const nt = normStr(tab);
+      if (nt && np && (nt === np || np.includes(nt) || nt.includes(np))) return tab;
+    }
+  }
   const gastoKeywords = ['gasto', 'proveedor', 'compra', 'egreso', 'costo', 'factura'];
   for (const tab of tabs) {
     const nt = normStr(tab);
@@ -262,7 +270,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tabName = gm?.pestana_destino || findBestTab(existingTabs) || FALLBACK_TAB;
         datosFila = gm?.datos_fila ?? {};
       } else {
-        tabName = findBestTab(existingTabs) || FALLBACK_TAB;
+        const provider = typeof inv.proveedor === 'string' ? inv.proveedor : undefined;
+        tabName = findBestTab(existingTabs, provider) || FALLBACK_TAB;
         const tabHeaders = tabHeaderMap[tabName];
         datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
       }
