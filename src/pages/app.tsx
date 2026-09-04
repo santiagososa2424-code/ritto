@@ -71,6 +71,8 @@ export default function AppPage() {
   const [sheetsStatus, setSheetsStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [sheetsError, setSheetsError] = useState('');
   const [sheetsRange, setSheetsRange] = useState('');
+  const [sheetsRowsAdded, setSheetsRowsAdded] = useState(0);
+  const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -342,6 +344,8 @@ export default function AppPage() {
       if (res.ok) {
         const data = await res.json();
         setSheetsRange(data.updatedRange ?? '');
+        setSheetsRowsAdded(data.rowsAdded ?? 0);
+        setSheetsTabs(data.tabs ?? []);
         setSheetsStatus('ok');
         const exportedAt = new Date().toISOString();
         const idsToMark = invoiceList.filter((inv) => inv.status === 'done').map((inv) => inv.id);
@@ -360,7 +364,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); }, 8000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); }, 10000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -698,9 +702,9 @@ export default function AppPage() {
               </button>
             </div>
             {sheetsStatus === 'ok' && (
-              <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  ✓ Datos enviados.{' '}
+              <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  ✓ {sheetsRowsAdded > 0 ? `${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'}` : 'Datos enviados'} a tu planilla.{' '}
                   <a
                     href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
                     target="_blank"
@@ -709,13 +713,15 @@ export default function AppPage() {
                   >
                     Abrir planilla →
                   </a>
-                  {sheetsRange && <span style={{ color: '#4b7a5e', fontWeight: 400 }}>({sheetsRange})</span>}
                 </div>
-                {googleEmail && (
-                  <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400 }}>
-                    Cuenta conectada: {googleEmail}
+                {sheetsTabs.length > 0 && (
+                  <div style={{ fontSize: 12, color: '#4b7a5e', fontWeight: 400 }}>
+                    {sheetsTabs.length === 1 ? 'Pestaña:' : 'Pestañas:'} {sheetsTabs.join(', ')}
                   </div>
                 )}
+                <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400, lineHeight: 1.4 }}>
+                  Ritto escribe los datos del comprobante (N°, fecha, importes). Las columnas con estados, fórmulas o deudas quedan tal como están.
+                </div>
               </div>
             )}
             {sheetsError && (
@@ -887,7 +893,7 @@ export default function AppPage() {
                         <div className="gs-num">3</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
-                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o enviá los datos directo a tu planilla con un clic. Para Google Sheets, primero conectá tu cuenta en Configuración.</div>
+                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o envíá los datos directo a tu planilla con un clic. Para Google Sheets, primero conectá tu cuenta en Configuración.</div>
                           <a href="/settings" className="gs-btn" style={{ marginTop: 8 }}>Conectar Google Sheets →</a>
                         </div>
                       </div>
