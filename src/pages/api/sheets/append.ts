@@ -108,12 +108,19 @@ interface GeminiMapping {
   datos_fila: Record<string, string | number | null>;
 }
 
+interface GeminiResult {
+  mappings: GeminiMapping[] | null;
+  called: boolean;
+  reason?: string;
+}
+
 async function mapWithGemini(
   invoices: Record<string, unknown>[],
   tabWritableHeaders: Record<string, string[]>,
-): Promise<GeminiMapping[] | null> {
+): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || Object.keys(tabWritableHeaders).length === 0) return null;
+  if (!apiKey) return { mappings: null, called: false, reason: 'no_api_key' };
+  if (Object.keys(tabWritableHeaders).length === 0) return { mappings: null, called: false, reason: 'no_writable_headers' };
 
   const sheetStructure = Object.entries(tabWritableHeaders).map(([nombre, columnas]) => ({ nombre, columnas }));
 
@@ -157,13 +164,19 @@ Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
         }),
       },
     );
-    if (!geminiRes.ok) return null;
+    if (!geminiRes.ok) {
+      let errMsg = geminiRes.statusText;
+      try { errMsg = ((await geminiRes.json()) as { error?: { message?: string } })?.error?.message ?? errMsg; } catch { /* ignore */ }
+      return { mappings: null, called: true, reason: `api_${geminiRes.status}: ${errMsg}` };
+    }
     const geminiData = await geminiRes.json();
     const text: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!text) return { mappings: null, called: true, reason: 'empty_response' };
     const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
+    if (!Array.isArray(parsed)) return { mappings: null, called: true, reason: 'response_not_array' };
+    return { mappings: parsed, called: true };
+  } catch (e) {
+    return { mappings: null, called: true, reason: `exception: ${String(e)}` };
   }
 }
 
@@ -325,7 +338,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
 
-    const geminiMappings = await mapWithGemini(invoices, tabWritableHeaders);
+    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders);
+    const geminiMappings = geminiResult.mappings;
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
     const invoiceDebug: Array<{
@@ -407,7 +421,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       _debug: {
         existingTabs,
         tabsWithHeaders: Object.keys(tabHeaderMap),
-        geminiCalled: !!geminiMappings,
+        geminiCalled: geminiResult.called,
+        geminiReason: geminiResult.reason ?? null,
         geminiMappings: useGemini ? geminiMappings : null,
         invoices: invoiceDebug,
       },
