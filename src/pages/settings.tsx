@@ -581,10 +581,13 @@ export default function SettingsPage() {
 
             {googleConnected && googleSheetUrl && (
               <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Paso 3 — Configurar columnas (opcional)</p>
-                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Ritto ya detecta columnas automáticamente. Si tu planilla usa nombres distintos (ej: "Empresa" en vez de "Proveedor"), podés configurarlo acá para que sea exacto.
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Paso 3 — Decile a Ritto en qué columna de tu planilla va cada dato (opcional)</p>
+                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 8, lineHeight: 1.5 }}>
+                  Ritto escribe los datos del comprobante en las columnas que vos eligas. Todo lo demás (estados, fórmulas, "Mes pagado", deudas, etc.) lo deja intacto — esas columnas son tuyas.
                 </p>
+                <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#854d0e', marginBottom: 12, lineHeight: 1.5 }}>
+                  <strong>¿Para qué sirve?</strong> Si tu planilla tiene una columna que se llama "Tt N° factura" o "Fecha de emisión", acá le decís a Ritto exactamente cuál es. Hacé clic en "Leer mi planilla" y Ritto te muestra las columnas que encontró para que las asignes vos.
+                </div>
                 {!structureLoaded ? (
                   <button
                     type="button"
@@ -593,23 +596,32 @@ export default function SettingsPage() {
                     onClick={detectColumns}
                     disabled={loadingStructure}
                   >
-                    {loadingStructure ? 'Leyendo planilla…' : 'Detectar columnas de mi planilla'}
+                    {loadingStructure ? 'Leyendo planilla…' : 'Leer mi planilla y ver columnas →'}
                   </button>
                 ) : (
                   <>
-                    <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 10 }}>
-                      Columnas encontradas en tu planilla. Seleccióná cuál corresponde a cada campo de Ritto (dejá en blanco si no querés incluirlo):
+                    <p style={{ fontSize: 13, color: 'var(--dark)', fontWeight: 600, marginBottom: 4 }}>
+                      Encontramos {sheetHeaders.length} columna{sheetHeaders.length !== 1 ? 's' : ''} en tu planilla.
                     </p>
-                    <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+                    <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                      Para cada dato que Ritto escribe, elegí <strong>cuál columna de tu planilla</strong> le corresponde. Si no tenés esa columna, dejá "— no la tengo —" y Ritto la saltea.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '0 8px', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: 6, borderBottom: '2px solid var(--border)' }}>Ritto escribe este dato…</span>
+                      <span style={{ borderBottom: '2px solid var(--border)' }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: 6, borderBottom: '2px solid var(--border)' }}>…en esta columna de tu planilla</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                       {MAPPING_FIELDS.map((f) => (
-                        <div key={f.value} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 13, fontWeight: 500, width: 180, flexShrink: 0 }}>{f.label}</span>
+                        <div key={f.value} style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '0 8px', alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--dark)' }}>{f.label}</span>
+                          <span style={{ color: '#aaa', fontSize: 14, textAlign: 'center' }}>→</span>
                           <select
-                            style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, background: 'var(--white)', color: 'var(--dark)', outline: 'none' }}
+                            style={{ border: '1px solid var(--border)', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, background: columnMapping[f.value] ? '#f0fdf4' : 'var(--white)', color: columnMapping[f.value] ? '#166534' : 'inherit', outline: 'none', cursor: 'pointer', width: '100%' }}
                             value={columnMapping[f.value] ?? ''}
                             onChange={(e) => setColumnMapping((prev) => ({ ...prev, [f.value]: e.target.value }))}
                           >
-                            <option value="">— no incluir —</option>
+                            <option value="">— no la tengo —</option>
                             {sheetHeaders.map((h) => (
                               <option key={h} value={h}>{h}</option>
                             ))}
@@ -617,12 +629,15 @@ export default function SettingsPage() {
                         </div>
                       ))}
                     </div>
+                    <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                      Las otras columnas de tu planilla que no asignaste acá (como "Mes pagado", "Estado", fórmulas, etc.) Ritto las deja exactamente como están.
+                    </p>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                       <button type="button" className="btn-save" onClick={saveSheetMapping} disabled={savingSheetMapping}>
                         {savingSheetMapping ? 'Guardando…' : 'Guardar configuración'}
                       </button>
                       <button type="button" onClick={detectColumns} disabled={loadingStructure} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
-                        {loadingStructure ? 'Leyendo…' : 'Volver a detectar'}
+                        {loadingStructure ? 'Leyendo…' : 'Volver a leer la planilla'}
                       </button>
                     </div>
                   </>
