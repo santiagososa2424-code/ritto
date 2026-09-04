@@ -67,10 +67,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const meta = await metaRes.json();
     const tabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
-    let sampleHeaders: string[] = [];
-    let sampleTab = '';
+    const allHeadersSet = new Set<string>();
+    const tabHeaderMap: Record<string, string[]> = {};
 
-    for (const tab of tabs.slice(0, 10)) {
+    for (const tab of tabs.slice(0, 15)) {
       const enc = encodeURIComponent(tab);
       const rowRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`,
@@ -80,13 +80,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const rowData = await rowRes.json();
       const headers: string[] = (rowData.values?.[0] ?? []).filter((h: unknown) => typeof h === 'string' && h.trim());
       if (headers.length > 0) {
-        sampleHeaders = headers;
-        sampleTab = tab;
-        break;
+        tabHeaderMap[tab] = headers;
+        headers.forEach((h) => allHeadersSet.add(h));
       }
     }
 
-    return res.status(200).json({ tabs, sampleHeaders, sampleTab });
+    const sampleHeaders = Array.from(allHeadersSet);
+
+    return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap });
   } catch (err) {
     console.error('[structure] unhandled error:', err);
     return res.status(500).json({ error: 'Error interno. Intentá de nuevo o escribinos a soporte@ritto.lat' });
