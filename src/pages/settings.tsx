@@ -118,8 +118,12 @@ export default function SettingsPage() {
     if (router.query.error === 'google_denied') {
       setError('Cancelaste la autorización de Google. Intentá de nuevo.');
     }
+    if (router.query.error === 'google_csrf') {
+      setError('Error de seguridad al conectar con Google (cookie inválida). Intentá de nuevo.');
+    }
     if (router.query.error === 'google_token') {
-      setError('No se pudo conectar con Google. Intentá de nuevo o escribinos a soporte@ritto.lat si el problema persiste.');
+      const detail = router.query.detail ? ` (${router.query.detail})` : '';
+      setError(`No se pudo conectar con Google${detail}. Intentá de nuevo o escribinos a soporte@ritto.lat si el problema persiste.`);
     }
     if (router.query.error === 'google_not_configured') {
       setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a soporte@ritto.lat y lo resolvemos en minutos.');
