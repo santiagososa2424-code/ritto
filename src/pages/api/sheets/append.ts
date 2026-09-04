@@ -22,34 +22,50 @@ async function refreshAccessToken(rt: string): Promise<string | null> {
   return data.access_token ?? null;
 }
 
-async function fetchSheetStructure(
-  sheetId: string,
-  accessToken: string,
-): Promise<{ tabs: string[]; tabHeaderMap: Record<string, string[]> }> {
+interface SheetStructure {
+  tabs: string[];
+  tabHeaderMap: Record<string, string[]>;       // all headers (for building the write row)
+  tabWritableHeaders: Record<string, string[]>; // non-formula headers only (for Gemini prompt)
+}
+
+async function fetchSheetStructure(sheetId: string, accessToken: string): Promise<SheetStructure> {
   const metaRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {} };
+  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {} };
   const meta = await metaRes.json();
   const tabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
   const tabHeaderMap: Record<string, string[]> = {};
+  const tabWritableHeaders: Record<string, string[]> = {};
+
   for (const tab of tabs.slice(0, 15)) {
     const enc = encodeURIComponent(tab);
-    const rowRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    if (!rowRes.ok) continue;
-    const rowData = await rowRes.json();
-    const headers: string[] = (rowData.values?.[0] ?? []).filter(
+
+    const [row1Res, row2Res] = await Promise.all([
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A2:ZZ2?valueRenderOption=FORMULA`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+    ]);
+
+    if (!row1Res.ok) continue;
+    const row1Data = await row1Res.json();
+    const headers: string[] = (row1Data.values?.[0] ?? []).filter(
       (h: unknown) => typeof h === 'string' && (h as string).trim(),
     );
-    if (headers.length > 0) tabHeaderMap[tab] = headers;
+    if (headers.length === 0) continue;
+
+    // Detect formula columns by checking if row 2 cell starts with "="
+    const row2Values: string[] = row2Res.ok ? ((await row2Res.json()).values?.[0] ?? []) : [];
+    const formulaCols = new Set<string>(
+      headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
+    );
+
+    tabHeaderMap[tab] = headers;
+    tabWritableHeaders[tab] = headers.filter((h) => !formulaCols.has(h));
   }
 
-  return { tabs, tabHeaderMap };
+  return { tabs, tabHeaderMap, tabWritableHeaders };
 }
 
 interface GeminiMapping {
@@ -60,12 +76,12 @@ interface GeminiMapping {
 
 async function mapWithGemini(
   invoices: Record<string, unknown>[],
-  tabHeaderMap: Record<string, string[]>,
+  tabWritableHeaders: Record<string, string[]>,
 ): Promise<GeminiMapping[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || Object.keys(tabHeaderMap).length === 0) return null;
+  if (!apiKey || Object.keys(tabWritableHeaders).length === 0) return null;
 
-  const sheetStructure = Object.entries(tabHeaderMap).map(([nombre, columnas]) => ({ nombre, columnas }));
+  const sheetStructure = Object.entries(tabWritableHeaders).map(([nombre, columnas]) => ({ nombre, columnas }));
 
   const prompt = `Sos el motor de mapeo contable de ritto.lat para Uruguay y Argentina.
 
@@ -246,7 +262,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const sheetId = extractSheetId(profile.google_sheet_id as string);
-    const { tabs: existingTabs, tabHeaderMap } = await fetchSheetStructure(sheetId, accessToken);
+    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders } = await fetchSheetStructure(sheetId, accessToken);
 
     if (!existingTabs.length) {
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
@@ -255,8 +271,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
 
-    // Try Gemini mapping first
-    const geminiMappings = await mapWithGemini(invoices, tabHeaderMap);
+    // Try Gemini mapping first (uses only writable/non-formula columns)
+    const geminiMappings = await mapWithGemini(invoices, tabWritableHeaders);
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
     for (let i = 0; i < invoices.length; i++) {
