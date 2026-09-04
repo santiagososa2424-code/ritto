@@ -7,10 +7,10 @@ function extractSheetId(urlOrId: string): string {
   return match ? match[1] : urlOrId;
 }
 
-// Properly quotes a tab name for the Sheets API range (handles spaces and special chars)
+// Quotes the tab name for the Sheets API range; only encodes the tab name (spaces etc.), not ! or the range.
 function sheetRange(tab: string, range: string): string {
-  const quoted = `'${tab.replace(/'/g, "''")}'`;
-  return encodeURIComponent(`${quoted}!${range}`);
+  const safeTab = tab.replace(/'/g, "''");
+  return `${encodeURIComponent(`'${safeTab}'`)}!${range}`;
 }
 
 // Match Gemini's returned tab name against the actual tab list (case-insensitive)
@@ -44,6 +44,38 @@ interface SheetStructure {
   tabWritableHeaders: Record<string, string[]>; // non-formula headers only (for Gemini prompt)
 }
 
+async function fetchTabHeaders(
+  sheetId: string,
+  tab: string,
+  accessToken: string,
+): Promise<{ headers: string[]; writableHeaders: string[] } | null> {
+  const [row1Res, row2Res] = await Promise.all([
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A1:ZZ1')}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A2:ZZ2')}?valueRenderOption=FORMULA`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  ]);
+
+  if (!row1Res.ok) return null;
+  const row1Data = await row1Res.json();
+  const headers: string[] = (row1Data.values?.[0] ?? []).filter(
+    (h: unknown) => typeof h === 'string' && (h as string).trim(),
+  );
+  if (headers.length === 0) return null;
+
+  const row2Values: string[] = row2Res.ok ? ((await row2Res.json()).values?.[0] ?? []) : [];
+  const formulaCols = new Set<string>(
+    headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
+  );
+
+  return {
+    headers,
+    writableHeaders: headers.filter((h) => !formulaCols.has(h)),
+  };
+}
+
 async function fetchSheetStructure(sheetId: string, accessToken: string): Promise<SheetStructure> {
   const metaRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
@@ -56,28 +88,16 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
 
-  for (const tab of tabs.slice(0, 15)) {
-    const [row1Res, row2Res] = await Promise.all([
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A1:ZZ1')}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A2:ZZ2')}?valueRenderOption=FORMULA`, { headers: { Authorization: `Bearer ${accessToken}` } }),
-    ]);
-
-    if (!row1Res.ok) continue;
-    const row1Data = await row1Res.json();
-    const headers: string[] = (row1Data.values?.[0] ?? []).filter(
-      (h: unknown) => typeof h === 'string' && (h as string).trim(),
-    );
-    if (headers.length === 0) continue;
-
-    // Detect formula columns by checking if row 2 cell starts with "="
-    const row2Values: string[] = row2Res.ok ? ((await row2Res.json()).values?.[0] ?? []) : [];
-    const formulaCols = new Set<string>(
-      headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
-    );
-
-    tabHeaderMap[tab] = headers;
-    tabWritableHeaders[tab] = headers.filter((h) => !formulaCols.has(h));
-  }
+  // Read up to 50 tabs (increased from 15)
+  await Promise.all(
+    tabs.slice(0, 50).map(async (tab) => {
+      const result = await fetchTabHeaders(sheetId, tab, accessToken);
+      if (result) {
+        tabHeaderMap[tab] = result.headers;
+        tabWritableHeaders[tab] = result.writableHeaders;
+      }
+    }),
+  );
 
   return { tabs, tabHeaderMap, tabWritableHeaders };
 }
@@ -161,16 +181,37 @@ async function appendRow(
   tabName: string,
   row: (string | number)[],
   accessToken: string,
-): Promise<boolean> {
+): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
+  // Read column A to find the actual last row with data (avoids offset bug where
+  // append writes to row 500+ because of formatted-but-empty cells).
+  let nextRow = 2;
+  const colARes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, 'A:A')}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (colARes.ok) {
+    const colAData = await colARes.json();
+    const filled = (colAData.values ?? []).length;
+    nextRow = Math.max(filled + 1, 2); // always below header row
+  }
+
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, 'A1')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `A${nextRow}`)}?valueInputOption=USER_ENTERED`,
     {
-      method: 'POST',
+      method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: [row] }),
     },
   );
-  return r.ok;
+  if (!r.ok) {
+    try {
+      const body = await r.json();
+      return { ok: false, status: r.status, error: body?.error?.message ?? r.statusText };
+    } catch {
+      return { ok: false, status: r.status, error: r.statusText };
+    }
+  }
+  return { ok: true, status: r.status, targetRow: nextRow };
 }
 
 // Fallback: simple alias-based column matching (used when Gemini is unavailable)
@@ -284,9 +325,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
 
-    // Try Gemini mapping first (uses only writable/non-formula columns)
     const geminiMappings = await mapWithGemini(invoices, tabWritableHeaders);
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
+
+    const invoiceDebug: Array<{
+      index: number;
+      resolvedTab: string;
+      headersCount: number;
+      rowAttempted: boolean;
+      appendStatus: number | null;
+      appendError: string | null;
+    }> = [];
 
     for (let i = 0; i < invoices.length; i++) {
       const inv = invoices[i];
@@ -306,8 +355,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
       }
 
+      // If headers not cached (tab > 50), fetch on demand
+      if (!tabHeaderMap[tabName] && existingTabs.includes(tabName)) {
+        const result = await fetchTabHeaders(sheetId, tabName, accessToken);
+        if (result) {
+          tabHeaderMap[tabName] = result.headers;
+          tabWritableHeaders[tabName] = result.writableHeaders;
+        }
+      }
+
       const tabHeaders = tabHeaderMap[tabName];
-      if (!tabHeaders || tabHeaders.length === 0) continue;
+      const debugEntry: (typeof invoiceDebug)[0] = {
+        index: i,
+        resolvedTab: tabName,
+        headersCount: tabHeaders?.length ?? 0,
+        rowAttempted: false,
+        appendStatus: null,
+        appendError: null,
+      };
+
+      if (!tabHeaders || tabHeaders.length === 0) {
+        invoiceDebug.push(debugEntry);
+        continue;
+      }
 
       await ensureTab(sheetId, tabName, accessToken, existingTabs);
 
@@ -316,19 +386,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return val == null ? '' : val;
       });
 
-      const ok = await appendRow(sheetId, tabName, row, accessToken);
-      if (ok) {
+      debugEntry.rowAttempted = true;
+      const result = await appendRow(sheetId, tabName, row, accessToken);
+      debugEntry.appendStatus = result.status;
+      debugEntry.appendError = result.error ?? null;
+
+      if (result.ok) {
         totalRows++;
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
       }
+      invoiceDebug.push(debugEntry);
     }
 
     return res.status(200).json({
-      ok: true,
+      ok: totalRows > 0,
       rowsAdded: totalRows,
       tabs: writtenTabs,
       updatedRange: writtenTabs.join(', '),
       engine: useGemini ? 'gemini' : 'fallback',
+      _debug: {
+        existingTabs,
+        tabsWithHeaders: Object.keys(tabHeaderMap),
+        geminiCalled: !!geminiMappings,
+        geminiMappings: useGemini ? geminiMappings : null,
+        invoices: invoiceDebug,
+      },
     });
   } catch (err) {
     console.error('[append] unhandled error:', err);
