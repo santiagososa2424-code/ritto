@@ -7,10 +7,12 @@ function extractSheetId(urlOrId: string): string {
   return match ? match[1] : urlOrId;
 }
 
-// Quotes the tab name for the Sheets API range; only encodes the tab name (spaces etc.), not ! or the range.
+// Quotes and URL-encodes a tab name + range for use in URL paths.
+// encodeURIComponent on the full string ensures : in ranges like A:A or A1:ZZ1
+// is sent as %3A, preventing the Sheets API from misreading it as a custom method suffix.
 function sheetRange(tab: string, range: string): string {
-  const safeTab = tab.replace(/'/g, "''");
-  return `${encodeURIComponent(`'${safeTab}'`)}!${range}`;
+  const quoted = `'${tab.replace(/'/g, "''")}'`;
+  return encodeURIComponent(`${quoted}!${range}`);
 }
 
 // Match Gemini's returned tab name against the actual tab list (case-insensitive)
@@ -88,15 +90,52 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
 
-  await Promise.all(
-    tabs.slice(0, 50).map(async (tab) => {
-      const result = await fetchTabHeaders(sheetId, tab, accessToken);
-      if (result) {
-        tabHeaderMap[tab] = result.headers;
-        tabWritableHeaders[tab] = result.writableHeaders;
-      }
-    }),
-  );
+  const tabs50 = tabs.slice(0, 50);
+  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders };
+
+  // Use batchGet to read all tab headers in 2 API calls instead of 100+ parallel requests
+  // (100 parallel requests causes Google Sheets API rate-limit errors - all return non-ok - 0 headers read)
+  // Ranges go as query params so URLSearchParams handles encoding (single quotes, colons, etc.)
+  const batchRow1Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
+  const batchRow2Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
+  batchRow2Url.searchParams.set('valueRenderOption', 'FORMULA');
+
+  for (const tab of tabs50) {
+    const safeTab = `'${tab.replace(/'/g, "''")}'`;
+    batchRow1Url.searchParams.append('ranges', `${safeTab}!A1:ZZ1`);
+    batchRow2Url.searchParams.append('ranges', `${safeTab}!A2:ZZ2`);
+  }
+
+  const [batchRow1Res, batchRow2Res] = await Promise.all([
+    fetch(batchRow1Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
+    fetch(batchRow2Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
+  ]);
+
+  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders };
+
+  const batchRow1Data = await batchRow1Res.json() as { valueRanges?: Array<{ values?: string[][] }> };
+  const batchRow2Data = batchRow2Res.ok
+    ? await batchRow2Res.json() as { valueRanges?: Array<{ values?: string[][] }> }
+    : null;
+
+  const row1Ranges = batchRow1Data.valueRanges ?? [];
+  const row2Ranges = batchRow2Data?.valueRanges ?? [];
+
+  for (let i = 0; i < tabs50.length; i++) {
+    const tab = tabs50[i];
+    const headers: string[] = (row1Ranges[i]?.values?.[0] ?? []).filter(
+      (h: unknown) => typeof h === 'string' && (h as string).trim(),
+    );
+    if (headers.length === 0) continue;
+
+    const row2Values: string[] = row2Ranges[i]?.values?.[0] ?? [];
+    const formulaCols = new Set<string>(
+      headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
+    );
+
+    tabHeaderMap[tab] = headers;
+    tabWritableHeaders[tab] = headers.filter((h) => !formulaCols.has(h));
+  }
 
   return { tabs, tabHeaderMap, tabWritableHeaders };
 }
