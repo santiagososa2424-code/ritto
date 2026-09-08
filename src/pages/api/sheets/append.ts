@@ -625,6 +625,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let totalRows = 0;
     const writtenTabs: string[] = [];
+    const exportedIds: string[] = [];
 
     const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows);
     const geminiMappings = geminiResult.mappings;
@@ -741,8 +742,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (result.ok) {
         totalRows++;
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
+        if (typeof inv.id === 'string') exportedIds.push(inv.id);
       }
       invoiceDebug.push(debugEntry);
+    }
+
+    // Marcar como exportadas acá y no desde el navegador: el cliente escribía con la
+    // sesión del usuario y, si la política de la tabla rechazaba el update, fallaba en
+    // silencio. La factura se veía archivada hasta que refrescabas y volvía a aparecer.
+    let exportedAt: string | null = null;
+    if (exportedIds.length > 0) {
+      const stamp = new Date().toISOString();
+      const { error: markError } = await supabase
+        .from('invoices')
+        .update({ exported_at: stamp })
+        .eq('user_id', user.id)
+        .in('id', exportedIds);
+      if (markError) console.error('[append] no se pudieron marcar como exportadas:', markError.message);
+      else exportedAt = stamp;
     }
 
     const primaryTab = writtenTabs[0];
@@ -753,6 +770,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       ok: totalRows > 0,
       rowsAdded: totalRows,
+      exportedIds,
+      exportedAt,
       tabs: writtenTabs,
       updatedRange: writtenTabs.join(', '),
       redirectUrl: totalRows > 0 ? redirectUrl : undefined,

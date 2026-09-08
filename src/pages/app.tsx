@@ -142,7 +142,13 @@ export default function AppPage() {
       .eq('user_id', user.id).gte('created_at', firstOfMonth.toISOString())
       .then(({ count }) => { if (count != null) setMonthlyUsed(count); });
 
-    supabase.from('invoices').select('*').order('created_at', { ascending: false })
+    // Acotado por usuario y con tope: sin el límite esta consulta se trae el historial
+    // entero con el detalle de ítems de cada factura, y eso es lo que hace que la
+    // pantalla tarde en responder cuando la cuenta ya tiene volumen.
+    supabase.from('invoices').select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(500)
       .then(({ data }) => {
         if (data) setInvoices(data.map(fromDB));
         setLoadingHistory(false);
@@ -349,11 +355,14 @@ export default function AppPage() {
         setSheetsTabs(data.tabs ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
-        const exportedAt = new Date().toISOString();
-        const idsToMark = invoiceList.filter((inv) => inv.status === 'done').map((inv) => inv.id);
-        if (idsToMark.length > 0) {
-          await supabase.from('invoices').update({ exported_at: exportedAt }).in('id', idsToMark);
-          setInvoices((prev) => prev.map((inv) => idsToMark.includes(inv.id) ? { ...inv, exportedAt } : inv));
+        // El servidor ya las marcó como exportadas y nos devuelve cuáles quedaron
+        // guardadas de verdad. Antes lo escribía el navegador y, si la escritura
+        // fallaba, la factura se veía archivada hasta el próximo refresh.
+        const marked: string[] = data.exportedIds ?? [];
+        if (data.exportedAt && marked.length > 0) {
+          setInvoices((prev) => prev.map((inv) =>
+            marked.includes(inv.id) ? { ...inv, exportedAt: data.exportedAt } : inv,
+          ));
         }
       } else {
         const data = await res.json();

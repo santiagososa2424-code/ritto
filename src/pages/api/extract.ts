@@ -8,6 +8,20 @@ import type { ExtractedInvoice } from '../../lib/types';
 
 export const config = { api: { bodyParser: false }, maxDuration: 60 };
 
+// Por debajo del maxDuration a propósito. Si la IA se cuelga con un PDF pesado, la
+// plataforma mata la función y el navegador recibe un 504 con HTML, que no dice nada.
+// Cortando antes devolvemos un error entendible y con el nombre del archivo.
+const EXTRACTION_TIMEOUT_MS = 50_000;
+
+function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout: ${label}`)), EXTRACTION_TIMEOUT_MS),
+    ),
+  ]);
+}
+
 function friendlyError(msg: string, type: 'pdf' | 'image' | 'other'): string {
   const m = msg.toLowerCase();
   if (m.includes('maxfilesize') || m.includes('file size') || m.includes('1009'))
@@ -79,13 +93,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (isPDF) {
-      const result = await extractFromPDF(file.filepath);
+      const result = await withTimeout(extractFromPDF(file.filepath), 'pdf');
       const { _validationWarning, ...rest } = result as typeof result & { _validationWarning?: string };
       return res.json({ ...base, source: 'pdf', status: 'done', ...rest, ...(_validationWarning ? { warning: _validationWarning } : {}) });
     }
 
     if (isImage) {
-      const result = await extractFromImage(file.filepath, mimeType);
+      const result = await withTimeout(extractFromImage(file.filepath, mimeType), 'image');
       const { _validationWarning, ...rest } = result as typeof result & { _validationWarning?: string };
       return res.json({ ...base, source: 'image', status: 'done', ...rest, ...(_validationWarning ? { warning: _validationWarning } : {}) });
     }

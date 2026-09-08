@@ -132,7 +132,6 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
         .sb-root {
           position: fixed; top: 0; left: 0; bottom: 0;
           width: 240px; background: #0a7c59;

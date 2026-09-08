@@ -139,19 +139,36 @@ function buildRetryParts(parts: Part[], errors: string[]): Part[] {
   ];
 }
 
+// Un reintento manda el archivo entero de nuevo, así que cuesta casi lo mismo que el
+// primer intento. Con un PDF pesado, tres llamadas encadenadas se pasan del tiempo que
+// la plataforma le da a la función y el usuario recibe un 504 sin ningún dato. Cuando
+// ya no queda margen preferimos devolver lo que tenemos, marcado para revisar.
+const RETRY_BUDGET_MS = 18_000;
+
 async function extractWithRetry(parts: Part[]): Promise<Partial<ExtractedInvoice> & { _validationWarning?: string }> {
+  const startedAt = Date.now();
+  const elapsed = () => Date.now() - startedAt;
+  const roomForAnotherCall = () => elapsed() + RETRY_BUDGET_MS < 45_000;
+
   const rawText = await callGemini(parts);
 
   let extracted: Partial<ExtractedInvoice>;
   try {
     extracted = parseResponse(rawText);
   } catch {
+    // Sin JSON no hay nada que devolver, así que este reintento va igual.
     const retryText = await callGemini(buildRetryParts(parts, ['JSON inválido — respondé SOLO con JSON, sin texto adicional']));
     extracted = parseResponse(retryText);
   }
 
   const validation = validateExtraction(extracted);
   if (validation.valid) return extracted;
+
+  // Acá sí tenemos datos utilizables: el reintento solo los mejora, no vale quedarse
+  // sin respuesta por intentarlo.
+  if (!roomForAnotherCall()) {
+    return { ...extracted, _validationWarning: validation.errors.join('; ') };
+  }
 
   const retryParts: Part[] = [
     ...parts.slice(0, -1),

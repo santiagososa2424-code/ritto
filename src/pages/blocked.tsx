@@ -54,7 +54,6 @@ export default function BlockedPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Figtree', sans-serif; background: #f5f5f7; color: #111; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
         .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 20px; padding: 40px 36px; max-width: 440px; width: 100%; text-align: center; }
