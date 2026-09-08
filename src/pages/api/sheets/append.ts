@@ -285,12 +285,12 @@ async function appendRow(
   row: (string | number | null)[],
   accessToken: string,
 ): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
-  // Use the first column we actually write to find the next empty row.
-  // Column A is often formula-filled (auto-numbering, status), so reading it would
-  // place the new row below the entire template. Using the first data-entry column
-  // ensures we write within the pre-built template rows.
-  const firstOwnedIdx = row.findIndex((v) => v !== null);
-  const checkCol = colLetter(firstOwnedIdx >= 0 ? firstOwnedIdx : 0);
+  // Measure occupancy on a column Ritto actually fills with a value. A column it
+  // only ever blanks would read as empty forever and every export would land on
+  // row 2, on top of the previous one.
+  const valuedIdx = row.findIndex((v) => v !== null && v !== '');
+  const ownedIdx = row.findIndex((v) => v !== null);
+  const checkCol = colLetter(valuedIdx >= 0 ? valuedIdx : Math.max(ownedIdx, 0));
 
   let nextRow = 2;
   const colRes = await fetch(
@@ -298,9 +298,18 @@ async function appendRow(
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (colRes.ok) {
-    const colData = await colRes.json();
-    const filled = (colData.values ?? []).length;
-    nextRow = Math.max(filled + 1, 2);
+    const colData = (await colRes.json()) as { values?: string[][] };
+    const cells = colData.values ?? [];
+    // Take the FIRST free row, not the one after the last used cell. These templates
+    // usually carry a totals row, a second block or notes well below the data, and
+    // counting to the end drops the invoice underneath all of it — outside the rows
+    // the =SUM() formulas cover, which is exactly what "queda afuera" looks like.
+    let free = -1;
+    for (let i = 1; i < cells.length; i++) {
+      const cell = cells[i]?.[0];
+      if (cell == null || String(cell).trim() === '') { free = i + 1; break; }
+    }
+    nextRow = free > 0 ? free : Math.max(cells.length + 1, 2);
   }
 
   // A single PUT over A:N would blank every protected cell in between, because ""
@@ -372,6 +381,38 @@ const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*
 
 function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));
+}
+
+// An amount that arrives already formatted ("$2,840.00") is parsed against the
+// spreadsheet's own locale. In a sheet set to Uruguay that string does not read as
+// two thousand eight hundred and forty, so it lands as text — and text is skipped by
+// =SUM(), which is why the totals stop adding up. Turn anything that is purely an
+// amount into a real number and let the column's own format display it.
+// Document numbers ("A-284741") and dates ("2026-09-02", "27/8/2026") never match.
+function parseAmount(value: string): number | null {
+  const s = value.trim();
+  if (!/^-?\s*(?:U\$S|USD|UYU|\$)?\s*-?[\d.,]+$/i.test(s)) return null;
+  const body = s.replace(/[^\d.,]/g, '');
+  if (!body || !/\d/.test(body)) return null;
+
+  const lastDot = body.lastIndexOf('.');
+  const lastComma = body.lastIndexOf(',');
+  let normalized: string;
+  if (lastDot === -1 && lastComma === -1) {
+    normalized = body;
+  } else {
+    const decIdx = Math.max(lastDot, lastComma);
+    const sep = body[decIdx];
+    const onlySeparator = (lastDot === -1) !== (lastComma === -1) && body.indexOf(sep) === decIdx;
+    // A lone separator with exactly three digits after it groups thousands ("1,500"),
+    // it does not mark decimals.
+    if (onlySeparator && body.length - decIdx - 1 === 3) normalized = body.replace(/[.,]/g, '');
+    else normalized = `${body.slice(0, decIdx).replace(/[.,]/g, '')}.${body.slice(decIdx + 1)}`;
+  }
+
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return null;
+  return /^-/.test(s) ? -Math.abs(n) : n;
 }
 
 function fallbackMapInvoice(
@@ -531,7 +572,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const row: (string | number | null)[] = tabHeaders.map((col) => {
         if (!writable.has(col) || isProtectedHeader(col)) return null;
         const val = datosFila[col];
-        return val == null ? '' : val;
+        if (val == null) return '';
+        if (typeof val === 'number') return val;
+        return parseAmount(val) ?? val;
       });
 
       // Don't write a row where every cell is empty (fallback had no alias matches)
