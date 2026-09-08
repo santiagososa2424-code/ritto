@@ -228,6 +228,13 @@ export default function GuiaPage() {
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
+                    <div className="step-title">Ritto lee tu planilla</div>
+                    <div className="step-desc">En Configuración tocás "Leer mi planilla y ver columnas". Ritto abre tu Sheet, detecta las pestañas y los nombres de tus columnas, y te los muestra para que le digas qué dato va en cada una. Es opcional, pero es lo que hace que los datos caigan justo donde los esperás.</div>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">4</div>
+                  <div className="step-content">
                     <div className="step-title">Exportás con un clic</div>
                     <div className="step-desc">Procesás tus facturas, tocás "Exportar a Google Sheets" y los datos se agregan solos. No tenés que abrir la planilla para nada.</div>
                   </div>
@@ -312,6 +319,10 @@ export default function GuiaPage() {
                     <div className="step-desc">Todos los exportes siguientes van a tener tus columnas exactas.</div>
                   </div>
                 </div>
+              </div>
+
+              <div className="highlight">
+                💡 <strong>Si usás Google Sheets no hace falta escribir nada a mano.</strong> En Configuración tocás "Leer mi planilla y ver columnas" y Ritto abre tu planilla, detecta las pestañas y los nombres de todas las columnas. Vos solo elegís qué dato va en cada una, de una lista.
               </div>
 
               <button className="btn-go" onClick={() => window.location.href = '/settings'}>
