@@ -192,21 +192,21 @@ REGLAS (en orden estricto de prioridad):
    - Si no hay coincidencia, elegí por tipo: compra/gasto → pestaña de gastos; venta → pestaña de ventas.
    - Si ninguna aplica, usá la primera pestaña disponible.
 
-2. MAPEO DE COLUMNAS (aprendé del ejemplo):
-   - Usá las filas_ejemplo para entender el formato real que usa el cliente (fechas, montos, textos).
-   - Si las fechas de ejemplo son "9/3/2026", usá ese formato. Si son "2026-03-09", usá ISO.
-   - Si los montos de ejemplo no tienen "$", no los incluyas.
-   - Mapeá al nombre EXACTO de la columna. Si un campo no tiene columna correspondiente, no lo incluyas.
-   - Si una columna no tiene dato disponible en la factura, usá null.
+2. MAPEO DE COLUMNAS — FORMATO EXACTO (crítico):
+   - Usá las filas_ejemplo para copiar el formato EXACTO de cada tipo de dato:
+     * Fechas: si el ejemplo tiene "9/3/2026" → usá D/M/YYYY. Si tiene "2026-03-09" → usá ISO.
+     * Montos: si el ejemplo tiene "$6,121.00" → escribí "$2,840.00" (mismo símbolo y decimales). Si tiene "6121" → escribí sin símbolo.
+     * Textos: copiá el estilo exacto de los ejemplos (mayúsculas, espacios, etc.).
+   - Mapeá al nombre EXACTO de la columna.
+   - Si no tenés dato suficiente para una columna, escribí null — NUNCA inventes valores.
 
 3. COLUMNAS DE TOTALES/ACUMULADOS:
-   - Si una columna parece un total calculado (ej: "TOTAL MES", "TOTAL MESA", "SUBTOTAL") y no tiene datos en filas_ejemplo pero sí en otras columnas, asignale null — son fórmulas del usuario.
+   - Si una columna parece un total calculado o acumulado mensual (ej: "TOTAL MES", "TOTAL MESA", "SUBTOTAL", "ACUMULADO") asignale null — son fórmulas automáticas del usuario, no las toques.
 
-4. CAMPOS ESPECIALES:
-   - "Estado pedido" → si la factura fue recibida como compra: "Recibido". Si es venta emitida: "Emitido".
-   - "Estado pago" → si el CFE indica contado o ya fue cobrado: "Pago". Si está pendiente: "No pago".
-   - "Deuda" → si Estado pago es "No pago": igual al monto total. Si es "Pago": 0.
-   - Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos van negativos.
+4. REGLA DE ORO — NO INVENTAR:
+   - Solo llenás una columna si su valor está EXPLÍCITAMENTE en los datos de la factura (N° de factura, fecha de emisión, montos, RUT, razón social, etc.).
+   - Columnas de estado (ej: "Estado pedido", "Estado pago"), columnas derivadas (ej: "Deuda"), y cualquier campo que no puedas leer directamente del CFE → siempre null.
+   - Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos numéricos van negativos.
 
 Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
 [
