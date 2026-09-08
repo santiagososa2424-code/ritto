@@ -11,7 +11,7 @@ function extractSheetId(urlOrId: string): string {
 // encodeURIComponent on the full string ensures : in ranges like A:A or A1:ZZ1
 // is sent as %3A, preventing the Sheets API from misreading it as a custom method suffix.
 function sheetRange(tab: string, range: string): string {
-  const quoted = `'${tab.replace(/'/g, "''")}''`;
+  const quoted = `'${tab.replace(/'/g, "''")}'`;
   return encodeURIComponent(`${quoted}!${range}`);
 }
 
@@ -101,7 +101,7 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   batchRow2Url.searchParams.set('valueRenderOption', 'FORMULA');
 
   for (const tab of tabs50) {
-    const safeTab = `'${tab.replace(/'/g, "''")}''`;
+    const safeTab = `'${tab.replace(/'/g, "''")}'`;
     batchRow1Url.searchParams.append('ranges', `${safeTab}!A1:ZZ1`);
     batchRow2Url.searchParams.append('ranges', `${safeTab}!A2:ZZ2`);
   }
