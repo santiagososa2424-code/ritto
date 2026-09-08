@@ -11,21 +11,21 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
     name: 'Pro',
     price: '$1.500',
     desc: 'UYU/mes · 1 usuario',
-    features: ['1 usuario', 'Facturas ilimitadas', 'Exportación a Excel', '1 empresa'],
+    features: ['Carga automática en Google Sheets', 'Sin romper tus fórmulas', 'Facturas y e-Tickets ilimitados', '1 usuario · 1 empresa'],
   },
   {
     id: 'pyme',
     name: 'Pyme',
     price: '$5.000',
     desc: 'UYU/mes · hasta 5 usuarios',
-    features: ['Hasta 5 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario'],
+    features: ['Hasta 5 usuarios', 'e-Facturas ilimitadas a sus Google Sheets', 'Dashboard ejecutivo en tiempo real', 'Soporte prioritario'],
   },
   {
     id: 'empresa',
     name: 'Empresa',
     price: '$12.000',
     desc: 'UYU/mes · hasta 20 usuarios',
-    features: ['Hasta 20 usuarios', 'Facturas ilimitadas', 'Exportación a Excel', 'Multi-empresa', 'Soporte prioritario', 'Onboarding personalizado'],
+    features: ['Hasta 20 usuarios', 'Automatización total en Google Sheets', 'Control del gasto en un único panel', 'Auditoría de carga por área', 'Soporte prioritario'],
   },
 ];
 

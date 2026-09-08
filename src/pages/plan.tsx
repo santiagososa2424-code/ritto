@@ -9,11 +9,12 @@ const PLANS = {
     name: 'Pro',
     price: '$1.500',
     period: 'UYU/mes',
+    desc: 'Ideal para profesionales, unipersonales y comercios que gestiona una sola persona.',
     features: [
+      'Carga 100% automática en Google Sheets',
+      'Sin romper tus fórmulas',
+      'Facturas y e-Tickets ilimitados',
       '1 usuario · 1 empresa',
-      'Facturas ilimitadas',
-      'PDF, imagen y XML CFE',
-      'Exportación a Excel y CSV',
       'Soporte por email',
     ],
     color: '#1d4ed8',
@@ -23,12 +24,12 @@ const PLANS = {
     name: 'Pyme',
     price: '$5.000',
     period: 'UYU/mes',
+    desc: 'Diseñado para pequeñas y medianas empresas con equipos de compras o administración.',
     features: [
-      'Hasta 5 cuentas · empresas ilimitadas',
-      'Facturas ilimitadas',
-      'PDF, imagen y XML CFE',
-      'Exportación a Excel y CSV',
-      'Historial compartido del equipo',
+      'Hasta 5 usuarios',
+      'e-Facturas ilimitadas a sus Google Sheets',
+      'Dashboard ejecutivo en tiempo real',
+      'Números consolidados sin invadir sus planillas',
       'Soporte prioritario',
     ],
     color: '#92400e',
@@ -38,14 +39,13 @@ const PLANS = {
     name: 'Empresa',
     price: '$12.000',
     period: 'UYU/mes',
+    desc: 'La solución integral para cadenas, franquicias o empresas con múltiples sucursales.',
     features: [
-      'Hasta 20 cuentas · empresas ilimitadas',
-      'Facturas ilimitadas',
-      'PDF, imagen y XML CFE',
-      'Exportación a Excel y CSV',
-      'Historial compartido del equipo',
+      'Hasta 20 usuarios',
+      'Facturas ilimitadas y automatización total',
+      'Control del gasto corporativo en un único panel',
+      'Auditoría de carga por área',
       'Soporte prioritario',
-      'Onboarding personalizado',
     ],
     color: '#6b21a8',
     bg: '#f3e8ff',
@@ -243,6 +243,7 @@ export default function PlanPage() {
               <span className="plan-badge" style={{ background: plan.bg, color: plan.color }}>{plan.name}</span>
               <div className="plan-price">{plan.price} <span>{plan.period}</span></div>
             </div>
+            <div style={{ fontSize: 13, color: 'var(--gray)', lineHeight: 1.5, marginBottom: 14 }}>{plan.desc}</div>
             <div className="features">
               {plan.features.map((f, i) => (
                 <div key={i} className="feature-item">

@@ -158,7 +158,8 @@ export default function LandingPage() {
         .popular-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 4px 18px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
         .price-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
         .price-amount { font-family: 'DM Serif Display', serif; font-size: 44px; line-height: 1; margin: 10px 0 4px; color: var(--dark); }
-        .price-period { font-size: 13px; color: var(--gray); margin-bottom: 24px; }
+        .price-period { font-size: 13px; color: var(--gray); margin-bottom: 14px; }
+        .price-for { font-size: 13px; color: var(--dark); line-height: 1.5; padding-bottom: 16px; margin-bottom: 10px; border-bottom: 1px solid var(--bg); }
         .price-list { list-style: none; margin-bottom: 28px; }
         .price-list li { padding: 7px 0; font-size: 14px; color: var(--gray); display: flex; gap: 8px; align-items: flex-start; border-bottom: 1px solid var(--bg); }
         .price-list li:last-child { border-bottom: none; }
@@ -343,11 +344,12 @@ export default function LandingPage() {
               <div className="price-name">Pro</div>
               <div className="price-amount">$1.500</div>
               <div className="price-period">UYU/mes</div>
+              <div className="price-for">Para profesionales, unipersonales y comercios que gestiona una sola persona.</div>
               <ul className="price-list">
+                <li><span className="check">✓</span>Carga 100% automática en Google Sheets</li>
+                <li><span className="check">✓</span>Sin romper tus fórmulas</li>
+                <li><span className="check">✓</span>Facturas y e-Tickets ilimitados</li>
                 <li><span className="check">✓</span>1 usuario · 1 empresa</li>
-                <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
                 <li><span className="check">✓</span>Soporte por email</li>
               </ul>
               <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -357,12 +359,12 @@ export default function LandingPage() {
               <div className="price-name">Pyme</div>
               <div className="price-amount">$5.000</div>
               <div className="price-period">UYU/mes</div>
+              <div className="price-for">Para pequeñas y medianas empresas con equipo de compras o administración.</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 5 cuentas · empresas ilimitadas</li>
-                <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
-                <li><span className="check">✓</span>Historial compartido del equipo</li>
+                <li><span className="check">✓</span>Hasta 5 usuarios</li>
+                <li><span className="check">✓</span>e-Facturas ilimitadas a sus Google Sheets</li>
+                <li><span className="check">✓</span>Dashboard ejecutivo en tiempo real</li>
+                <li><span className="check">✓</span>Números consolidados sin invadir sus planillas</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
               </ul>
               <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
@@ -371,14 +373,13 @@ export default function LandingPage() {
               <div className="price-name">Empresa</div>
               <div className="price-amount">$12.000</div>
               <div className="price-period">UYU/mes</div>
+              <div className="price-for">Para cadenas, franquicias o empresas con múltiples sucursales.</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 20 cuentas · empresas ilimitadas</li>
-                <li><span className="check">✓</span>Facturas ilimitadas</li>
-                <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
-                <li><span className="check">✓</span>Exportación a Excel y CSV</li>
-                <li><span className="check">✓</span>Historial compartido del equipo</li>
+                <li><span className="check">✓</span>Hasta 20 usuarios</li>
+                <li><span className="check">✓</span>Facturas ilimitadas y automatización total</li>
+                <li><span className="check">✓</span>Control del gasto corporativo en un panel</li>
+                <li><span className="check">✓</span>Auditoría de carga por área</li>
                 <li><span className="check">✓</span>Soporte prioritario</li>
-                <li><span className="check">✓</span>Onboarding personalizado</li>
               </ul>
               <button className="btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/login?signup=true')}>Probar 14 días gratis</button>
             </div>
