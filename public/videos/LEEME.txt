@@ -1,0 +1,3 @@
+Poné acá el screencast del demo como demo.mp4 (1920x1080, H.264).
+La landing lo carga desde /videos/demo.mp4.
+Si el archivo no esta, el hero cae al mockup estatico solo.

@@ -1,7 +1,49 @@
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 export default function LandingPage() {
   const router = useRouter();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // Until the file lands in public/videos/, the <video> 404s and we keep showing
+  // the static mockup — the landing never renders a broken player.
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [playing, setPlaying] = useState(true);
+  const [phrase, setPhrase] = useState(0);
+
+  // Imágenes de fondo del hero. Vacío = solo los orbes CSS (estado actual).
+  // Al poner archivos en public/hero/ y listarlos acá, arrancan a rotar solos
+  // en crossfade detrás del texto. Ej: ['/hero/1.webp', '/hero/2.webp'].
+  const BG_IMAGES: string[] = [];
+
+  // Frases que rotan sobre el fondo animado del hero.
+  const PHRASES = [
+    'Del XML del CFE a tu planilla, sin tipear nada',
+    'RUT, IVA y totales extraídos automáticamente',
+    'Diez facturas a la vez, procesadas en segundos',
+    'Tus columnas, tu formato, tu Google Sheets',
+  ];
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t = setInterval(() => setPhrase((i) => (i + 1) % PHRASES.length), 4200);
+    return () => clearInterval(t);
+  }, [PHRASES.length]);
+
+  useEffect(() => {
+    // Respect prefers-reduced-motion: a looping screencast is exactly the kind of
+    // motion that setting is about. Read it after mount so SSR markup stays stable.
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    videoRef.current?.pause();
+    setPlaying(false);
+  }, []);
+
+  function toggleVideo() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play().catch(() => {}); setPlaying(true); }
+    else { v.pause(); setPlaying(false); }
+  }
+
   return (
     <>
       <style>{`
@@ -35,7 +77,56 @@ export default function LandingPage() {
         .btn-primary { background: var(--green); color: #fff; border: none; padding: 14px 34px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-ghost { background: transparent; color: var(--dark); border: 1.5px solid var(--border); padding: 14px 28px; border-radius: 10px; font-family: 'Figtree', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer; }
 
-        .demo-wrap { max-width: 740px; margin: 72px auto 0; padding: 0 2rem; }
+        /* ---- Fondo animado del hero (100% CSS, sin assets) ---- */
+        .hero-shell { position: relative; overflow: hidden; }
+        .hero-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+        .orb { position: absolute; border-radius: 50%; filter: blur(64px); opacity: 0.5; will-change: transform; }
+        .orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, #7fd4b4, transparent 70%); top: -120px; left: -80px; animation: drift1 22s ease-in-out infinite; }
+        .orb-2 { width: 360px; height: 360px; background: radial-gradient(circle, #bfe6d7, transparent 70%); top: 40px; right: -100px; animation: drift2 27s ease-in-out infinite; }
+        .orb-3 { width: 300px; height: 300px; background: radial-gradient(circle, #d8ecff, transparent 70%); bottom: -140px; left: 45%; animation: drift3 19s ease-in-out infinite; }
+        @keyframes drift1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px,50px) scale(1.12); } }
+        @keyframes drift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-60px,70px) scale(1.08); } }
+        @keyframes drift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-45px) scale(1.15); } }
+        .hero > * { position: relative; z-index: 1; }
+
+        /* Carrusel de imágenes de fondo (solo si BG_IMAGES tiene items) */
+        .bg-slide {
+          position: absolute; inset: 0; background-size: cover; background-position: center;
+          opacity: 0; transition: opacity 1.4s ease, transform 9s linear;
+          transform: scale(1.06);
+        }
+        .bg-slide.on { opacity: 1; transform: scale(1.14); }
+        /* Velo para que el texto del hero mantenga contraste sobre cualquier foto */
+        .bg-veil { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(245,245,247,0.86), rgba(245,245,247,0.94)); }
+
+        /* Rotador de frases */
+        .phrase-rail { height: 26px; margin-top: 30px; position: relative; }
+        .phrase { position: absolute; inset: 0; font-size: 14px; color: var(--green); font-weight: 500; opacity: 0; transform: translateY(8px); transition: opacity .6s ease, transform .6s ease; }
+        .phrase.on { opacity: 1; transform: translateY(0); }
+
+        /* ---- Player del demo ---- */
+        .demo-video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--bg); }
+        .video-shell { position: relative; }
+        .video-toggle {
+          position: absolute; right: 14px; bottom: 14px;
+          background: rgba(17,17,17,0.62); color: #fff; border: none;
+          width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          opacity: 0; transition: opacity .2s ease, background .2s ease; backdrop-filter: blur(6px);
+        }
+        .video-shell:hover .video-toggle, .video-toggle:focus-visible { opacity: 1; }
+        .video-toggle:hover { background: rgba(17,17,17,0.85); }
+        .demo-window { transition: transform .35s ease, box-shadow .35s ease; }
+        .demo-wrap:hover .demo-window { transform: translateY(-4px); box-shadow: 0 12px 60px rgba(0,0,0,0.11); }
+        .demo-url { flex: 1; text-align: center; font-size: 12px; color: var(--gray); background: var(--white); border-radius: 6px; padding: 3px 10px; margin-left: 8px; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .orb { animation: none; }
+          .phrase { transition: none; }
+          .demo-wrap:hover .demo-window { transform: none; }
+        }
+
+        .demo-wrap { max-width: 920px; margin: 72px auto 0; padding: 0 2rem; }
         .demo-window { background: var(--white); border-radius: 16px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 4px 48px rgba(0,0,0,0.07); }
         .demo-bar { background: #f0f0f2; padding: 12px 16px; display: flex; gap: 6px; align-items: center; }
         .demo-dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -109,15 +200,35 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <section className="hero">
-        <div className="badge"><span className="badge-dot" />Hecho para empresas uruguayas</div>
-        <h1>Tus facturas,<br />procesadas en <em>segundos</em></h1>
-        <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.</p>
-        <div className="hero-btns">
-          <button className="btn-primary" onClick={() => router.push('/login?signup=true')}>Probar gratis 14 días</button>
-          <button className="btn-ghost" onClick={() => router.push('/login')}>Iniciar sesión</button>
+      <div className="hero-shell">
+        <div className="hero-bg" aria-hidden="true">
+          <div className="orb orb-1" />
+          <div className="orb orb-2" />
+          <div className="orb orb-3" />
+          {BG_IMAGES.map((src, i) => (
+            <div
+              key={src}
+              className={`bg-slide${i === phrase % BG_IMAGES.length ? ' on' : ''}`}
+              style={{ backgroundImage: `url(${src})` }}
+            />
+          ))}
+          {BG_IMAGES.length > 0 && <div className="bg-veil" />}
         </div>
-      </section>
+        <section className="hero">
+          <div className="badge"><span className="badge-dot" />Hecho para empresas uruguayas</div>
+          <h1>Tus facturas,<br />procesadas en <em>segundos</em></h1>
+          <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.</p>
+          <div className="hero-btns">
+            <button className="btn-primary" onClick={() => router.push('/login?signup=true')}>Probar gratis 14 días</button>
+            <button className="btn-ghost" onClick={() => router.push('/login')}>Iniciar sesión</button>
+          </div>
+          <div className="phrase-rail">
+            {PHRASES.map((p, i) => (
+              <div key={p} className={`phrase${i === phrase ? ' on' : ''}`} aria-hidden={i !== phrase}>{p}</div>
+            ))}
+          </div>
+        </section>
+      </div>
 
       <div className="demo-wrap">
         <div className="demo-window">
@@ -125,7 +236,32 @@ export default function LandingPage() {
             <div className="demo-dot" style={{ background: '#ff5f57' }} />
             <div className="demo-dot" style={{ background: '#ffbd2e' }} />
             <div className="demo-dot" style={{ background: '#28c840' }} />
+            <div className="demo-url">ritto.lat</div>
           </div>
+
+          {!videoFailed && (
+            <div className="video-shell">
+              <video
+                ref={videoRef}
+                className="demo-video"
+                src="/videos/demo.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-label="Ritto procesando una e-Factura"
+                onError={() => setVideoFailed(true)}
+              />
+              <button className="video-toggle" onClick={toggleVideo} aria-label={playing ? 'Pausar demo' : 'Reproducir demo'}>
+                {playing
+                  ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                  : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>}
+              </button>
+            </div>
+          )}
+
+          {videoFailed && (
           <div className="demo-body">
             <div className="upload-zone">
               <div className="upload-icon">
@@ -147,6 +283,7 @@ export default function LandingPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
 
