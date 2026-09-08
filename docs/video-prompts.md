@@ -24,17 +24,23 @@ Fotos: `foto-1-landing`, `foto-2-columnas`, `foto-3-procesando`,
 
 ---
 
-## Antes de publicar: tres cosas para revisar
+## Datos personales: qué se tapó
 
-1. **Datos de proveedores reales.** Los clips 6, 7 y 8 y varias fotos muestran
-   nombres y RUT de proveedores de verdad, con montos. En un producto fiscal eso
-   es delicado: estás publicando la información tributaria de un tercero que no
-   dio permiso. Lo más limpio es rehacer esa parte con una factura de prueba a
-   nombre de una empresa inventada.
-2. **Tu teléfono.** En el clip 2 se abre el autocompletado del navegador y se ve
-   un número de celular. Recortá ese tramo o tapalo.
-3. **La URL de tu planilla** queda visible en el clip 4. No da acceso a nadie sin
-   permisos, pero si preferís, difuminala.
+Los clips venían con información sensible a la vista. Ya está resuelto:
+
+- **Nombres y RUT de proveedores reales** (clips 6, 7 y 8, fotos 4, 6 y 7). Se
+  reemplazaron por **Proveedor S.A.** y **Comercial SRL**, escritos con el mismo
+  cuerpo y color que la tabla para que no se note el retoque. El RUT quedó tapado.
+  Los montos, fechas y estados siguen intactos: lo que se ve funcionando es real.
+- **Tu teléfono y tu mail** en el autocompletado del navegador (clip 2, segundos
+  3,4 a 9,6). Difuminados.
+
+Queda una sola cosa a criterio tuyo: **la URL de tu planilla** se ve en el clip 4.
+No le da acceso a nadie que no tenga permisos, así que podés dejarla; si preferís,
+avisame y la difumino también.
+
+Si en algún momento regrabás, lo ideal igual es usar una factura de prueba a
+nombre de una empresa inventada — sale más limpio que tapar en posproducción.
 
 ---
 
