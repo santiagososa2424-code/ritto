@@ -10,9 +10,12 @@ function extractSheetId(urlOrId: string): string {
 // Quotes and URL-encodes a tab name + range for use in URL paths.
 // encodeURIComponent on the full string ensures : in ranges like A:A or A1:ZZ1
 // is sent as %3A, preventing the Sheets API from misreading it as a custom method suffix.
+function plainRange(tab: string, range: string): string {
+  return `'${tab.replace(/'/g, "''")}'!${range}`;
+}
+
 function sheetRange(tab: string, range: string): string {
-  const quoted = `'${tab.replace(/'/g, "''")}'`;
-  return encodeURIComponent(`${quoted}!${range}`);
+  return encodeURIComponent(plainRange(tab, range));
 }
 
 // Match Gemini's returned tab name against the actual tab list (case-insensitive)
@@ -274,20 +277,20 @@ function colLetter(idx: number): string {
   return s;
 }
 
+// `row` is aligned 1:1 with the tab's headers. null means "this cell is not ours" —
+// a formula column or a field Ritto must never fill — and is skipped entirely.
 async function appendRow(
   sheetId: string,
   tabName: string,
-  row: (string | number)[],
+  row: (string | number | null)[],
   accessToken: string,
-  allHeaders: string[],
-  writableHeaders: string[],
 ): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
-  // Use the first writable column to find the next empty row.
+  // Use the first column we actually write to find the next empty row.
   // Column A is often formula-filled (auto-numbering, status), so reading it would
   // place the new row below the entire template. Using the first data-entry column
   // ensures we write within the pre-built template rows.
-  const firstWritableIdx = Math.max(allHeaders.findIndex((h) => writableHeaders.includes(h)), 0);
-  const checkCol = colLetter(firstWritableIdx);
+  const firstOwnedIdx = row.findIndex((v) => v !== null);
+  const checkCol = colLetter(firstOwnedIdx >= 0 ? firstOwnedIdx : 0);
 
   let nextRow = 2;
   const colRes = await fetch(
@@ -300,20 +303,37 @@ async function appendRow(
     nextRow = Math.max(filled + 1, 2);
   }
 
-  // Trim trailing empty cells so formula columns at the end (e.g. TOTAL MES) are never
-  // overwritten. Writing "" to a cell with a =SUM() formula clears that formula.
-  const writeRow = [...row];
-  while (writeRow.length > 0 && (writeRow[writeRow.length - 1] === '' || writeRow[writeRow.length - 1] == null)) {
-    writeRow.pop();
+  // A single PUT over A:N would blank every protected cell in between, because ""
+  // clears a formula just as surely as a value does. So split the row into runs of
+  // consecutive owned cells and write each run as its own range — the protected
+  // columns are never part of any request and keep whatever the user put there.
+  const segments: Array<{ start: number; values: (string | number)[] }> = [];
+  let run: { start: number; values: (string | number)[] } | null = null;
+  for (let i = 0; i < row.length; i++) {
+    const v = row[i];
+    if (v === null) {
+      if (run) { segments.push(run); run = null; }
+      continue;
+    }
+    if (!run) run = { start: i, values: [] };
+    run.values.push(v);
   }
-  if (writeRow.length === 0) return { ok: false, status: 400, error: 'empty_row_after_trim' };
+  if (run) segments.push(run);
+
+  const filled = segments.filter((s) => s.values.some((v) => v !== '' && v != null));
+  if (filled.length === 0) return { ok: false, status: 400, error: 'empty_row_after_trim' };
+
+  const data = filled.map((s) => ({
+    range: plainRange(tabName, `${colLetter(s.start)}${nextRow}:${colLetter(s.start + s.values.length - 1)}${nextRow}`),
+    values: [s.values],
+  }));
 
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `A${nextRow}`)}?valueInputOption=USER_ENTERED`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,
     {
-      method: 'PUT',
+      method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [writeRow] }),
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }),
     },
   );
   if (!r.ok) {
@@ -341,6 +361,17 @@ const FIELD_ALIASES: Record<string, string[]> = {
 
 function normStr(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Columns Ritto must never fill, whatever the model returns for them. A payment date
+// simply is not in a CFE — the document only carries the issue date — and a monthly
+// accumulator sums many invoices, so one invoice's amount does not belong there.
+// The formula check already catches most of these; this covers the rest, e.g. the
+// first export into a template whose =SUM() rows have not been written yet.
+const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?mes\b|acumulad/;
+
+function isProtectedHeader(header: string): boolean {
+  return PROTECTED_HEADER.test(normStr(header));
 }
 
 function fallbackMapInvoice(
@@ -493,7 +524,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       await ensureTab(sheetId, tabName, accessToken, existingTabs);
 
-      const row = tabHeaders.map((col) => {
+      // One cell per header, in header order — never a concatenation, so a value can
+      // never slide into the neighbouring column. Cells Ritto does not own become
+      // null and are left untouched rather than blanked.
+      const writable = new Set(tabWritableHeaders[tabName] ?? tabHeaders);
+      const row: (string | number | null)[] = tabHeaders.map((col) => {
+        if (!writable.has(col) || isProtectedHeader(col)) return null;
         const val = datosFila[col];
         return val == null ? '' : val;
       });
@@ -507,7 +543,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       debugEntry.rowAttempted = true;
-      const result = await appendRow(sheetId, tabName, row, accessToken, tabHeaders, tabWritableHeaders[tabName] ?? []);
+      const result = await appendRow(sheetId, tabName, row, accessToken);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
 
