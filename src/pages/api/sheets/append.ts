@@ -200,11 +200,14 @@ REGLAS (en orden estricto de prioridad):
    - Mapeá al nombre EXACTO de la columna.
    - Si no tenés dato suficiente para una columna, escribí null — NUNCA inventes valores.
 
-3. COLUMNAS DE TOTALES/ACUMULADOS:
-   - Si una columna parece un total calculado o acumulado mensual (ej: "TOTAL MES", "TOTAL MESA", "SUBTOTAL", "ACUMULADO") asignale null — son fórmulas automáticas del usuario, no las toques.
+3. COLUMNAS DE TOTALES ACUMULADOS — PROHIBIDO TOCAR:
+   - Columnas como "TOTAL MES", "TOTAL MESA", "SUBTOTAL", "ACUMULADO", "TOTAL MENSUAL" son fórmulas =SUM() del usuario que suman MÚLTIPLES facturas del mes. NO representan el monto de UNA factura. Asignales SIEMPRE null.
+   - IMPORTANTE: el monto facturado (total de la factura) va ÚNICAMENTE en columnas como "Costo", "Monto", "Importe", "Precio", "Valor", nunca en columnas de totales acumulados.
 
-4. REGLA DE ORO — NO INVENTAR:
+4. REGLA DE ORO — NO INVENTAR (la más importante):
    - Solo llenás una columna si su valor está EXPLÍCITAMENTE en los datos de la factura (N° de factura, fecha de emisión, montos, RUT, razón social, etc.).
+   - "Fecha de pago" = la fecha en que la empresa pagó la factura. ESO NO ESTÁ en el CFE (el CFE solo tiene fecha de EMISIÓN). "Fecha de pago" → siempre null.
+   - "Fecha de factura" o "Fecha de emisión" = la fecha que aparece en el CFE → podés usarla.
    - Columnas de estado (ej: "Estado pedido", "Estado pago"), columnas derivadas (ej: "Deuda"), y cualquier campo que no puedas leer directamente del CFE → siempre null.
    - Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos numéricos van negativos.
 
