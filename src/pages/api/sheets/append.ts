@@ -471,7 +471,7 @@ function normStr(s: string): string {
 // accumulator sums many invoices, so one invoice's amount does not belong there.
 // The formula check already catches most of these; this covers the rest, e.g. the
 // first export into a template whose =SUM() rows have not been written yet.
-const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?mes\b|acumulad/;
+const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b/;
 
 function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));
@@ -483,6 +483,29 @@ function isProtectedHeader(header: string): boolean {
 // =SUM(), which is why the totals stop adding up. Turn anything that is purely an
 // amount into a real number and let the column's own format display it.
 // Document numbers ("A-284741") and dates ("2026-09-02", "27/8/2026") never match.
+// Where a person would type the invoice amount by hand, best candidate first. A
+// column called "Costo" beats one called "Total" because "Total" is just as often
+// the sheet's own calculation.
+const MONEY_COLUMN = ['costo', 'monto', 'importe', 'precio', 'valor', 'subtotal', 'total', 'neto'];
+
+function looksLikeMoney(header: string): boolean {
+  const h = normStr(header);
+  return MONEY_COLUMN.some((k) => h.includes(k));
+}
+
+function bestMoneyColumn(headers: string[], usable: (h: string) => boolean): string | null {
+  const open = headers.filter(usable);
+  for (const key of MONEY_COLUMN) {
+    const exact = open.find((h) => normStr(h) === key);
+    if (exact) return exact;
+  }
+  for (const key of MONEY_COLUMN) {
+    const partial = open.find((h) => normStr(h).includes(key));
+    if (partial) return partial;
+  }
+  return null;
+}
+
 function parseAmount(value: string): number | null {
   const s = value.trim();
   if (!/^-?\s*(?:U\$S|USD|UYU|\$)?\s*-?[\d.,]+$/i.test(s)) return null;
@@ -663,6 +686,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // never slide into the neighbouring column. Cells Ritto does not own become
       // null and are left untouched rather than blanked.
       const writable = new Set(tabWritableHeaders[tabName] ?? tabHeaders);
+
+      // Dropping a value assigned to a protected column is not enough: if the model
+      // decided the amount belonged in "TOTAL MES", refusing to write it there leaves
+      // the invoice on the sheet with no money in it at all. Move that amount to the
+      // column the user actually types into, and if it never came through, fall back
+      // to the total Ritto read off the document itself.
+      const usable = (h: string) => writable.has(h) && !isProtectedHeader(h);
+      const moneyCol = bestMoneyColumn(tabHeaders, usable);
+      // Only step in when no money column got a value at all. A sheet with both
+      // "Subtotal" and "Total" fills one of them legitimately, and rescuing into the
+      // other would write the amount twice.
+      const anyMoneyFilled = tabHeaders.some(
+        (h) => usable(h) && looksLikeMoney(h) && datosFila[h] != null && datosFila[h] !== '',
+      );
+      if (moneyCol && !anyMoneyFilled) {
+        let rescued: number | null = null;
+        for (const h of tabHeaders) {
+          if (usable(h)) continue;
+          const v = datosFila[h];
+          if (v == null || v === '') continue;
+          const amount = typeof v === 'number' ? v : parseAmount(String(v));
+          if (amount != null) { rescued = amount; break; }
+        }
+        if (rescued == null && typeof inv.total === 'number') {
+          const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
+          rescued = isNC ? -Math.abs(inv.total) : inv.total;
+        }
+        if (rescued != null) datosFila[moneyCol] = rescued;
+      }
+
       const row: (string | number | null)[] = tabHeaders.map((col) => {
         if (!writable.has(col) || isProtectedHeader(col)) return null;
         const val = datosFila[col];
