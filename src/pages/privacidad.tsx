@@ -57,7 +57,7 @@ export default function PrivacidadPage() {
         </ul>
 
         <h2>5. Retención y eliminación</h2>
-        <p>Guardamos tus datos mientras tengas una cuenta activa. Podés solicitar la eliminación de tu cuenta y todos tus datos escribiendo a <a href="mailto:soporte@ritto.lat">soporte@ritto.lat</a>. Los datos se eliminan dentro de los 30 días siguientes a la solicitud.</p>
+        <p>Guardamos tus datos mientras tengas una cuenta activa. Podés solicitar la eliminación de tu cuenta y todos tus datos escribiendo a <a href="mailto:santiagososa2424@gmail.com">santiagososa2424@gmail.com</a>. Los datos se eliminan dentro de los 30 días siguientes a la solicitud.</p>
 
         <h2>6. Tus derechos</h2>
         <ul>
@@ -77,7 +77,7 @@ export default function PrivacidadPage() {
         <p>Ritto está destinado a empresas y profesionales. No recopilamos datos de menores de 18 años de forma intencional.</p>
 
         <h2>10. Contacto</h2>
-        <p>Para consultas sobre privacidad: <a href="mailto:soporte@ritto.lat">soporte@ritto.lat</a></p>
+        <p>Para consultas sobre privacidad: <a href="mailto:santiagososa2424@gmail.com">santiagososa2424@gmail.com</a></p>
       </div>
     </>
   );

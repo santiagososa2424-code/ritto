@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!item || !email || !userId) return res.status(400).json({ error: 'Parámetros inválidos' });
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
-  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Contactá soporte@ritto.lat' });
+  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Contactá santiagososa2424@gmail.com' });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 

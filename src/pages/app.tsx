@@ -732,7 +732,7 @@ export default function AppPage() {
                   ? <>Conectá tu cuenta de Google en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> antes de exportar.</>
                   : sheetsError.toLowerCase().includes('url') || sheetsError.toLowerCase().includes('sheet')
                   ? <>Revisá la URL de tu planilla en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
-                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos a soporte@ritto.lat</>
+                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos a santiagososa2424@gmail.com</>
                 }
               </div>
             )}

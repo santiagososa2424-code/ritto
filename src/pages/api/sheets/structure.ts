@@ -90,6 +90,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap });
   } catch (err) {
     console.error('[structure] unhandled error:', err);
-    return res.status(500).json({ error: 'Error interno. Intentá de nuevo o escribinos a soporte@ritto.lat' });
+    return res.status(500).json({ error: 'Error interno. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });
   }
 }

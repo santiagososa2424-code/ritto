@@ -285,7 +285,7 @@ export default function LandingPage() {
           <p>© 2025 ritto.lat · Uruguay</p>
           <a href="/terminos" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Términos</a>
           <a href="/privacidad" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Privacidad</a>
-          <a href="mailto:soporte@ritto.lat" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Soporte</a>
+          <a href="mailto:santiagososa2424@gmail.com" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Soporte</a>
         </div>
       </footer>
     </>

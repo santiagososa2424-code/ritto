@@ -358,7 +358,7 @@ export default function GuiaPage() {
               <div className="card-icon">🔴</div>
               <div className="card-title">"Acceso bloqueado: ritto solo se puede usar dentro de su organización"</div>
               <div className="card-text">
-                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribínos a soporte@ritto.lat</strong> indicando tu email y lo resolvemos en minutos.
+                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribínos a santiagososa2424@gmail.com</strong> indicando tu email y lo resolvemos en minutos.
               </div>
             </div>
 
@@ -407,7 +407,7 @@ export default function GuiaPage() {
               <div className="card-icon">📧</div>
               <div className="card-title">¿Otro problema?</div>
               <div className="card-text">
-                Escribínos a <strong>soporte@ritto.lat</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
+                Escribínos a <strong>santiagososa2424@gmail.com</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
               </div>
             </div>
           </div>

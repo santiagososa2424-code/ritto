@@ -541,6 +541,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (err) {
     console.error('[append] unhandled error:', err);
-    return res.status(500).json({ error: 'Error interno al exportar. Intentá de nuevo o escribinos a soporte@ritto.lat' });
+    return res.status(500).json({ error: 'Error interno al exportar. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });
   }
 }

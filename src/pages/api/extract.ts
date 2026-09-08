@@ -15,9 +15,9 @@ function friendlyError(msg: string, type: 'pdf' | 'image' | 'other'): string {
   if (m.includes('resource_exhausted') || m.includes('quota') || m.includes('429') || m.includes('rate limit'))
     return 'El servicio de IA está saturado. Esperá unos minutos e intentá de nuevo.';
   if (m.includes('api_key') || m.includes('api key') || m.includes('401') || m.includes('unauthorized'))
-    return 'Error de configuración del servidor. Contactá soporte@ritto.lat';
+    return 'Error de configuración del servidor. Contactá santiagososa2424@gmail.com';
   if (m.includes('safety') || m.includes('blocked'))
-    return 'El archivo fue bloqueado por filtros de seguridad. Contactá soporte@ritto.lat';
+    return 'El archivo fue bloqueado por filtros de seguridad. Contactá santiagososa2424@gmail.com';
   if (m.includes('json') || m.includes('parse') || m.includes('invalid'))
     return type === 'image'
       ? 'No pudimos leer la imagen. Probá con más luz, mejor enfoque, o convertila a PDF.'

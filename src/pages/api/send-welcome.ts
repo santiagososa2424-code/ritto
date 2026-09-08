@@ -129,7 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             <td align="center" style="padding:24px 0 0;">
               <p style="margin:0;font-size:12px;color:#9b9b9b;line-height:1.6;">
                 Ritto · Montevideo, Uruguay<br/>
-                ¿Preguntas? Escribinos a <a href="mailto:soporte@ritto.lat" style="color:#0a7c59;text-decoration:none;">soporte@ritto.lat</a>
+                ¿Preguntas? Escribinos a <a href="mailto:santiagososa2424@gmail.com" style="color:#0a7c59;text-decoration:none;">santiagososa2424@gmail.com</a>
               </p>
             </td>
           </tr>

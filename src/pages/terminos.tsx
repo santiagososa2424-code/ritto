@@ -66,7 +66,7 @@ export default function TerminosPage() {
         <p>Podemos actualizar estos términos. Te notificaremos por email con al menos 15 días de anticipación ante cambios materiales.</p>
 
         <h2>10. Contacto</h2>
-        <p>Para consultas: <a href="mailto:soporte@ritto.lat">soporte@ritto.lat</a></p>
+        <p>Para consultas: <a href="mailto:santiagososa2424@gmail.com">santiagososa2424@gmail.com</a></p>
       </div>
     </>
   );

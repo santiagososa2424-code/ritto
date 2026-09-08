@@ -123,10 +123,10 @@ export default function SettingsPage() {
     }
     if (router.query.error === 'google_token') {
       const detail = router.query.detail ? ` (${router.query.detail})` : '';
-      setError(`No se pudo conectar con Google${detail}. Intentá de nuevo o escribinos a soporte@ritto.lat si el problema persiste.`);
+      setError(`No se pudo conectar con Google${detail}. Intentá de nuevo o escribinos a santiagososa2424@gmail.com si el problema persiste.`);
     }
     if (router.query.error === 'google_not_configured') {
-      setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a soporte@ritto.lat y lo resolvemos en minutos.');
+      setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a santiagososa2424@gmail.com y lo resolvemos en minutos.');
     }
   }, [router.query]);
 

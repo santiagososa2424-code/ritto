@@ -102,7 +102,7 @@ export default function PlanPage() {
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        setPayError(data.error || 'No se pudo iniciar el pago. Escribínos a soporte@ritto.lat');
+        setPayError(data.error || 'No se pudo iniciar el pago. Escribínos a santiagososa2424@gmail.com');
         setPaying(false);
       }
     } catch {
@@ -274,7 +274,7 @@ export default function PlanPage() {
                 Pago seguro con MercadoPago · Cancelá cuando quieras
               </div>
               <hr className="cta-divider" />
-              <a href="mailto:soporte@ritto.lat" className="support-link">¿Tenés preguntas? Contactá a soporte</a>
+              <a href="mailto:santiagososa2424@gmail.com" className="support-link">¿Tenés preguntas? Contactá a soporte</a>
             </div>
           )}
 
@@ -315,7 +315,7 @@ export default function PlanPage() {
               ))}
               <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', marginTop: 10 }}>
                 Para cambiar de plan contactá a{' '}
-                <a href="mailto:soporte@ritto.lat" style={{ color: 'var(--green)' }}>soporte@ritto.lat</a>
+                <a href="mailto:santiagososa2424@gmail.com" style={{ color: 'var(--green)' }}>santiagososa2424@gmail.com</a>
               </div>
             </>
           )}
