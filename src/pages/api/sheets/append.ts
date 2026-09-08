@@ -293,12 +293,20 @@ async function appendRow(
     nextRow = Math.max(filled + 1, 2);
   }
 
+  // Trim trailing empty cells so formula columns at the end (e.g. TOTAL MES) are never
+  // overwritten. Writing "" to a cell with a =SUM() formula clears that formula.
+  const writeRow = [...row];
+  while (writeRow.length > 0 && (writeRow[writeRow.length - 1] === '' || writeRow[writeRow.length - 1] == null)) {
+    writeRow.pop();
+  }
+  if (writeRow.length === 0) return { ok: false, status: 400, error: 'empty_row_after_trim' };
+
   const r = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `A${nextRow}`)}?valueInputOption=USER_ENTERED`,
     {
       method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [row] }),
+      body: JSON.stringify({ values: [writeRow] }),
     },
   );
   if (!r.ok) {
