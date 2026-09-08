@@ -277,6 +277,43 @@ function colLetter(idx: number): string {
   return s;
 }
 
+// Groups sorted column indexes into contiguous runs, so a set of columns can be
+// addressed as a few ranges instead of one request per cell.
+function runsOf(indexes: number[]): Array<{ start: number; end: number }> {
+  const runs: Array<{ start: number; end: number }> = [];
+  for (const i of [...indexes].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && i === last.end + 1) last.end = i;
+    else runs.push({ start: i, end: i });
+  }
+  return runs;
+}
+
+// How far down the pre-built template reaches: the last row whose formula column
+// still carries a formula. Past that line the tab is just empty space, and an
+// invoice dropped there sits outside every total the user built.
+async function templateLastRow(
+  sheetId: string,
+  tabName: string,
+  formulaIdx: number[],
+  accessToken: string,
+): Promise<number> {
+  if (formulaIdx.length === 0) return 0;
+  const col = colLetter(formulaIdx[0]);
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${col}2:${col}`)}?valueRenderOption=FORMULA`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) return 0;
+  const cells = ((await res.json()) as { values?: string[][] }).values ?? [];
+  let last = 0;
+  for (let i = 0; i < cells.length; i++) {
+    const v = cells[i]?.[0];
+    if (typeof v === 'string' && v.startsWith('=')) last = i + 2;
+  }
+  return last;
+}
+
 // `row` is aligned 1:1 with the tab's headers. null means "this cell is not ours" —
 // a formula column or a field Ritto must never fill — and is skipped entirely.
 async function appendRow(
@@ -284,7 +321,9 @@ async function appendRow(
   tabName: string,
   row: (string | number | null)[],
   accessToken: string,
-): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
+  tabGid: number | undefined,
+  formulaIdx: number[],
+): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean }> {
   // Measure occupancy on a column Ritto actually fills with a value. A column it
   // only ever blanks would read as empty forever and every export would land on
   // row 2, on top of the previous one.
@@ -292,24 +331,79 @@ async function appendRow(
   const ownedIdx = row.findIndex((v) => v !== null);
   const checkCol = colLetter(valuedIdx >= 0 ? valuedIdx : Math.max(ownedIdx, 0));
 
-  let nextRow = 2;
-  const colRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${checkCol}:${checkCol}`)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const [colRes, lastTemplate] = await Promise.all([
+    fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${checkCol}:${checkCol}`)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ),
+    templateLastRow(sheetId, tabName, formulaIdx, accessToken),
+  ]);
+
+  let used = 1;
+  let free = -1;
   if (colRes.ok) {
-    const colData = (await colRes.json()) as { values?: string[][] };
-    const cells = colData.values ?? [];
+    const cells = ((await colRes.json()) as { values?: string[][] }).values ?? [];
+    used = cells.length;
     // Take the FIRST free row, not the one after the last used cell. These templates
     // usually carry a totals row, a second block or notes well below the data, and
-    // counting to the end drops the invoice underneath all of it — outside the rows
-    // the =SUM() formulas cover, which is exactly what "queda afuera" looks like.
-    let free = -1;
+    // counting to the end drops the invoice underneath all of it.
     for (let i = 1; i < cells.length; i++) {
       const cell = cells[i]?.[0];
       if (cell == null || String(cell).trim() === '') { free = i + 1; break; }
     }
-    nextRow = free > 0 ? free : Math.max(cells.length + 1, 2);
+  }
+
+  // Only a free row that falls *inside* the template is usable. A blank row further
+  // down is not free space, it is the empty sheet past where the formulas stop.
+  let nextRow: number;
+  let grewTemplate = false;
+  // Trailing blanks are omitted from the response, so a template that is only half
+  // filled ends the read early: past the last value, the next row is free too.
+  const firstFree = free > 0 ? free : Math.max(used + 1, 2);
+
+  if (lastTemplate === 0 || firstFree <= lastTemplate) {
+    nextRow = firstFree;                  // a real gap inside the table
+  } else if (lastTemplate > 0 && tabGid != null) {
+    // The table is full. Insert *inside* it, at its last row, pushing that line and
+    // everything below one down. Inserting after the last row would leave the
+    // invoice outside a total that sums up to it: Sheets only stretches a range
+    // when the new row falls within it, never when it lands just past the end.
+    nextRow = Math.max(lastTemplate, 3);
+    grewTemplate = true;
+  } else {
+    nextRow = Math.max(used + 1, 2);      // no formulas here, nothing to stay inside of
+  }
+
+  if (grewTemplate && tabGid != null) {
+    const requests: unknown[] = [{
+      insertDimension: {
+        range: { sheetId: tabGid, dimension: 'ROWS', startIndex: nextRow - 1, endIndex: nextRow },
+        inheritFromBefore: true,  // borders, colours and number formats of the row above
+      },
+    }];
+    // An inserted row inherits formatting but not formulas. Copy them column by
+    // column — copying the whole row would drag the neighbouring invoice's values
+    // along with them.
+    for (const run of runsOf(formulaIdx)) {
+      requests.push({
+        copyPaste: {
+          source: { sheetId: tabGid, startRowIndex: nextRow - 2, endRowIndex: nextRow - 1, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
+          destination: { sheetId: tabGid, startRowIndex: nextRow - 1, endRowIndex: nextRow, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
+          pasteType: 'PASTE_FORMULA',
+        },
+      });
+    }
+    const ins = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    });
+    if (!ins.ok) {
+      // Couldn't make room; land past the data rather than overwrite the last line
+      // of the user's template.
+      grewTemplate = false;
+      nextRow = Math.max(used + 1, lastTemplate + 1, 2);
+    }
   }
 
   // A single PUT over A:N would blank every protected cell in between, because ""
@@ -353,7 +447,7 @@ async function appendRow(
       return { ok: false, status: r.status, error: r.statusText };
     }
   }
-  return { ok: true, status: r.status, targetRow: nextRow };
+  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate };
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
@@ -586,7 +680,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       debugEntry.rowAttempted = true;
-      const result = await appendRow(sheetId, tabName, row, accessToken);
+      const formulaIdx = tabHeaders.map((h, i) => (writable.has(h) ? -1 : i)).filter((i) => i >= 0);
+      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
 
