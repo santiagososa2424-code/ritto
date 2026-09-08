@@ -44,6 +44,7 @@ interface SheetStructure {
   tabs: string[];
   tabHeaderMap: Record<string, string[]>;
   tabWritableHeaders: Record<string, string[]>;
+  tabSampleRows: Record<string, string[][]>;
 }
 
 async function fetchTabHeaders(
@@ -83,43 +84,49 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {} };
+  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {}, tabSampleRows: {} };
   const meta = await metaRes.json();
   const tabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
 
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
+  const tabSampleRows: Record<string, string[][]> = {};
 
   const tabs50 = tabs.slice(0, 50);
-  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders };
+  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
 
-  // Use batchGet to read all tab headers in 2 API calls instead of 100+ parallel requests
-  // (100 parallel requests causes Google Sheets API rate-limit errors - all return non-ok - 0 headers read)
-  // Ranges go as query params so URLSearchParams handles encoding (single quotes, colons, etc.)
+  // 3 batchGet calls: row 1 (headers), row 2 (formula detection), rows 3-6 (data examples)
   const batchRow1Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
   const batchRow2Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
+  const batchSampleUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
   batchRow2Url.searchParams.set('valueRenderOption', 'FORMULA');
 
   for (const tab of tabs50) {
     const safeTab = `'${tab.replace(/'/g, "''")}'`;
     batchRow1Url.searchParams.append('ranges', `${safeTab}!A1:ZZ1`);
     batchRow2Url.searchParams.append('ranges', `${safeTab}!A2:ZZ2`);
+    batchSampleUrl.searchParams.append('ranges', `${safeTab}!A3:ZZ6`);
   }
 
-  const [batchRow1Res, batchRow2Res] = await Promise.all([
+  const [batchRow1Res, batchRow2Res, batchSampleRes] = await Promise.all([
     fetch(batchRow1Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
     fetch(batchRow2Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
+    fetch(batchSampleUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
   ]);
 
-  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders };
+  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
 
   const batchRow1Data = await batchRow1Res.json() as { valueRanges?: Array<{ values?: string[][] }> };
   const batchRow2Data = batchRow2Res.ok
     ? await batchRow2Res.json() as { valueRanges?: Array<{ values?: string[][] }> }
     : null;
+  const batchSampleData = batchSampleRes.ok
+    ? await batchSampleRes.json() as { valueRanges?: Array<{ values?: string[][] }> }
+    : null;
 
   const row1Ranges = batchRow1Data.valueRanges ?? [];
   const row2Ranges = batchRow2Data?.valueRanges ?? [];
+  const sampleRanges = batchSampleData?.valueRanges ?? [];
 
   for (let i = 0; i < tabs50.length; i++) {
     const tab = tabs50[i];
@@ -135,9 +142,10 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
 
     tabHeaderMap[tab] = headers;
     tabWritableHeaders[tab] = headers.filter((h) => !formulaCols.has(h));
+    tabSampleRows[tab] = (sampleRanges[i]?.values ?? []).slice(0, 4);
   }
 
-  return { tabs, tabHeaderMap, tabWritableHeaders };
+  return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
 }
 
 interface GeminiMapping {
@@ -155,29 +163,50 @@ interface GeminiResult {
 async function mapWithGemini(
   invoices: Record<string, unknown>[],
   tabWritableHeaders: Record<string, string[]>,
+  tabSampleRows: Record<string, string[][]>,
 ): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { mappings: null, called: false, reason: 'no_api_key' };
   if (Object.keys(tabWritableHeaders).length === 0) return { mappings: null, called: false, reason: 'no_writable_headers' };
 
-  const sheetStructure = Object.entries(tabWritableHeaders).map(([nombre, columnas]) => ({ nombre, columnas }));
+  const sheetStructure = Object.entries(tabWritableHeaders).map(([nombre, columnas]) => ({
+    nombre,
+    columnas,
+    filas_ejemplo: (tabSampleRows[nombre] ?? []).slice(0, 4),
+  }));
 
   const prompt = `Sos el motor de mapeo contable de ritto.lat para Uruguay y Argentina.
+Cada usuario tiene su propia planilla con columnas y formatos completamente personalizados.
+Tu tarea es entender la intención de cada columna usando su nombre Y los valores de ejemplo reales que ya existen en esa pestaña.
 
-ESTRUCTURA DE LA PLANILLA DEL USUARIO:
+ESTRUCTURA DE LA PLANILLA DEL USUARIO (nombre + columnas escribibles + filas_ejemplo reales):
 ${JSON.stringify({ pestañas_disponibles: sheetStructure }, null, 2)}
 
 FACTURAS A PROCESAR:
 ${JSON.stringify(invoices.map((inv, i) => ({ index: i, ...inv })), null, 2)}
 
-REGLAS (en orden de prioridad):
-1. PRIORIDAD MÁXIMA — Si el nombre del proveedor/emisor de la factura coincide con el nombre de una pestaña (exacto o parcialmente, ignorando mayúsculas/acentos), usá ESA pestaña. Ejemplo: proveedor "Loazzolo S.A." → pestaña "Loazzolo".
-2. Si no hay coincidencia por proveedor, elegí por tipo: compra/gasto → pestaña de gastos/proveedores; venta → pestaña de ventas/clientes.
-3. Mapeá cada campo al nombre EXACTO de la columna de esa pestaña. Si ninguna columna coincide con un campo, no lo incluyas.
-4. Si una columna no tiene dato, usá null.
-5. Fechas en formato YYYY-MM-DD. Montos sin símbolo de moneda, solo número.
-6. Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos van negativos.
-7. Si ninguna pestaña aplica, usá la primera pestaña disponible.
+REGLAS (en orden estricto de prioridad):
+
+1. SELECCIÓN DE PESTAÑA:
+   - Si el proveedor/emisor de la factura coincide (exacto o parcial, ignorando mayúsculas/acentos) con el nombre de una pestaña, usá ESA pestaña. Ej: "Loazzolo S.A." → "Loazzolo".
+   - Si no hay coincidencia, elegí por tipo: compra/gasto → pestaña de gastos; venta → pestaña de ventas.
+   - Si ninguna aplica, usá la primera pestaña disponible.
+
+2. MAPEO DE COLUMNAS (aprendé del ejemplo):
+   - Usá las filas_ejemplo para entender el formato real que usa el cliente (fechas, montos, textos).
+   - Si las fechas de ejemplo son "9/3/2026", usá ese formato. Si son "2026-03-09", usá ISO.
+   - Si los montos de ejemplo no tienen "$", no los incluyas.
+   - Mapeá al nombre EXACTO de la columna. Si un campo no tiene columna correspondiente, no lo incluyas.
+   - Si una columna no tiene dato disponible en la factura, usá null.
+
+3. COLUMNAS DE TOTALES/ACUMULADOS:
+   - Si una columna parece un total calculado (ej: "TOTAL MES", "TOTAL MESA", "SUBTOTAL") y no tiene datos en filas_ejemplo pero sí en otras columnas, asignale null — son fórmulas del usuario.
+
+4. CAMPOS ESPECIALES:
+   - "Estado pedido" → si la factura fue recibida como compra: "Recibido". Si es venta emitida: "Emitido".
+   - "Estado pago" → si el CFE indica contado o ya fue cobrado: "Pago". Si está pendiente: "No pago".
+   - "Deuda" → si Estado pago es "No pago": igual al monto total. Si es "Pago": 0.
+   - Si el tipo de documento contiene "Crédito" o "Nota de Crédito", los montos van negativos.
 
 Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
 [
@@ -384,7 +413,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const sheetId = extractSheetId(profile.google_sheet_id as string);
-    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders } = await fetchSheetStructure(sheetId, accessToken);
+    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders, tabSampleRows } = await fetchSheetStructure(sheetId, accessToken);
 
     if (!existingTabs.length) {
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
@@ -393,7 +422,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
 
-    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders);
+    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows);
     const geminiMappings = geminiResult.mappings;
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
