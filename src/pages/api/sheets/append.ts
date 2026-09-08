@@ -11,7 +11,7 @@ function extractSheetId(urlOrId: string): string {
 // encodeURIComponent on the full string ensures : in ranges like A:A or A1:ZZ1
 // is sent as %3A, preventing the Sheets API from misreading it as a custom method suffix.
 function sheetRange(tab: string, range: string): string {
-  const quoted = `'${tab.replace(/'/g, "''")}'`;
+  const quoted = `'${tab.replace(/'/g, "''")}''`;
   return encodeURIComponent(`${quoted}!${range}`);
 }
 
@@ -101,7 +101,7 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   batchRow2Url.searchParams.set('valueRenderOption', 'FORMULA');
 
   for (const tab of tabs50) {
-    const safeTab = `'${tab.replace(/'/g, "''")}'`;
+    const safeTab = `'${tab.replace(/'/g, "''")}''`;
     batchRow1Url.searchParams.append('ranges', `${safeTab}!A1:ZZ1`);
     batchRow2Url.searchParams.append('ranges', `${safeTab}!A2:ZZ2`);
   }
@@ -227,20 +227,40 @@ async function ensureTab(sheetId: string, tabName: string, accessToken: string, 
   });
 }
 
+// Converts a 0-based column index to a Sheets column letter (0→A, 25→Z, 26→AA, …)
+function colLetter(idx: number): string {
+  let s = '';
+  let n = idx + 1;
+  while (n > 0) {
+    s = String.fromCharCode(((n - 1) % 26) + 65) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 async function appendRow(
   sheetId: string,
   tabName: string,
   row: (string | number)[],
   accessToken: string,
+  allHeaders: string[],
+  writableHeaders: string[],
 ): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number }> {
+  // Use the first writable column to find the next empty row.
+  // Column A is often formula-filled (auto-numbering, status), so reading it would
+  // place the new row below the entire template. Using the first data-entry column
+  // ensures we write within the pre-built template rows.
+  const firstWritableIdx = Math.max(allHeaders.findIndex((h) => writableHeaders.includes(h)), 0);
+  const checkCol = colLetter(firstWritableIdx);
+
   let nextRow = 2;
-  const colARes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, 'A:A')}`,
+  const colRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${checkCol}:${checkCol}`)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (colARes.ok) {
-    const colAData = await colARes.json();
-    const filled = (colAData.values ?? []).length;
+  if (colRes.ok) {
+    const colData = await colRes.json();
+    const filled = (colData.values ?? []).length;
     nextRow = Math.max(filled + 1, 2);
   }
 
@@ -443,7 +463,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       debugEntry.rowAttempted = true;
-      const result = await appendRow(sheetId, tabName, row, accessToken);
+      const result = await appendRow(sheetId, tabName, row, accessToken, tabHeaders, tabWritableHeaders[tabName] ?? []);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
 
