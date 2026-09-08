@@ -73,6 +73,7 @@ export default function AppPage() {
   const [sheetsRange, setSheetsRange] = useState('');
   const [sheetsRowsAdded, setSheetsRowsAdded] = useState(0);
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
+  const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -346,6 +347,7 @@ export default function AppPage() {
         setSheetsRange(data.updatedRange ?? '');
         setSheetsRowsAdded(data.rowsAdded ?? 0);
         setSheetsTabs(data.tabs ?? []);
+        setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
         const exportedAt = new Date().toISOString();
         const idsToMark = invoiceList.filter((inv) => inv.status === 'done').map((inv) => inv.id);
@@ -364,7 +366,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); }, 10000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsRedirectUrl(''); }, 10000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -706,12 +708,12 @@ export default function AppPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   ✓ {sheetsRowsAdded > 0 ? `${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'}` : 'Datos enviados'} a tu planilla.{' '}
                   <a
-                    href={(() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
+                    href={sheetsRedirectUrl || (() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
                     target="_blank"
                     rel="noreferrer"
                     style={{ color: '#166534', textDecoration: 'underline' }}
                   >
-                    Abrir planilla →
+                    {sheetsRedirectUrl ? 'Abrir en la pestaña correcta →' : 'Abrir planilla →'}
                   </a>
                 </div>
                 {sheetsTabs.length > 0 && (

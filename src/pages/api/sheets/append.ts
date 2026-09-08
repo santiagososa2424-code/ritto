@@ -45,6 +45,7 @@ interface SheetStructure {
   tabHeaderMap: Record<string, string[]>;
   tabWritableHeaders: Record<string, string[]>;
   tabSampleRows: Record<string, string[][]>;
+  tabGidMap: Record<string, number>;
 }
 
 async function fetchTabHeaders(
@@ -81,19 +82,22 @@ async function fetchTabHeaders(
 
 async function fetchSheetStructure(sheetId: string, accessToken: string): Promise<SheetStructure> {
   const metaRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {}, tabSampleRows: {} };
+  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {}, tabSampleRows: {}, tabGidMap: {} };
   const meta = await metaRes.json();
-  const tabs: string[] = (meta.sheets ?? []).map((s: { properties: { title: string } }) => s.properties.title);
+  const sheetMetas: Array<{ properties: { title: string; sheetId: number } }> = meta.sheets ?? [];
+  const tabs: string[] = sheetMetas.map((s) => s.properties.title);
+  const tabGidMap: Record<string, number> = {};
+  for (const s of sheetMetas) tabGidMap[s.properties.title] = s.properties.sheetId;
 
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
   const tabSampleRows: Record<string, string[][]> = {};
 
   const tabs50 = tabs.slice(0, 50);
-  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
+  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
 
   // 3 batchGet calls: row 1 (headers), row 2 (formula detection), rows 3-6 (data examples)
   const batchRow1Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
@@ -114,7 +118,7 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
     fetch(batchSampleUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
   ]);
 
-  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
+  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
 
   const batchRow1Data = await batchRow1Res.json() as { valueRanges?: Array<{ values?: string[][] }> };
   const batchRow2Data = batchRow2Res.ok
@@ -145,7 +149,7 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
     tabSampleRows[tab] = (sampleRanges[i]?.values ?? []).slice(0, 4);
   }
 
-  return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows };
+  return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
 }
 
 interface GeminiMapping {
@@ -424,7 +428,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const sheetId = extractSheetId(profile.google_sheet_id as string);
-    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders, tabSampleRows } = await fetchSheetStructure(sheetId, accessToken);
+    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap } = await fetchSheetStructure(sheetId, accessToken);
 
     if (!existingTabs.length) {
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
@@ -514,11 +518,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       invoiceDebug.push(debugEntry);
     }
 
+    const primaryTab = writtenTabs[0];
+    const primaryGid = primaryTab != null ? tabGidMap[primaryTab] : undefined;
+    const baseSheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+    const redirectUrl = primaryGid != null ? `${baseSheetUrl}#gid=${primaryGid}` : baseSheetUrl;
+
     return res.status(200).json({
       ok: totalRows > 0,
       rowsAdded: totalRows,
       tabs: writtenTabs,
       updatedRange: writtenTabs.join(', '),
+      redirectUrl: totalRows > 0 ? redirectUrl : undefined,
       engine: useGemini ? 'gemini' : 'fallback',
       _debug: {
         existingTabs,

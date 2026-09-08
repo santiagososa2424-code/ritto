@@ -204,7 +204,7 @@ export default function LandingPage() {
           <div className="pricing-grid">
             <div className="price-card">
               <div className="price-name">Pro</div>
-              <div className="price-amount">$490</div>
+              <div className="price-amount">$1.500</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
                 <li><span className="check">✓</span>1 usuario · 1 empresa</li>
@@ -218,10 +218,10 @@ export default function LandingPage() {
             <div className="price-card featured">
               <div className="popular-badge">Más popular</div>
               <div className="price-name">Pyme</div>
-              <div className="price-amount">$1.990</div>
+              <div className="price-amount">$5.000</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 5 usuarios · 1 empresa</li>
+                <li><span className="check">✓</span>Hasta 5 cuentas · empresas ilimitadas</li>
                 <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
                 <li><span className="check">✓</span>Exportación a Excel y CSV</li>
@@ -232,10 +232,10 @@ export default function LandingPage() {
             </div>
             <div className="price-card">
               <div className="price-name">Empresa</div>
-              <div className="price-amount">$4.990</div>
+              <div className="price-amount">$12.000</div>
               <div className="price-period">UYU/mes</div>
               <ul className="price-list">
-                <li><span className="check">✓</span>Hasta 20 usuarios · 1 empresa</li>
+                <li><span className="check">✓</span>Hasta 20 cuentas · empresas ilimitadas</li>
                 <li><span className="check">✓</span>Facturas ilimitadas</li>
                 <li><span className="check">✓</span>PDF, imagen y XML CFE</li>
                 <li><span className="check">✓</span>Exportación a Excel y CSV</li>
@@ -257,7 +257,7 @@ export default function LandingPage() {
             {[
               { q: '¿Funciona con cualquier factura uruguaya?', a: 'Sí. Procesamos fotos de celular, PDFs y archivos XML de CFE digital de DGI. Si tenés la factura en papel, sacale una foto y listo.' },
               { q: '¿Con qué sistemas contables es compatible?', a: 'Compatible con GNS Contable, ZetaSoftware y Siigo. El archivo que descargás ya tiene las columnas exactas que necesita cada sistema — solo importarlo.' },
-              { q: '¿Cuántos usuarios puede usar una misma cuenta?', a: 'En el plan Pro es 1 usuario. En Pyme hasta 5 personas comparten la misma empresa y ven las mismas facturas. En Empresa hasta 20 usuarios.' },
+              { q: '¿Cuántos usuarios puede usar una misma cuenta?', a: 'En el plan Pro es 1 usuario con 1 empresa. En Pyme hasta 5 cuentas y en Empresa hasta 20 cuentas, en ambos casos con empresas ilimitadas y el historial compartido entre el equipo.' },
               { q: '¿Qué pasa cuando se vence la prueba gratuita?', a: 'Tu cuenta queda pausada pero no perdés nada. Activás tu plan desde "Mi Plan" y retomás donde estabas con todo el historial.' },
               { q: '¿Mis facturas están seguras?', a: 'Sí. Los archivos se eliminan del servidor inmediatamente después de procesar. Los datos quedan guardados solo en tu cuenta, cifrados y protegidos.' },
               { q: '¿Necesito saber de contabilidad para usarlo?', a: 'No. Subís la factura, Ritto extrae los datos y descargás el archivo. Si tenés dudas sobre qué hacer con el archivo, tu contador te puede guiar en dos minutos.' },
