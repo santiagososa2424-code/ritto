@@ -80,7 +80,12 @@ export default function BeneficiosPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return; }
       setUser(data.user);
-      supabase.from('profiles').select('*').eq('id', data.user.id).single().then(({ data: p }) => {
+      supabase.from('profiles')
+        // Lista explícita: el rol authenticated ya no tiene SELECT sobre la tabla entera,
+      // sólo sobre estas columnas. Un select('*') incluiría los tokens de Google y la
+      // consulta entera falla por permisos.
+      .select('id, nombre, empresa, rut, telefono, created_at, updated_at, sistema_contable, organization_id, role, excel_mapping, onboarding_complete, google_sheet_id, google_token_expires_at, google_email, mp_subscription_id, subscription_status, plan, trial_ends_at, sheet_column_mapping')
+        .eq('id', data.user.id).single().then(({ data: p }) => {
         if (!p) return;
         if (p.trial_ends_at && p.subscription_status === 'trial') {
           setTrialDaysLeft(Math.max(0, Math.ceil((new Date(p.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))));

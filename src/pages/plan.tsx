@@ -69,7 +69,9 @@ export default function PlanPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('*')
+        // Ver nota en dashboard.tsx: select('*') falla porque los tokens de Google ya
+        // no son legibles por el cliente.
+        .select('id, nombre, empresa, rut, telefono, created_at, updated_at, sistema_contable, organization_id, role, excel_mapping, onboarding_complete, google_sheet_id, google_token_expires_at, google_email, mp_subscription_id, subscription_status, plan, trial_ends_at, sheet_column_mapping')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
