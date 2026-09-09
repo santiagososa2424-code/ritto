@@ -61,6 +61,32 @@ async function createOrgForOwner(userId: string, plan: string) {
   });
 }
 
+// Al dar de baja, bloquear también al equipo. Los miembros quedaron con
+// subscription_status 'active' cuando aceptaron la invitación, así que si sólo se
+// bloquea al dueño, hasta veinte cuentas siguen usando el producto sin que nadie pague.
+async function blockOrgMembers(ownerId: string) {
+  const { data: ownerMember } = await supabaseAdmin
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', ownerId)
+    .eq('role', 'owner')
+    .maybeSingle();
+
+  const orgId = ownerMember?.org_id;
+  if (!orgId) return;
+
+  const { data: members } = await supabaseAdmin
+    .from('organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('status', 'active');
+
+  const ids = (members ?? []).map((m) => m.user_id).filter(Boolean) as string[];
+  if (ids.length === 0) return;
+
+  await supabaseAdmin.from('profiles').update({ subscription_status: 'blocked' }).in('id', ids);
+}
+
 export const config = { api: { bodyParser: true } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -96,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await supabaseAdmin.from('profiles').update({
           subscription_status: 'blocked',
         }).eq('id', userId);
+        await blockOrgMembers(userId);
       }
     }
 

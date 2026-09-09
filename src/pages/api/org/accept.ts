@@ -2,6 +2,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
 
+// Las invitaciones no vencían nunca: un link filtrado —reenviado, en el historial del
+// navegador, en un mail viejo— servía para siempre. Se usa created_at, que la tabla ya
+// tiene, para no depender de una columna nueva.
+const INVITE_TTL_DIAS = 7;
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -18,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: invite } = await supabaseAdmin
     .from('organization_members')
-    .select('id, org_id, status, email')
+    .select('id, org_id, status, email, created_at')
     .eq('invite_token', token)
     .maybeSingle();
 
@@ -26,8 +31,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (invite.status === 'active') return res.status(400).json({ error: 'Esta invitación ya fue aceptada' });
   if (invite.status === 'removed') return res.status(400).json({ error: 'Invitación cancelada' });
 
-  // Verify the authenticated user's email matches the invite (optional but recommended)
-  if (invite.email && user.email && invite.email.toLowerCase() !== user.email.toLowerCase()) {
+  const emitida = invite.created_at ? new Date(invite.created_at).getTime() : 0;
+  if (emitida && Date.now() - emitida > INVITE_TTL_DIAS * 24 * 60 * 60 * 1000) {
+    return res.status(400).json({ error: `La invitación venció. Pedile al dueño que te mande una nueva.` });
+  }
+
+  // El chequeo se salteaba si la invitación no tenía mail: entonces cualquiera con el
+  // token entraba. Ahora sin mail no se acepta.
+  if (!invite.email || !user.email || invite.email.toLowerCase() !== user.email.toLowerCase()) {
     return res.status(403).json({ error: 'Esta invitación es para otro email' });
   }
 
