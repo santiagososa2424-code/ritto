@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [savingMapping, setSavingMapping] = useState(false);
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [savingSheet, setSavingSheet] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [sheetMsg, setSheetMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -365,6 +366,35 @@ export default function SettingsPage() {
     setGoogleConnected(false);
     setSuccess('Google desconectado');
     setTimeout(() => setSuccess(''), 3000);
+  }
+
+  async function deleteAccount() {
+    // Se pide escribir la palabra: un "¿estás seguro?" se acepta por reflejo, y esto
+    // no tiene vuelta atrás.
+    const typed = window.prompt(
+      'Esto borra tu cuenta, tus facturas y revoca el acceso a tu Google Sheets. No se puede deshacer.\n\nEscribí ELIMINAR para confirmar:',
+    );
+    if (typed !== 'ELIMINAR') return;
+
+    setDeletingAccount(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/user/delete-account', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ confirm: 'ELIMINAR' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? 'No se pudo eliminar la cuenta.');
+      setDeletingAccount(false);
+      setTimeout(() => setError(''), 6000);
+      return;
+    }
+    await supabase.auth.signOut();
+    router.replace('/');
   }
 
   async function connectGoogle() {
@@ -787,6 +817,23 @@ export default function SettingsPage() {
               <button className="btn-save" style={{ background: 'var(--gray)' }} onClick={() => router.push('/plan')}>Ver mi plan</button>
               <button className="btn-danger" style={{ width: 'auto' }} onClick={async () => { await supabase.auth.signOut(); router.replace('/login'); }}>
                 Cerrar sesión
+              </button>
+            </div>
+
+            <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 4 }}>Eliminar mi cuenta</div>
+              <p style={{ fontSize: 13, color: 'var(--gray)', lineHeight: 1.5, marginBottom: 12 }}>
+                Borra tu cuenta, tus facturas y los datos de tu empresa, y revoca el acceso de Ritto
+                a tu Google Sheets. Tu planilla y su contenido quedan intactos. No se puede deshacer.
+              </p>
+              <button
+                type="button"
+                className="btn-danger"
+                style={{ width: 'auto' }}
+                onClick={deleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? 'Eliminando…' : 'Eliminar mi cuenta'}
               </button>
             </div>
           </div>
