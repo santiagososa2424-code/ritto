@@ -14,7 +14,7 @@ Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, sin bloques de c
 
 FORMATO DE RESPUESTA (devolvé exactamente esta estructura):
 {
-  "proveedor": "razón social o nombre comercial completo del emisor",
+  "proveedor": "nombre fantasía o razón social del EMISOR — nunca su dirección",
   "rut": "RUT del emisor en formato XX.XXX.XXX-X (con puntos y guion)",
   "fecha": "fecha de emisión en formato YYYY-MM-DD",
   "nroDocumento": "número de serie y número del documento (ej: A-0001234 o E-0001234)",
@@ -38,6 +38,23 @@ FORMATO DE RESPUESTA (devolvé exactamente esta estructura):
   "ivaTotal": 0.00,
   "total": 0.00
 }
+
+CÓMO ELEGIR EL "proveedor" (leelo antes que nada):
+En la cabecera de un CFE conviven, con tipografías muy parecidas, tres cosas
+distintas: la razón social (ej: "Distribuidora Abasto S.A."), el nombre fantasía
+(ej: "Abasto") y la dirección fiscal (ej: "Av. Italia 1234"). Son fáciles de
+confundir. Para no equivocarte:
+ a. El proveedor es el EMISOR: quien vende y emite el comprobante. Nunca el
+    receptor o cliente, que aparece más abajo bajo "Señor(es)", "Cliente" o
+    "Receptor" — ese es quien recibe la factura y no va en este campo.
+ b. Elegí el nombre fantasía o la razón social. Si ves los dos, preferí el que
+    identifica al comercio (ej: "Abasto" antes que "Distribuidora Abasto S.A.").
+ c. PROHIBIDO poner una dirección. Nunca uses calles, avenidas, esquinas,
+    números de puerta, rutas, kilómetros, barrios, ciudades ni departamentos.
+    Ej: jamás "Av. Italia 1234", "Mercedes 987", "Ruta 8 Km 17", "Montevideo".
+ d. Tampoco uses teléfonos, correos, sitios web ni el texto del pie de página.
+ e. Ante la duda, el proveedor es el nombre que está junto al RUT del emisor,
+    arriba de todo en el documento.
 
 REGLAS CRÍTICAS PARA URUGUAY:
 1. RUT: siempre en formato XX.XXX.XXX-X (ej: 21.234.567-8). Si tiene dígito verificador, incluiló.
@@ -68,11 +85,34 @@ interface ValidationResult {
   errors: string[];
 }
 
+// La cabecera de un CFE pone la razón social y la dirección fiscal casi con la misma
+// tipografía, y el modelo a veces devuelve la calle como proveedor. Marcarlo como
+// error de validación reusa el reintento que ya existe: se le pide la corrección
+// puntual y, si vuelve a fallar, la factura queda señalada para revisar en vez de
+// entrar a la planilla con el nombre de una avenida.
+const STREET_WORD = /^(calle|av|avda|avenida|bv|bvar|bulevar|blvd|br|rambla|ruta|rte|camino|cno|pasaje|psje|peatonal|plaza|km|esq|esquina)\b/;
+
+function looksLikeAddress(name: string): boolean {
+  const n = name.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!n) return false;
+  if (STREET_WORD.test(n)) return true;
+  // "Mercedes 1234": un nombre que termina en un número de puerta suele ser la
+  // dirección. Una empresa rara vez se llama así.
+  if (/\s\d{3,5}$/.test(n)) return true;
+  return false;
+}
+
 function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
   const errors: string[] = [];
 
   if (!data.items || data.items.length === 0) {
     errors.push('items vacío');
+  }
+
+  if (data.proveedor && looksLikeAddress(data.proveedor)) {
+    errors.push(
+      `"${data.proveedor}" parece una dirección, no un proveedor: usá el nombre fantasía o la razón social del emisor, nunca su calle`,
+    );
   }
 
   const neto = Number(data.neto ?? 0);
