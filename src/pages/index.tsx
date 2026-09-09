@@ -182,7 +182,7 @@ export default function LandingPage() {
           <TypedDomain />
           <div className="badge"><span className="badge-dot" />Hecho para empresas uruguayas</div>
           <h1>Tus facturas,<br />procesadas en <em>segundos</em></h1>
-          <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Excel.</p>
+          <p className="hero-sub">Subí tus facturas y Ritto extrae automáticamente todos los datos fiscales — RUT, IVA, totales — listos para exportar a Google Sheets.</p>
           <div className="hero-btns">
             <button className="btn-primary" onClick={() => router.push('/login?signup=true')}>Probar gratis 14 días</button>
             <button className="btn-ghost" onClick={() => router.push('/login')}>Iniciar sesión</button>
