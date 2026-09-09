@@ -2,9 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { generateCustomExcel } from '../../lib/excelExporter';
 import { DEFAULT_COLUMNS } from '../../lib/types';
 import type { ExtractedInvoice, ExcelColumn } from '../../lib/types';
+import { getAuthUser } from '../../lib/auth';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
 
   const { invoices, mapping } = req.body as { invoices: ExtractedInvoice[]; mapping?: ExcelColumn[] };
   if (!Array.isArray(invoices) || invoices.length === 0) {

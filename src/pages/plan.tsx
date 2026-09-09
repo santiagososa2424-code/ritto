@@ -93,10 +93,16 @@ export default function PlanPage() {
     setPaying(true);
     setPayError('');
     try {
+      // El mail y el userId los toma el servidor de la sesión; mandarlos desde acá
+      // permitía generar pagos a nombre de otra persona.
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/payments/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: key, email: user.email, userId: user.id }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ plan: key }),
       });
       const data = await res.json();
       if (data.checkout_url) {

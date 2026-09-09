@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getAuthUser } from '../../../lib/auth';
 
 const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
   pro: { title: 'Ritto Pro · 1 empresa', unit_price: 1500 },
@@ -9,9 +10,16 @@ const PLAN_ITEMS: Record<string, { title: string; unit_price: number }> = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { plan, email, userId } = req.body as { plan: string; email: string; userId: string };
+  // El userId y el mail salen de la sesión, no del cuerpo: si no, cualquiera podía
+  // generar preferencias de pago a nombre de otra persona.
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+
+  const { plan } = req.body as { plan: string };
   const item = PLAN_ITEMS[plan];
-  if (!item || !email || !userId) return res.status(400).json({ error: 'Parámetros inválidos' });
+  const email = user.email;
+  const userId = user.id;
+  if (!item || !email) return res.status(400).json({ error: 'Parámetros inválidos' });
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
   if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Contactá santiagososa2424@gmail.com' });

@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 import { parseCFE } from '../../lib/cfeParser';
 import { extractFromImage, extractFromPDF } from '../../lib/geminiExtractor';
 import type { ExtractedInvoice } from '../../lib/types';
+import { getAuthUser } from '../../lib/auth';
+import { rateLimit } from '../../lib/rateLimit';
 
 export const config = { api: { bodyParser: false }, maxDuration: 60 };
 
@@ -54,6 +56,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({ status: 'error', error: 'GEMINI_API_KEY no configurada en el servidor' });
+  }
+
+  // Este endpoint estaba abierto a internet: cualquiera podía mandar PDFs y gastar la
+  // cuota de Gemini, sin siquiera tener cuenta. Exigir sesión es el control principal;
+  // el límite por tasa es lo que además evita que una cuenta legítima se desboque.
+  const user = await getAuthUser(req);
+  if (!user) return res.status(401).json({ status: 'error', error: 'No autorizado' });
+
+  // 20 por minuto deja cómoda la carga de a diez archivos y corta un bucle.
+  const verdict = rateLimit(`extract:${user.id}`, 20, 60_000);
+  if (!verdict.ok) {
+    res.setHeader('Retry-After', String(verdict.retryAfter));
+    return res.status(429).json({
+      status: 'error',
+      error: `Estás procesando muchos archivos seguidos. Esperá ${verdict.retryAfter} segundos y seguí.`,
+    });
   }
 
   const form = formidable({ maxFileSize: 20 * 1024 * 1024 });

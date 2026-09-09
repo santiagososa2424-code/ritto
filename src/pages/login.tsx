@@ -97,11 +97,17 @@ export default function LoginPage() {
         await supabase.from('org_invites').update({ status: 'accepted' }).eq('id', invite.id);
       }
 
-      fetch('/api/send-welcome', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, nombre, plan: selectedPlan, sistema: 'Ritto' }),
-      }).catch(() => {});
+      // El destinatario lo resuelve el servidor desde la sesión; acá sólo va el token.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch('/api/send-welcome', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ nombre, plan: selectedPlan, sistema: 'Ritto' }),
+        }).catch(() => {});
+      });
 
       router.push('/onboarding');
     }

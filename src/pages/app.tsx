@@ -158,6 +158,13 @@ export default function AppPage() {
       });
   }, [user]);
 
+  // Los endpoints de extracción y exportación ahora exigen sesión, así que toda
+  // llamada tiene que llevar el token.
+  async function authHeaders(): Promise<Record<string, string>> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  }
+
   async function saveInvoice(inv: ExtractedInvoice) {
     if (!user) return;
     await supabase.from('invoices').insert({
@@ -184,7 +191,7 @@ export default function AppPage() {
     formData.append('file', file);
     formData.append('id', id);
     try {
-      const res = await fetch('/api/extract', { method: 'POST', body: formData });
+      const res = await fetch('/api/extract', { method: 'POST', headers: await authHeaders(), body: formData });
       let data: ExtractedInvoice;
       try { data = await res.json(); }
       catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
@@ -263,7 +270,7 @@ export default function AppPage() {
       formData.append('file', file);
       formData.append('id', id);
       try {
-        const res = await fetch('/api/extract', { method: 'POST', body: formData });
+        const res = await fetch('/api/extract', { method: 'POST', headers: await authHeaders(), body: formData });
         let data: ExtractedInvoice;
         try { data = await res.json(); }
         catch { data = { id, fileName: file.name, source: getSource(file), status: 'error', error: 'La lectura tardó demasiado. Probá con un archivo más liviano o en formato PDF.' }; }
@@ -322,7 +329,7 @@ export default function AppPage() {
     setDownloading(label);
     const res = await fetch('/api/export', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ invoices: invoiceList, mapping: excelMapping }),
     });
     const blob = await res.blob();

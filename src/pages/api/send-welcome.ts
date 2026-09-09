@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getAuthUser } from '../../lib/auth';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -6,8 +7,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { email, nombre, plan, sistema } = req.body as {
-    email: string;
+  // Estaba abierto: cualquiera podía disparar mails desde tu dominio a la dirección
+  // que quisiera, gastando cuota de envío y arriesgando la reputación del remitente.
+  // Además el destinatario ahora sale de la sesión, no del cuerpo.
+  const user = await getAuthUser(req);
+  if (!user?.email) return res.status(401).json({ error: 'No autorizado' });
+
+  const email = user.email;
+  const { nombre, plan, sistema } = req.body as {
     nombre?: string;
     plan?: string;
     sistema?: string;
