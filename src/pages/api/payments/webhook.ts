@@ -51,7 +51,7 @@ async function createOrgForOwner(userId: string, plan: string) {
 
   if (!org) return;
 
-  await supabaseAdmin.from('profiles').update({ org_id: org.id }).eq('id', userId);
+  await supabaseAdmin.from('profiles').update({ organization_id: org.id }).eq('id', userId);
   await supabaseAdmin.from('organization_members').insert({
     org_id: org.id,
     user_id: userId,
@@ -119,8 +119,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
     }
-  } catch {
-    // always 200 so MP doesn't retry endlessly
+  } catch (e) {
+    // Se responde 200 igual para que MercadoPago no reintente para siempre, pero el
+    // error se registra: este catch mudo fue justamente lo que escondió que la
+    // vinculación con la organización venía fallando en cada pago.
+    console.error('[webhook] fallo procesando', type, (e as Error)?.message ?? e);
   }
 
   return res.status(200).end();

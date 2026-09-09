@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (target.user_id) {
     await supabaseAdmin
       .from('profiles')
-      .update({ org_id: null, subscription_status: 'blocked' })
+      .update({ organization_id: null, subscription_status: 'blocked' })
       .eq('id', target.user_id);
   }
 

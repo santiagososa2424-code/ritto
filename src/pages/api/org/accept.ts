@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   await supabaseAdmin
     .from('profiles')
     .update({
-      org_id: invite.org_id,
+      organization_id: invite.org_id,
       subscription_status: 'active',
       plan: org?.plan ?? 'pyme',
       onboarding_complete: true,
