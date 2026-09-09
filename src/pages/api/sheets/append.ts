@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
+import { parseAmount } from '../../../lib/money';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -477,12 +478,6 @@ function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));
 }
 
-// An amount that arrives already formatted ("$2,840.00") is parsed against the
-// spreadsheet's own locale. In a sheet set to Uruguay that string does not read as
-// two thousand eight hundred and forty, so it lands as text — and text is skipped by
-// =SUM(), which is why the totals stop adding up. Turn anything that is purely an
-// amount into a real number and let the column's own format display it.
-// Document numbers ("A-284741") and dates ("2026-09-02", "27/8/2026") never match.
 // Where a person would type the invoice amount by hand, best candidate first. A
 // column called "Costo" beats one called "Total" because "Total" is just as often
 // the sheet's own calculation.
@@ -506,31 +501,6 @@ function bestMoneyColumn(headers: string[], usable: (h: string) => boolean): str
   return null;
 }
 
-function parseAmount(value: string): number | null {
-  const s = value.trim();
-  if (!/^-?\s*(?:U\$S|USD|UYU|\$)?\s*-?[\d.,]+$/i.test(s)) return null;
-  const body = s.replace(/[^\d.,]/g, '');
-  if (!body || !/\d/.test(body)) return null;
-
-  const lastDot = body.lastIndexOf('.');
-  const lastComma = body.lastIndexOf(',');
-  let normalized: string;
-  if (lastDot === -1 && lastComma === -1) {
-    normalized = body;
-  } else {
-    const decIdx = Math.max(lastDot, lastComma);
-    const sep = body[decIdx];
-    const onlySeparator = (lastDot === -1) !== (lastComma === -1) && body.indexOf(sep) === decIdx;
-    // A lone separator with exactly three digits after it groups thousands ("1,500"),
-    // it does not mark decimals.
-    if (onlySeparator && body.length - decIdx - 1 === 3) normalized = body.replace(/[.,]/g, '');
-    else normalized = `${body.slice(0, decIdx).replace(/[.,]/g, '')}.${body.slice(decIdx + 1)}`;
-  }
-
-  const n = Number(normalized);
-  if (!Number.isFinite(n)) return null;
-  return /^-/.test(s) ? -Math.abs(n) : n;
-}
 
 function fallbackMapInvoice(
   inv: Record<string, unknown>,

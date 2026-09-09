@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
 import fs from 'fs';
 import type { ExtractedInvoice } from './types';
+import { toNumber } from './money';
 
 function getModel() {
   const key = process.env.GEMINI_API_KEY;
@@ -38,6 +39,17 @@ FORMATO DE RESPUESTA (devolvé exactamente esta estructura):
   "ivaTotal": 0.00,
   "total": 0.00
 }
+
+SI EL ARCHIVO ES UNA FOTO DE UN PAPEL (muy común: la sacan con el celular):
+ - Ignorá arrugas, dobleces, sombras, reflejos, brillos, anotaciones a mano y el
+   fondo alrededor de la hoja. Nada de eso es parte del comprobante.
+ - Si un dígito queda tapado por un pliegue, deducilo por los totales antes que
+   inventarlo. Si aun así no se lee, dejá el campo vacío.
+ - Los importes están escritos a la uruguaya: punto para miles y coma para
+   decimales ("1.445,00", "-0,47"). Devolvelos SIEMPRE como número con punto
+   decimal y sin separador de miles: 1445.00 y -0.47.
+ - Una línea de "REDONDEO", "No facturable" o "Ajuste" puede ser negativa. Si lo
+   es, respetá el signo.
 
 CÓMO ELEGIR EL "proveedor" (leelo antes que nada):
 En la cabecera de un CFE conviven, con tipografías muy parecidas, tres cosas
@@ -81,7 +93,8 @@ REGLAS CRÍTICAS PARA URUGUAY:
 VERIFICACIÓN FINAL antes de responder:
 - ¿neto + ivaTotal ≈ total? (tolerancia: diferencia menor a 1 unidad monetaria)
 - ¿items array tiene al menos 1 elemento?
-- ¿RUT tiene formato correcto con puntos y guión?
+- ¿El RUT son los 12 dígitos del EMISOR, sin puntos ni guion, y no el del comprador?
+- ¿El proveedor es un nombre de empresa y no una dirección?
 - ¿fecha está en formato YYYY-MM-DD?`;
 
 interface ValidationResult {
@@ -168,15 +181,45 @@ function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+const MONEY_FIELDS = ['neto', 'iva10', 'iva22', 'ivaTotal', 'total'] as const;
+const ITEM_FIELDS = ['cantidad', 'precioUnitario', 'descuento', 'impuesto', 'subtotal', 'totalItem'] as const;
+
+// Aunque el prompt pide punto decimal, en una foto de un papel uruguayo el modelo a
+// veces copia el importe tal como está impreso ("1.445,00"). Guardado como texto no
+// suma en ningún lado, así que se normaliza acá, una sola vez, apenas entra.
+function normalizeNumbers(data: Record<string, unknown>): void {
+  for (const field of MONEY_FIELDS) {
+    if (typeof data[field] === 'string') {
+      const n = toNumber(data[field]);
+      if (n !== undefined) data[field] = n;
+    }
+  }
+  if (Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      for (const field of ITEM_FIELDS) {
+        if (typeof row[field] === 'string') {
+          const n = toNumber(row[field]);
+          if (n !== undefined) row[field] = n;
+        }
+      }
+    }
+  }
+}
+
 function parseResponse(text: string): Partial<ExtractedInvoice> {
   const clean = text.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+  let parsed: Record<string, unknown>;
   try {
-    return JSON.parse(clean);
+    parsed = JSON.parse(clean);
   } catch {
     const match = clean.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('Gemini no devolvió JSON válido');
+    if (!match) throw new Error('Gemini no devolvió JSON válido');
+    parsed = JSON.parse(match[0]);
   }
+  normalizeNumbers(parsed);
+  return parsed as Partial<ExtractedInvoice>;
 }
 
 async function callGemini(parts: Part[]): Promise<string> {
