@@ -157,13 +157,15 @@ export default function SettingsPage() {
     if (!user) return;
     setSaving(true);
     setError('');
-    const { error: err } = await supabase.from('profiles').upsert({
-      id: user.id,
+    // update y no upsert: un upsert necesita permiso de INSERT sobre la tabla, y ese
+    // permiso es justamente el que le sacamos al cliente para que no pueda crearse una
+    // fila con el plan o el estado de suscripción que quiera. El perfil ya existe acá.
+    const { error: err } = await supabase.from('profiles').update({
       nombre: profile.nombre,
       empresa: profile.empresa,
       rut: profile.rut || null,
       telefono: profile.telefono || null,
-    });
+    }).eq('id', user.id);
     if (err) setError('Error al guardar. Intentá de nuevo.');
     else { setSuccess('Cambios guardados'); setTimeout(() => setSuccess(''), 3000); }
     setSaving(false);
