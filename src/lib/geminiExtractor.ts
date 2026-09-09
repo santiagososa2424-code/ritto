@@ -92,8 +92,16 @@ interface ValidationResult {
 // entrar a la planilla con el nombre de una avenida.
 const STREET_WORD = /^(calle|av|avda|avenida|bv|bvar|bulevar|blvd|br|rambla|ruta|rte|camino|cno|pasaje|psje|peatonal|plaza|km|esq|esquina)\b/;
 
-function looksLikeAddress(name: string): boolean {
-  const n = name.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// El JSON del modelo no tiene garantía de tipos: un campo declarado como texto puede
+// volver como número, null o incluso un objeto. Llamarle .trim() a eso lanza un
+// TypeError que sube hasta el handler y termina en un error genérico, sin que el
+// problema real haya sido el comprobante.
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
+function looksLikeAddress(value: unknown): boolean {
+  const n = asText(value).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (!n) return false;
   if (STREET_WORD.test(n)) return true;
   // "Mercedes 1234": un nombre que termina en un número de puerta suele ser la
@@ -105,13 +113,16 @@ function looksLikeAddress(name: string): boolean {
 function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
   const errors: string[] = [];
 
-  if (!data.items || data.items.length === 0) {
+  // Por la misma razón: si el modelo manda items como objeto en vez de array, todo lo
+  // que recorra esa lista después falla.
+  if (!Array.isArray(data.items) || data.items.length === 0) {
     errors.push('items vacío');
   }
 
-  if (data.proveedor && looksLikeAddress(data.proveedor)) {
+  const proveedor = asText(data.proveedor).trim();
+  if (proveedor && looksLikeAddress(proveedor)) {
     errors.push(
-      `"${data.proveedor}" parece una dirección, no un proveedor: usá el nombre fantasía o la razón social del emisor, nunca su calle`,
+      `"${proveedor}" parece una dirección, no un proveedor: usá el nombre fantasía o la razón social del emisor, nunca su calle`,
     );
   }
 
@@ -128,17 +139,19 @@ function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
     }
   }
 
-  if (data.rut && data.rut.trim() !== '') {
+  const rut = asText(data.rut).trim();
+  if (rut) {
     const rutPattern = /^\d{1,2}\.\d{3}\.\d{3}-\d$/;
-    if (!rutPattern.test(data.rut.trim())) {
-      errors.push(`RUT con formato incorrecto: "${data.rut}"`);
+    if (!rutPattern.test(rut)) {
+      errors.push(`RUT con formato incorrecto: "${rut}"`);
     }
   }
 
-  if (data.fecha && data.fecha.trim() !== '') {
+  const fecha = asText(data.fecha).trim();
+  if (fecha) {
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    if (!datePattern.test(data.fecha.trim())) {
-      errors.push(`fecha con formato incorrecto: "${data.fecha}"`);
+    if (!datePattern.test(fecha)) {
+      errors.push(`fecha con formato incorrecto: "${fecha}"`);
     }
   }
 
