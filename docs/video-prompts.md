@@ -108,19 +108,20 @@ Van en inglés: estos modelos rinden bastante peor en español.
 
 ---
 
-## Imágenes para el fondo del hero
+## El fondo del hero
 
-El fondo animado de la landing ya funciona sin archivos: son orbes de gradiente en
-CSS. Si querés fotos rotando, generalas con estos prompts, guardalas en
-`public/hero/` y listalas en `BG_IMAGES` dentro de `src/pages/index.tsx`.
+No lleva imágenes. Son cintas horizontales con la marca repetida y separada por
+puntos, cada palabra en una tipografía distinta, corriendo en sentidos opuestos
+sobre unos orbes verdes difuminados. Todo en CSS: cero archivos, cero descargas.
 
-> Minimal overhead flat lay of neatly organized paper documents on a soft
-> off-white surface, subtle emerald green accents, lots of empty space, bright
-> even lighting, muted premium color palette, photographic.
+Las tipografías son las dos de la marca —DM Serif Display y Figtree— más familias
+que ya trae cualquier sistema (Times, Courier, Trebuchet, Verdana, Palatino,
+Georgia), así que la variedad no cuesta una sola petición de red.
 
-> Soft focus abstract background of pale green and white organic shapes, very low
-> contrast, calm, plenty of negative space, no objects, no text.
+Se ajusta desde dos listas en `src/pages/index.tsx`: `FACES` son las tipografías
+que rotan palabra a palabra, y `BANDS` define cada cinta —altura, tamaño,
+opacidad, dirección, velocidad y desenfoque—. Agregar o sacar una cinta es
+agregar o sacar una línea de `BANDS`.
 
-Tres reglas para que no arruinen el hero: **muy bajo contraste** (van detrás del
-título), **horizontales y con el centro despejado**, y **livianas** — a `.webp` y
-bajo 300 KB cada una, porque el hero es lo primero que carga.
+En pantallas chicas todo se achica desde una sola variable (`--scale`), y con
+`prefers-reduced-motion` las cintas quedan quietas.

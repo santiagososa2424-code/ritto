@@ -10,10 +10,42 @@ export default function LandingPage() {
   const [playing, setPlaying] = useState(true);
   const [phrase, setPhrase] = useState(0);
 
-  // Imágenes de fondo del hero. Vacío = solo los orbes CSS (estado actual).
-  // Al poner archivos en public/hero/ y listarlos acá, arrancan a rotar solos
-  // en crossfade detrás del texto. Ej: ['/hero/1.webp', '/hero/2.webp'].
-  const BG_IMAGES: string[] = [];
+  // El fondo del hero: la marca escrita muchas veces, en tipografías distintas,
+  // derivando lento sobre los orbes verdes. Todo en verde y con muy poca opacidad,
+  // porque va detrás del título y tiene que acompañar, no competir.
+  // Las tipografías son las dos de la marca más familias que ya trae el sistema:
+  // dan variedad real sin sumar una sola descarga.
+  // Cada palabra toma una tipografía distinta de esta lista. Son las dos de la marca
+  // más familias que ya trae el sistema: variedad real sin sumar una sola descarga.
+  const FACES = [
+    { font: "'DM Serif Display', Georgia, serif", italic: false, weight: 400 },
+    { font: "'Figtree', system-ui, sans-serif", italic: false, weight: 600 },
+    { font: "'Times New Roman', Times, serif", italic: true, weight: 400 },
+    { font: "'Courier New', monospace", italic: false, weight: 400 },
+    { font: "'Trebuchet MS', sans-serif", italic: false, weight: 400 },
+    { font: "'DM Serif Display', Georgia, serif", italic: true, weight: 400 },
+    { font: 'Verdana, Geneva, sans-serif', italic: false, weight: 400 },
+    { font: "'Palatino Linotype', Palatino, Georgia, serif", italic: false, weight: 400 },
+    { font: "'Figtree', system-ui, sans-serif", italic: false, weight: 300 },
+    { font: 'Georgia, serif', italic: true, weight: 400 },
+  ];
+
+  // Cintas horizontales que cruzan el hero. Las de arriba y abajo van más marcadas y
+  // las del medio más apagadas y borrosas, para que el título respire; y como corren
+  // en sentidos opuestos y a velocidades distintas, el conjunto nunca se repite igual.
+  const BANDS = [
+    { top: 3,  size: 52,  opacity: 0.085, dir: 'l', dur: 95,  blur: 0 },
+    { top: 15, size: 30,  opacity: 0.075, dir: 'r', dur: 130, blur: 0 },
+    { top: 29, size: 104, opacity: 0.04,  dir: 'l', dur: 175, blur: 2 },
+    { top: 46, size: 38,  opacity: 0.055, dir: 'r', dur: 115, blur: 0.5 },
+    { top: 60, size: 74,  opacity: 0.05,  dir: 'l', dur: 150, blur: 1.5 },
+    { top: 76, size: 28,  opacity: 0.08,  dir: 'r', dur: 105, blur: 0 },
+    { top: 87, size: 58,  opacity: 0.065, dir: 'l', dur: 125, blur: 0 },
+  ];
+
+  // Se repite lo justo para que media cinta tape la pantalla más ancha: la animación
+  // corre hasta el 50% y vuelve al inicio sin que se note el salto.
+  const wordsFor = (size: number) => Math.min(30, Math.max(8, Math.ceil(3000 / (size * 2.4))));
 
   // Frases que rotan sobre el fondo animado del hero.
   const PHRASES = [
@@ -88,15 +120,25 @@ export default function LandingPage() {
         @keyframes drift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-45px) scale(1.15); } }
         .hero > * { position: relative; z-index: 1; }
 
-        /* Carrusel de imágenes de fondo (solo si BG_IMAGES tiene items) */
-        .bg-slide {
-          position: absolute; inset: 0; background-size: cover; background-position: center;
-          opacity: 0; transition: opacity 1.4s ease, transform 9s linear;
-          transform: scale(1.06);
+        /* Cintas horizontales con la marca repetida, cada palabra en otra tipografía */
+        .hero-bg { --scale: 1px; }
+        .band {
+          position: absolute; left: 0; right: 0;
+          display: flex; overflow: hidden;
+          color: var(--green); user-select: none; line-height: 1;
+          font-size: calc(var(--s) * var(--scale));
         }
-        .bg-slide.on { opacity: 1; transform: scale(1.14); }
-        /* Velo para que el texto del hero mantenga contraste sobre cualquier foto */
-        .bg-veil { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(245,245,247,0.86), rgba(245,245,247,0.94)); }
+        .band-track {
+          display: flex; width: max-content; will-change: transform;
+          animation-name: bandLeft; animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+        .band-rtl .band-track { animation-name: bandRight; }
+        .band-word { display: inline-flex; align-items: center; white-space: nowrap; }
+        /* El punto separador, más tenue que la palabra para que no compita con ella */
+        .band-dot { font-style: normal; opacity: 0.55; margin: 0 0.5em; }
+        @keyframes bandLeft  { from { transform: translateX(0); }       to { transform: translateX(-50%); } }
+        @keyframes bandRight { from { transform: translateX(-50%); }    to { transform: translateX(0); } }
 
         /* Rotador de frases */
         .phrase-rail { height: 26px; margin-top: 30px; position: relative; }
@@ -119,8 +161,14 @@ export default function LandingPage() {
         .demo-wrap:hover .demo-window { transform: translateY(-4px); box-shadow: 0 12px 60px rgba(0,0,0,0.11); }
         .demo-url { flex: 1; text-align: center; font-size: 12px; color: var(--gray); background: var(--white); border-radius: 6px; padding: 3px 10px; margin-left: 8px; }
 
+        /* En pantallas chicas las palabras grandes taparían todo: se achica el campo
+           entero desde una sola variable, en vez de tocar cada tamaño. */
+        @media (max-width: 900px) { .hero-bg { --scale: 0.62px; } }
+        @media (max-width: 560px) { .hero-bg { --scale: 0.45px; } }
+
         @media (prefers-reduced-motion: reduce) {
           .orb { animation: none; }
+          .band-track { animation: none; }
           .phrase { transition: none; }
           .demo-wrap:hover .demo-window { transform: none; }
         }
@@ -205,14 +253,34 @@ export default function LandingPage() {
           <div className="orb orb-1" />
           <div className="orb orb-2" />
           <div className="orb orb-3" />
-          {BG_IMAGES.map((src, i) => (
-            <div
-              key={src}
-              className={`bg-slide${i === phrase % BG_IMAGES.length ? ' on' : ''}`}
-              style={{ backgroundImage: `url(${src})` }}
-            />
-          ))}
-          {BG_IMAGES.length > 0 && <div className="bg-veil" />}
+          {BANDS.map((band, bi) => {
+            const count = wordsFor(band.size);
+            // El contenido va dos veces seguidas: la animación desplaza media cinta,
+            // así que cuando termina, la segunda copia quedó exactamente donde estaba
+            // la primera y el ciclo reinicia sin corte visible.
+            const words = Array.from({ length: count * 2 }, (_, i) => FACES[(i + bi * 3) % FACES.length]);
+            return (
+              <div
+                key={bi}
+                className={`band${band.dir === 'r' ? ' band-rtl' : ''}`}
+                style={{
+                  top: `${band.top}%`,
+                  ['--s' as string]: band.size,
+                  opacity: band.opacity,
+                  filter: band.blur ? `blur(${band.blur}px)` : undefined,
+                }}
+              >
+                <div className="band-track" style={{ animationDuration: `${band.dur}s` }}>
+                  {words.map((face, wi) => (
+                    <span key={wi} className="band-word" style={{ fontFamily: face.font, fontStyle: face.italic ? 'italic' : 'normal', fontWeight: face.weight }}>
+                      ritto
+                      <i className="band-dot">·</i>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <section className="hero">
           <div className="badge"><span className="badge-dot" />Hecho para empresas uruguayas</div>
