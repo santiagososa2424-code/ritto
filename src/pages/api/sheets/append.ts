@@ -595,17 +595,68 @@ function fallbackMapInvoice(
   return result;
 }
 
-// ¿Hay una pestaña que se llame como este proveedor? Devuelve null cuando no, y eso
-// es información para el usuario: significa que su factura va a terminar en una
-// pestaña general en lugar de la del proveedor.
-function matchTabByProvider(tabs: string[], providerName: string): string | null {
-  const np = normStr(providerName);
-  if (!np) return null;
-  for (const tab of tabs) {
-    const nt = normStr(tab);
-    if (nt && (nt === np || np.includes(nt) || nt.includes(np))) return tab;
+// Formas jurídicas y palabras de unión: nadie bautiza la pestaña "Loazzolo S.A.",
+// le pone "Loazzolo". Comparar el nombre completo no engancha nunca.
+const LEGAL_FORM = new Set([
+  'sa', 'srl', 'sas', 'ltda', 'ltd', 'limitada', 'sociedad', 'anonima', 'saic', 'sca',
+  'cia', 'compania', 'hnos', 'hermanos', 'e', 'y', 'de', 'del', 'la', 'el', 'los', 'las',
+  'uy', 'uruguay', 'unipersonal',
+]);
+
+// Palabras de rubro: dos proveedores distintos las comparten, así que compartir SOLO
+// una de estas no alcanza para decir que la pestaña es la de este proveedor.
+const GENERIC_WORD = new Set([
+  'distribuidora', 'distribuciones', 'distribucion', 'comercial', 'importadora',
+  'exportadora', 'empresa', 'servicios', 'servicio', 'agencia', 'deposito', 'barraca',
+  'supermercado', 'almacen', 'mercado', 'grupo', 'industrias', 'industria', 'productos',
+  'casa', 'centro', 'tienda', 'ferreteria', 'farmacia',
+]);
+
+function significantTokens(name: string): string[] {
+  return normStr(name).split(' ').filter((t) => t.length > 1 && !LEGAL_FORM.has(t));
+}
+
+// Puntúa cuánto se parecen. Tolera que falte la forma jurídica, los puntos y los
+// acentos, y aguanta abreviaturas ("Multiv." para "MULTIVENTAS distribuciones").
+function tabScore(tabName: string, providerName: string): number {
+  const prov = significantTokens(providerName);
+  const tab = significantTokens(tabName);
+  if (prov.length === 0 || tab.length === 0) return 0;
+
+  const provJoined = prov.join(' ');
+  const tabJoined = tab.join(' ');
+  if (provJoined === tabJoined) return 100;
+  if (provJoined.includes(tabJoined) || tabJoined.includes(provJoined)) return 80;
+
+  // Sin espacios, porque no siempre se separan igual: "MultiVentas" y "Multi Ventas".
+  const provTight = provJoined.replace(/ /g, '');
+  const tabTight = tabJoined.replace(/ /g, '');
+  if (provTight === tabTight) return 95;
+  if (tabTight.length >= 4 && (provTight.includes(tabTight) || tabTight.includes(provTight))) return 75;
+
+  let best = 0;
+  for (const a of prov) {
+    for (const b of tab) {
+      const generic = GENERIC_WORD.has(a) || GENERIC_WORD.has(b);
+      if (a === b) best = Math.max(best, generic ? 30 : 60 + Math.min(a.length, 12));
+      else if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) {
+        best = Math.max(best, generic ? 25 : 40 + Math.min(a.length, b.length, 12));
+      }
+    }
   }
-  return null;
+  return best;
+}
+
+// Devuelve la pestaña que mejor puntúa, o null si ninguna llega al mínimo. Que sea
+// null es información para el usuario: su factura no tiene dónde ir.
+function matchTabByProvider(tabs: string[], providerName: string): string | null {
+  let bestTab: string | null = null;
+  let bestScore = 0;
+  for (const tab of tabs) {
+    const score = tabScore(tab, providerName);
+    if (score > bestScore) { bestScore = score; bestTab = tab; }
+  }
+  return bestScore >= 40 ? bestTab : null;
 }
 
 function findBestTab(tabs: string[], providerName?: string): string {
@@ -663,6 +714,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!existingTabs.length) {
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
     }
+
+    // Bloquear la exportación solo tiene sentido si la planilla está organizada por
+    // proveedor. Si ninguna factura del lote encuentra su pestaña, lo más probable es
+    // que esté organizada de otra forma —por mes, por rubro, una sola hoja— y entonces
+    // no exportar nada sería dejar al usuario sin producto.
+    const planillaPorProveedor = invoices.some((inv) => {
+      const p = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
+      return p ? matchTabByProvider(existingTabs, p) !== null : false;
+    });
 
     let totalRows = 0;
     const writtenTabs: string[] = [];
@@ -740,7 +800,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // igual. Se la deja sin exportar para que pueda reintentar después de arreglar el
       // nombre en la planilla. La excepción es una planilla de una sola pestaña: ahí no
       // hay ninguna decisión que tomar y ese es el destino.
-      if (proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
+      if (planillaPorProveedor && proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
         if (!sinPestana.includes(proveedorFactura)) sinPestana.push(proveedorFactura);
         debugEntry.appendError = 'sin_pestana_del_proveedor';
         invoiceDebug.push(debugEntry);
