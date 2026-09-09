@@ -50,37 +50,89 @@ interface SheetStructure {
   tabWritableHeaders: Record<string, string[]>;
   tabSampleRows: Record<string, string[][]>;
   tabGidMap: Record<string, number>;
+  tabHeaderRow: Record<string, number>;
+}
+
+const EMPTY_STRUCTURE: SheetStructure = {
+  tabs: [], tabHeaderMap: {}, tabWritableHeaders: {}, tabSampleRows: {}, tabGidMap: {}, tabHeaderRow: {},
+};
+
+// Una columna sin título no se puede descartar: si se la saca de la lista, todas las
+// que vienen después se corren un lugar y la fila entera queda desalineada. Se le pone
+// un nombre interno para que ocupe su casillero, y como no entra en las escribibles,
+// nunca se le escribe nada.
+const GHOST_COLUMN = '__ritto_col_';
+const isGhost = (h: string) => h.startsWith(GHOST_COLUMN);
+
+const HEADER_HINT = /fecha|rut|monto|total|proveedor|factura|costo|comprobante|importe|neto|iva|serie|documento|precio|cliente|empresa|descripcion/;
+
+// Mucha gente arranca la planilla con un título o un logo y recién pone los
+// encabezados en la fila 3 o 4. Leyendo siempre la fila 1 se tomaba esa decoración
+// como nombres de columna. Se busca entre las primeras filas la que más se parece a
+// un encabezado: por palabras típicas de una planilla contable y, si no hay ninguna
+// —porque el usuario les puso nombres propios—, por cantidad de celdas con texto.
+function findHeaderRow(rows: string[][]): number {
+  let bestRow = 1;
+  let bestScore = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] ?? []).map((c) => (c == null ? '' : String(c).trim()));
+    const filled = cells.filter(Boolean).length;
+    if (filled < 2) continue;
+    const hints = cells.filter((c) => HEADER_HINT.test(normStr(c))).length;
+    const score = filled + hints * 3;
+    if (score > bestScore) { bestScore = score; bestRow = i + 1; }
+  }
+  return bestRow;
+}
+
+function namedHeaders(raw: string[]): string[] {
+  return raw.map((h, i) => {
+    const text = h == null ? '' : String(h).trim();
+    return text || `${GHOST_COLUMN}${i}`;
+  });
+}
+
+// La detección miraba una sola fila. Si esa estaba vacía y las fórmulas empezaban más
+// abajo, la columna pasaba por escribible y se pisaba el cálculo del usuario.
+function formulaColumns(headers: string[], formulaRows: string[][]): Set<string> {
+  const found = new Set<string>();
+  for (const row of formulaRows) {
+    for (let idx = 0; idx < headers.length; idx++) {
+      const cell = row?.[idx];
+      if (typeof cell === 'string' && cell.startsWith('=')) found.add(headers[idx]);
+    }
+  }
+  return found;
 }
 
 async function fetchTabHeaders(
   sheetId: string,
   tab: string,
   accessToken: string,
-): Promise<{ headers: string[]; writableHeaders: string[] } | null> {
-  const [row1Res, row2Res] = await Promise.all([
-    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A1:ZZ1')}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }),
-    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A2:ZZ2')}?valueRenderOption=FORMULA`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }),
-  ]);
-
-  if (!row1Res.ok) return null;
-  const row1Data = await row1Res.json();
-  const headers: string[] = (row1Data.values?.[0] ?? []).filter(
-    (h: unknown) => typeof h === 'string' && (h as string).trim(),
+): Promise<{ headers: string[]; writableHeaders: string[]; headerRow: number } | null> {
+  const headRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, 'A1:ZZ10')}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (headers.length === 0) return null;
+  if (!headRes.ok) return null;
+  const rows: string[][] = (await headRes.json()).values ?? [];
+  if (rows.length === 0) return null;
 
-  const row2Values: string[] = row2Res.ok ? ((await row2Res.json()).values?.[0] ?? []) : [];
-  const formulaCols = new Set<string>(
-    headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
+  const headerRow = findHeaderRow(rows);
+  const headers = namedHeaders(rows[headerRow - 1] ?? []);
+  if (headers.length === 0 || headers.every(isGhost)) return null;
+
+  const formulaRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tab, `A${headerRow + 1}:ZZ${headerRow + 20}`)}?valueRenderOption=FORMULA`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   );
+  const formulaRows: string[][] = formulaRes.ok ? ((await formulaRes.json()).values ?? []) : [];
+  const withFormula = formulaColumns(headers, formulaRows);
 
   return {
     headers,
-    writableHeaders: headers.filter((h) => !formulaCols.has(h)),
+    writableHeaders: headers.filter((h) => !withFormula.has(h) && !isGhost(h)),
+    headerRow,
   };
 }
 
@@ -89,7 +141,7 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!metaRes.ok) return { tabs: [], tabHeaderMap: {}, tabWritableHeaders: {}, tabSampleRows: {}, tabGidMap: {} };
+  if (!metaRes.ok) return EMPTY_STRUCTURE;
   const meta = await metaRes.json();
   const sheetMetas: Array<{ properties: { title: string; sheetId: number } }> = meta.sheets ?? [];
   const tabs: string[] = sheetMetas.map((s) => s.properties.title);
@@ -99,66 +151,68 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
   const tabHeaderMap: Record<string, string[]> = {};
   const tabWritableHeaders: Record<string, string[]> = {};
   const tabSampleRows: Record<string, string[][]> = {};
+  const tabHeaderRow: Record<string, number> = {};
 
   const tabs50 = tabs.slice(0, 50);
-  if (tabs50.length === 0) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
+  const base = { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap, tabHeaderRow };
+  if (tabs50.length === 0) return base;
 
-  // 3 batchGet calls: row 1 (headers), row 2 (formula detection), rows 3-6 (data examples)
-  const batchRow1Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
-  const batchRow2Url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
-  const batchSampleUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
-  batchRow2Url.searchParams.set('valueRenderOption', 'FORMULA');
+  const quote = (tab: string) => `'${tab.replace(/'/g, "''")}'`;
 
-  for (const tab of tabs50) {
-    const safeTab = `'${tab.replace(/'/g, "''")}'`;
-    batchRow1Url.searchParams.append('ranges', `${safeTab}!A1:ZZ1`);
-    batchRow2Url.searchParams.append('ranges', `${safeTab}!A2:ZZ2`);
-    batchSampleUrl.searchParams.append('ranges', `${safeTab}!A3:ZZ6`);
-  }
+  // Primera lectura: las diez filas de arriba de cada pestaña. De ahí sale dónde están
+  // los encabezados y, de paso, las filas de ejemplo que siguen — sin pedir nada extra.
+  const headUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
+  for (const tab of tabs50) headUrl.searchParams.append('ranges', `${quote(tab)}!A1:ZZ10`);
 
-  const [batchRow1Res, batchRow2Res, batchSampleRes] = await Promise.all([
-    fetch(batchRow1Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
-    fetch(batchRow2Url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
-    fetch(batchSampleUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }),
-  ]);
+  const headRes = await fetch(headUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!headRes.ok) return base;
+  const headRanges = ((await headRes.json()) as { valueRanges?: Array<{ values?: string[][] }> }).valueRanges ?? [];
 
-  if (!batchRow1Res.ok) return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
-
-  const batchRow1Data = await batchRow1Res.json() as { valueRanges?: Array<{ values?: string[][] }> };
-  const batchRow2Data = batchRow2Res.ok
-    ? await batchRow2Res.json() as { valueRanges?: Array<{ values?: string[][] }> }
-    : null;
-  const batchSampleData = batchSampleRes.ok
-    ? await batchSampleRes.json() as { valueRanges?: Array<{ values?: string[][] }> }
-    : null;
-
-  const row1Ranges = batchRow1Data.valueRanges ?? [];
-  const row2Ranges = batchRow2Data?.valueRanges ?? [];
-  const sampleRanges = batchSampleData?.valueRanges ?? [];
-
+  const layout: Array<{ tab: string; headers: string[]; headerRow: number }> = [];
   for (let i = 0; i < tabs50.length; i++) {
-    const tab = tabs50[i];
-    const headers: string[] = (row1Ranges[i]?.values?.[0] ?? []).filter(
-      (h: unknown) => typeof h === 'string' && (h as string).trim(),
-    );
-    if (headers.length === 0) continue;
+    const rows = headRanges[i]?.values ?? [];
+    if (rows.length === 0) continue;
+    const headerRow = findHeaderRow(rows);
+    const headers = namedHeaders(rows[headerRow - 1] ?? []);
+    if (headers.length === 0 || headers.every(isGhost)) continue;
 
-    const row2Values: string[] = row2Ranges[i]?.values?.[0] ?? [];
-    const formulaCols = new Set<string>(
-      headers.filter((_, idx) => typeof row2Values[idx] === 'string' && (row2Values[idx] as string).startsWith('=')),
-    );
+    layout.push({ tab: tabs50[i], headers, headerRow });
+    tabHeaderMap[tabs50[i]] = headers;
+    tabHeaderRow[tabs50[i]] = headerRow;
+    tabSampleRows[tabs50[i]] = rows.slice(headerRow, headerRow + 4);
+  }
+  if (layout.length === 0) return base;
 
-    tabHeaderMap[tab] = headers;
-    tabWritableHeaders[tab] = headers.filter((h) => !formulaCols.has(h));
-    tabSampleRows[tab] = (sampleRanges[i]?.values ?? []).slice(0, 4);
+  // Segunda lectura: veinte filas de datos por pestaña, pidiendo las fórmulas en vez de
+  // sus resultados. Se hace aparte porque el rango arranca donde termina el encabezado,
+  // que recién ahora sabemos y es distinto en cada pestaña.
+  const formulaUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet`);
+  formulaUrl.searchParams.set('valueRenderOption', 'FORMULA');
+  for (const { tab, headerRow } of layout) {
+    formulaUrl.searchParams.append('ranges', `${quote(tab)}!A${headerRow + 1}:ZZ${headerRow + 20}`);
   }
 
-  return { tabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap };
+  const formulaRes = await fetch(formulaUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  const formulaRanges = formulaRes.ok
+    ? ((await formulaRes.json()) as { valueRanges?: Array<{ values?: string[][] }> }).valueRanges ?? []
+    : [];
+
+  for (let i = 0; i < layout.length; i++) {
+    const { tab, headers } = layout[i];
+    const withFormula = formulaColumns(headers, formulaRanges[i]?.values ?? []);
+    tabWritableHeaders[tab] = headers.filter((h) => !withFormula.has(h) && !isGhost(h));
+  }
+
+  return base;
 }
 
 interface GeminiMapping {
   index: number;
   pestana_destino: string;
+  // El modelo tolera nombres abreviados que una comparación de texto no engancha
+  // ("Multiv." para "MULTIVENTAS distribuciones"). Que declare él si la pestaña es la
+  // del proveedor evita avisarle al usuario de un problema que no existe.
+  es_pestana_del_proveedor?: boolean;
   datos_fila: Record<string, string | number | null>;
 }
 
@@ -196,6 +250,10 @@ ${JSON.stringify(invoices.map((inv, i) => ({ index: i, ...inv })), null, 2)}
 REGLAS (en orden estricto de prioridad):
 
 1. SELECCIÓN DE PESTAÑA:
+   - Además marcá "es_pestana_del_proveedor": true solo si la pestaña elegida es la de
+     ESE proveedor (aunque esté abreviada: "Multiv." es la de "MULTIVENTAS
+     distribuciones"). Si la mandás a una pestaña general de gastos o a la primera
+     porque no había ninguna del proveedor, poné false.
    - Si el proveedor/emisor de la factura coincide (exacto o parcial, ignorando mayúsculas/acentos) con el nombre de una pestaña, usá ESA pestaña. Ej: "Loazzolo S.A." → "Loazzolo".
    - Si no hay coincidencia, elegí por tipo: compra/gasto → pestaña de gastos; venta → pestaña de ventas.
    - Si ninguna aplica, usá la primera pestaña disponible.
@@ -224,6 +282,7 @@ Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
   {
     "index": 0,
     "pestana_destino": "Nombre Exacto Pestaña",
+    "es_pestana_del_proveedor": true,
     "datos_fila": {
       "Nombre Exacto Columna": "valor"
     }
@@ -298,11 +357,12 @@ async function templateLastRow(
   tabName: string,
   formulaIdx: number[],
   accessToken: string,
+  headerRow: number,
 ): Promise<number> {
   if (formulaIdx.length === 0) return 0;
   const col = colLetter(formulaIdx[0]);
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${col}2:${col}`)}?valueRenderOption=FORMULA`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${col}${headerRow + 1}:${col}`)}?valueRenderOption=FORMULA`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) return 0;
@@ -310,7 +370,7 @@ async function templateLastRow(
   let last = 0;
   for (let i = 0; i < cells.length; i++) {
     const v = cells[i]?.[0];
-    if (typeof v === 'string' && v.startsWith('=')) last = i + 2;
+    if (typeof v === 'string' && v.startsWith('=')) last = i + headerRow + 1;
   }
   return last;
 }
@@ -324,6 +384,7 @@ async function appendRow(
   accessToken: string,
   tabGid: number | undefined,
   formulaIdx: number[],
+  headerRow: number,
 ): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean }> {
   // Measure occupancy on a column Ritto actually fills with a value. A column it
   // only ever blanks would read as empty forever and every export would land on
@@ -334,10 +395,10 @@ async function appendRow(
 
   const [colRes, lastTemplate] = await Promise.all([
     fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${checkCol}:${checkCol}`)}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${checkCol}${headerRow}:${checkCol}`)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     ),
-    templateLastRow(sheetId, tabName, formulaIdx, accessToken),
+    templateLastRow(sheetId, tabName, formulaIdx, accessToken, headerRow),
   ]);
 
   let used = 1;
@@ -350,7 +411,7 @@ async function appendRow(
     // counting to the end drops the invoice underneath all of it.
     for (let i = 1; i < cells.length; i++) {
       const cell = cells[i]?.[0];
-      if (cell == null || String(cell).trim() === '') { free = i + 1; break; }
+      if (cell == null || String(cell).trim() === '') { free = headerRow + i; break; }
     }
   }
 
@@ -360,7 +421,7 @@ async function appendRow(
   let grewTemplate = false;
   // Trailing blanks are omitted from the response, so a template that is only half
   // filled ends the read early: past the last value, the next row is free too.
-  const firstFree = free > 0 ? free : Math.max(used + 1, 2);
+  const firstFree = free > 0 ? free : Math.max(used + headerRow, headerRow + 1);
 
   if (lastTemplate === 0 || firstFree <= lastTemplate) {
     nextRow = firstFree;                  // a real gap inside the table
@@ -369,10 +430,10 @@ async function appendRow(
     // everything below one down. Inserting after the last row would leave the
     // invoice outside a total that sums up to it: Sheets only stretches a range
     // when the new row falls within it, never when it lands just past the end.
-    nextRow = Math.max(lastTemplate, 3);
+    nextRow = Math.max(lastTemplate, headerRow + 2);
     grewTemplate = true;
   } else {
-    nextRow = Math.max(used + 1, 2);      // no formulas here, nothing to stay inside of
+    nextRow = Math.max(used + headerRow, headerRow + 1); // no formulas here, nothing to stay inside of
   }
 
   if (grewTemplate && tabGid != null) {
@@ -403,7 +464,7 @@ async function appendRow(
       // Couldn't make room; land past the data rather than overwrite the last line
       // of the user's template.
       grewTemplate = false;
-      nextRow = Math.max(used + 1, lastTemplate + 1, 2);
+      nextRow = Math.max(used + headerRow, lastTemplate + 1, headerRow + 1);
     }
   }
 
@@ -597,7 +658,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const sheetId = extractSheetId(profile.google_sheet_id as string);
-    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap } = await fetchSheetStructure(sheetId, accessToken);
+    const { tabs: existingTabs, tabHeaderMap, tabWritableHeaders, tabSampleRows, tabGidMap, tabHeaderRow } = await fetchSheetStructure(sheetId, accessToken);
 
     if (!existingTabs.length) {
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
@@ -606,7 +667,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
     const exportedIds: string[] = [];
-    const sinPestana: Array<{ proveedor: string; pestanaUsada: string }> = [];
+    const sinPestana: string[] = [];
 
     const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows);
     const geminiMappings = geminiResult.mappings;
@@ -630,15 +691,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Se calcula aparte de la elección de pestaña: no cambia dónde se escribe, sirve
       // para poder avisar cuando el proveedor no tiene pestaña propia en la planilla.
       const proveedorFactura = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
-      const pestanaDelProveedor = proveedorFactura
-        ? matchTabByProvider(existingTabs, proveedorFactura)
-        : null;
+      let tieneSuPestana = proveedorFactura
+        ? matchTabByProvider(existingTabs, proveedorFactura) !== null
+        : true;
 
       if (useGemini) {
         const gm = geminiMappings.find((m) => m.index === i) ?? geminiMappings[i];
         const geminiTab = gm?.pestana_destino ?? '';
         tabName = (geminiTab && resolveTab(geminiTab, existingTabs)) || findBestTab(existingTabs) || FALLBACK_TAB;
         datosFila = gm?.datos_fila ?? {};
+        // El modelo ve la planilla completa y reconoce abreviaturas que la comparación
+        // de texto no engancha, así que su respuesta manda cuando dice que sí.
+        if (gm?.es_pestana_del_proveedor === true) tieneSuPestana = true;
+        else if (gm?.es_pestana_del_proveedor === false) tieneSuPestana = false;
       } else {
         const provider = typeof inv.proveedor === 'string' ? inv.proveedor : undefined;
         tabName = findBestTab(existingTabs, provider) || FALLBACK_TAB;
@@ -651,6 +716,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (result) {
           tabHeaderMap[tabName] = result.headers;
           tabWritableHeaders[tabName] = result.writableHeaders;
+          tabHeaderRow[tabName] = result.headerRow;
         }
       }
 
@@ -665,6 +731,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       if (!tabHeaders || tabHeaders.length === 0) {
+        invoiceDebug.push(debugEntry);
+        continue;
+      }
+
+      // Sin pestaña del proveedor no se escribe. Antes la factura caía en una pestaña
+      // general, que no es donde el usuario la busca, y quedaba marcada como exportada
+      // igual. Se la deja sin exportar para que pueda reintentar después de arreglar el
+      // nombre en la planilla. La excepción es una planilla de una sola pestaña: ahí no
+      // hay ninguna decisión que tomar y ese es el destino.
+      if (proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
+        if (!sinPestana.includes(proveedorFactura)) sinPestana.push(proveedorFactura);
+        debugEntry.appendError = 'sin_pestana_del_proveedor';
         invoiceDebug.push(debugEntry);
         continue;
       }
@@ -723,7 +801,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       debugEntry.rowAttempted = true;
       const formulaIdx = tabHeaders.map((h, i) => (writable.has(h) ? -1 : i)).filter((i) => i >= 0);
-      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx);
+      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
 
@@ -731,9 +809,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalRows++;
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
         if (typeof inv.id === 'string') exportedIds.push(inv.id);
-        if (proveedorFactura && !pestanaDelProveedor && !sinPestana.some((u) => u.proveedor === proveedorFactura)) {
-          sinPestana.push({ proveedor: proveedorFactura, pestanaUsada: tabName });
-        }
       }
       invoiceDebug.push(debugEntry);
     }

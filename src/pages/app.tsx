@@ -73,7 +73,7 @@ export default function AppPage() {
   const [sheetsRange, setSheetsRange] = useState('');
   const [sheetsRowsAdded, setSheetsRowsAdded] = useState(0);
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
-  const [sheetsSinPestana, setSheetsSinPestana] = useState<{ proveedor: string; pestanaUsada: string }[]>([]);
+  const [sheetsSinPestana, setSheetsSinPestana] = useState<string[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -715,9 +715,10 @@ export default function AppPage() {
               </button>
             </div>
             {sheetsStatus === 'ok' && (
-              <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', color: '#166534', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: sheetsRowsAdded > 0 ? '#f0fdf4' : '#fffbeb', color: sheetsRowsAdded > 0 ? '#166534' : '#78350f', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sheetsRowsAdded > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  ✓ {sheetsRowsAdded > 0 ? `${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'}` : 'Datos enviados'} a tu planilla.{' '}
+                  ✓ {`${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'}`} a tu planilla.{' '}
                   <a
                     href={sheetsRedirectUrl || (() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
                     target="_blank"
@@ -727,28 +728,36 @@ export default function AppPage() {
                     {sheetsRedirectUrl ? 'Abrir en la pestaña correcta →' : 'Abrir planilla →'}
                   </a>
                 </div>
-                {sheetsTabs.length > 0 && (
+                )}
+                {sheetsRowsAdded > 0 && sheetsTabs.length > 0 && (
                   <div style={{ fontSize: 12, color: '#4b7a5e', fontWeight: 400 }}>
                     {sheetsTabs.length === 1 ? 'Pestaña:' : 'Pestañas:'} {sheetsTabs.join(', ')}
                   </div>
                 )}
                 {sheetsSinPestana.length > 0 && (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', color: '#78350f', fontSize: 12, lineHeight: 1.5 }}>
-                    <strong>No encontramos la pestaña de {sheetsSinPestana.length === 1 ? 'este proveedor' : 'estos proveedores'}:</strong>
-                    <ul style={{ margin: '6px 0 6px 16px', padding: 0 }}>
-                      {sheetsSinPestana.map((s) => (
-                        <li key={s.proveedor} style={{ marginBottom: 2 }}>
-                          <strong>{s.proveedor}</strong> — se guardó en «{s.pestanaUsada}»
-                        </li>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', color: '#78350f', fontSize: 12, lineHeight: 1.55 }}>
+                    <strong>
+                      {sheetsSinPestana.length === 1
+                        ? 'La pestaña de tu Google Sheets no coincide con el proveedor'
+                        : 'Hay pestañas de tu Google Sheets que no coinciden con el proveedor'}
+                    </strong>
+                    <div style={{ margin: '6px 0' }}>
+                      No encontramos una pestaña para {sheetsSinPestana.length === 1 ? '' : 'estos proveedores'}
+                      {sheetsSinPestana.map((p, i) => (
+                        <span key={p}>
+                          {i > 0 ? ', ' : ' '}<strong>«{p}»</strong>
+                        </span>
                       ))}
-                    </ul>
-                    Revisá en tu Google Sheets que el nombre de la pestaña esté escrito igual que en la factura.
-                    Si no coincide, movés la fila a mano y renombrás la pestaña para que la próxima vaya sola.
+                      {sheetsSinPestana.length === 1 ? '.' : '.'} Esas facturas no se exportaron y siguen en tu lista.
+                    </div>
+                    Creá la pestaña en tu planilla con el nombre <strong>tal cual aparece en la factura</strong> y volvé a exportar.
                   </div>
                 )}
+                {sheetsRowsAdded > 0 && (
                 <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400, lineHeight: 1.4 }}>
                   Ritto escribe los datos del comprobante (N°, fecha, importes). Las columnas con estados, fórmulas o deudas quedan tal como están.
                 </div>
+                )}
               </div>
             )}
             {sheetsError && (
