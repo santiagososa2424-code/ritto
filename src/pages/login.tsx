@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
+import HeroBackground from '../components/HeroBackground';
 
 type Mode = 'login' | 'signup';
 type Plan = 'pro' | 'pyme' | 'empresa';
@@ -124,7 +125,8 @@ export default function LoginPage() {
           --white: #ffffff; --red: #dc2626;
         }
         body { font-family: 'Figtree', sans-serif; background: var(--bg); color: var(--dark); }
-        .page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; }
+        .page { position: relative; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; overflow: hidden; }
+        .page > *:not(.rb) { position: relative; z-index: 1; }
         .logo { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--green); margin-bottom: 28px; cursor: pointer; }
         .card { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 420px; }
         .card-title { font-family: 'DM Serif Display', serif; font-size: 22px; margin-bottom: 4px; }
@@ -186,6 +188,7 @@ export default function LoginPage() {
       `}</style>
 
       <div className="page">
+        <HeroBackground soft />
         <div className="logo" onClick={() => router.push('/')}>ritto</div>
 
         {registered && (
