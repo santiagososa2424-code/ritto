@@ -14,12 +14,15 @@ export const config = { api: { bodyParser: false }, maxDuration: 60 };
 const EXTRACTION_TIMEOUT_MS = 50_000;
 
 function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
-  return Promise.race([
-    work,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`timeout: ${label}`)), EXTRACTION_TIMEOUT_MS),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout>;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timeout: ${label}`)), EXTRACTION_TIMEOUT_MS);
+  });
+  // Sin el clearTimeout, cuando la extracción termina a tiempo el temporizador
+  // igual salta después y rechaza una promesa que ya nadie escucha. Node trata eso
+  // como unhandled rejection y puede tumbar el proceso, haciendo fallar pedidos
+  // que no tenían nada que ver.
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
 }
 
 function friendlyError(msg: string, type: 'pdf' | 'image' | 'other'): string {
@@ -107,8 +110,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ ...base, status: 'error', error: 'Tipo de archivo no soportado' });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('Error extrayendo:', msg);
+    console.error('Error extrayendo:', fileName, msg);
     const friendly = friendlyError(msg, isPDF ? 'pdf' : isImage ? 'image' : 'other');
-    return res.status(500).json({ ...base, status: 'error', error: friendly });
+    // 422 y no 500: que no hayamos podido leer un comprobante no es una falla del
+    // servidor. Devolviendo 500 cada documento ilegible aparecía en la consola como
+    // si algo se hubiera roto, y no se distinguía de un bug de verdad.
+    // `detail` no se muestra en pantalla, queda para inspeccionar en el navegador.
+    return res.status(422).json({ ...base, status: 'error', error: friendly, detail: msg.slice(0, 300) });
   }
 }
