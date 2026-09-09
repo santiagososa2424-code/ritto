@@ -73,6 +73,7 @@ export default function AppPage() {
   const [sheetsRange, setSheetsRange] = useState('');
   const [sheetsRowsAdded, setSheetsRowsAdded] = useState(0);
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
+  const [sheetsSinPestana, setSheetsSinPestana] = useState<{ proveedor: string; pestanaUsada: string }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -353,6 +354,7 @@ export default function AppPage() {
         setSheetsRange(data.updatedRange ?? '');
         setSheetsRowsAdded(data.rowsAdded ?? 0);
         setSheetsTabs(data.tabs ?? []);
+        setSheetsSinPestana(data.sinPestana ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
         // El servidor ya las marcó como exportadas y nos devuelve cuáles quedaron
@@ -375,7 +377,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsRedirectUrl(''); }, 10000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsRedirectUrl(''); }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -728,6 +730,20 @@ export default function AppPage() {
                 {sheetsTabs.length > 0 && (
                   <div style={{ fontSize: 12, color: '#4b7a5e', fontWeight: 400 }}>
                     {sheetsTabs.length === 1 ? 'Pestaña:' : 'Pestañas:'} {sheetsTabs.join(', ')}
+                  </div>
+                )}
+                {sheetsSinPestana.length > 0 && (
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', color: '#78350f', fontSize: 12, lineHeight: 1.5 }}>
+                    <strong>No encontramos la pestaña de {sheetsSinPestana.length === 1 ? 'este proveedor' : 'estos proveedores'}:</strong>
+                    <ul style={{ margin: '6px 0 6px 16px', padding: 0 }}>
+                      {sheetsSinPestana.map((s) => (
+                        <li key={s.proveedor} style={{ marginBottom: 2 }}>
+                          <strong>{s.proveedor}</strong> — se guardó en «{s.pestanaUsada}»
+                        </li>
+                      ))}
+                    </ul>
+                    Revisá en tu Google Sheets que el nombre de la pestaña esté escrito igual que en la factura.
+                    Si no coincide, movés la fila a mano y renombrás la pestaña para que la próxima vaya sola.
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: '#4b7a5e', fontWeight: 400, lineHeight: 1.4 }}>

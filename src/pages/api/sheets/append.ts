@@ -534,13 +534,23 @@ function fallbackMapInvoice(
   return result;
 }
 
+// ¿Hay una pestaña que se llame como este proveedor? Devuelve null cuando no, y eso
+// es información para el usuario: significa que su factura va a terminar en una
+// pestaña general en lugar de la del proveedor.
+function matchTabByProvider(tabs: string[], providerName: string): string | null {
+  const np = normStr(providerName);
+  if (!np) return null;
+  for (const tab of tabs) {
+    const nt = normStr(tab);
+    if (nt && (nt === np || np.includes(nt) || nt.includes(np))) return tab;
+  }
+  return null;
+}
+
 function findBestTab(tabs: string[], providerName?: string): string {
   if (providerName) {
-    const np = normStr(providerName);
-    for (const tab of tabs) {
-      const nt = normStr(tab);
-      if (nt && np && (nt === np || np.includes(nt) || nt.includes(np))) return tab;
-    }
+    const matched = matchTabByProvider(tabs, providerName);
+    if (matched) return matched;
   }
   const gastoKeywords = ['gasto', 'proveedor', 'compra', 'egreso', 'costo', 'factura'];
   for (const tab of tabs) {
@@ -596,6 +606,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalRows = 0;
     const writtenTabs: string[] = [];
     const exportedIds: string[] = [];
+    const sinPestana: Array<{ proveedor: string; pestanaUsada: string }> = [];
 
     const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows);
     const geminiMappings = geminiResult.mappings;
@@ -615,6 +626,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       let tabName: string;
       let datosFila: Record<string, string | number | null>;
+
+      // Se calcula aparte de la elección de pestaña: no cambia dónde se escribe, sirve
+      // para poder avisar cuando el proveedor no tiene pestaña propia en la planilla.
+      const proveedorFactura = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
+      const pestanaDelProveedor = proveedorFactura
+        ? matchTabByProvider(existingTabs, proveedorFactura)
+        : null;
 
       if (useGemini) {
         const gm = geminiMappings.find((m) => m.index === i) ?? geminiMappings[i];
@@ -713,6 +731,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalRows++;
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
         if (typeof inv.id === 'string') exportedIds.push(inv.id);
+        if (proveedorFactura && !pestanaDelProveedor && !sinPestana.some((u) => u.proveedor === proveedorFactura)) {
+          sinPestana.push({ proveedor: proveedorFactura, pestanaUsada: tabName });
+        }
       }
       invoiceDebug.push(debugEntry);
     }
@@ -740,6 +761,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       ok: totalRows > 0,
       rowsAdded: totalRows,
+      sinPestana,
       exportedIds,
       exportedAt,
       tabs: writtenTabs,
