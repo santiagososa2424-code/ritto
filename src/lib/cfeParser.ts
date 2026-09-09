@@ -21,10 +21,16 @@ const TIPO_CFE: Record<string, string> = {
   '213': 'e-Nota de Crédito de e-Boleta Honorarios Profesionales',
 };
 
+// El RUT uruguayo tiene 12 dígitos y así lo imprime la DGI en el comprobante
+// (ej: 100333100014). Antes se recortaba a los últimos 9 y se le daba forma de
+// cédula, con lo cual ese RUT quedaba guardado como 33.310.001-4: los tres primeros
+// dígitos se perdían y el número no coincidía con el de la factura.
 function formatRUT(raw: string | number): string {
   const digits = String(raw).replace(/\D/g, '');
-  const rut = digits.length > 9 ? digits.slice(-9) : digits.padStart(9, '0');
-  return `${rut.slice(0, 2)}.${rut.slice(2, 5)}.${rut.slice(5, 8)}-${rut.slice(8)}`;
+  if (digits.length === 12) return digits;
+  // Un valor con otro largo no es un RUT que podamos reconstruir sin inventar,
+  // así que se devuelve tal cual vino.
+  return digits || String(raw).trim();
 }
 
 export function parseCFE(xmlContent: string): Partial<ExtractedInvoice> {

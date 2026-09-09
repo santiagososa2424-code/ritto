@@ -15,7 +15,7 @@ Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, sin bloques de c
 FORMATO DE RESPUESTA (devolvé exactamente esta estructura):
 {
   "proveedor": "nombre fantasía o razón social del EMISOR — nunca su dirección",
-  "rut": "RUT del emisor en formato XX.XXX.XXX-X (con puntos y guion)",
+  "rut": "RUT del EMISOR tal cual figura impreso: 12 dígitos seguidos, sin puntos ni guion",
   "fecha": "fecha de emisión en formato YYYY-MM-DD",
   "nroDocumento": "número de serie y número del documento (ej: A-0001234 o E-0001234)",
   "tipoDocumento": "e-Factura | e-Ticket | Factura | Ticket | e-Remito | Remito | e-Nota de Crédito | Nota de Crédito",
@@ -57,7 +57,11 @@ confundir. Para no equivocarte:
     arriba de todo en el documento.
 
 REGLAS CRÍTICAS PARA URUGUAY:
-1. RUT: siempre en formato XX.XXX.XXX-X (ej: 21.234.567-8). Si tiene dígito verificador, incluiló.
+1. RUT: el RUT uruguayo son 12 dígitos corridos (ej: 100333100014). Copialo EXACTAMENTE
+   como aparece impreso, sin agregarle puntos, guiones ni espacios, y sin recortarlo.
+   Tiene que ser el del EMISOR, el que está junto a su nombre arriba del documento.
+   CUIDADO: el comprobante también trae el RUT del comprador, rotulado "RUT COMPRADOR",
+   "Cliente", "Señor(es)" o "Receptor". Ese NO va: es de quien recibe la factura.
 2. IVA en Uruguay: básico=22%, mínimo=10%, exento=0%. Identificá correctamente cuál aplica a cada ítem.
 3. TOTALES: neto + ivaTotal DEBE ser igual a total. Verificalo antes de responder.
 4. neto = suma de subtotales de ítems (sin IVA)
@@ -139,11 +143,17 @@ function validateExtraction(data: Partial<ExtractedInvoice>): ValidationResult {
     }
   }
 
+  // El RUT uruguayo son 12 dígitos. La validación anterior exigía XX.XXX.XXX-X, que es
+  // formato de cédula: un RUT correcto la fallaba siempre, y eso disparaba un reintento
+  // al modelo en cada factura — el doble de tiempo, para terminar marcándola igual.
+  // Se sigue aceptando el formato viejo para no marcar lo ya cargado.
   const rut = asText(data.rut).trim();
   if (rut) {
-    const rutPattern = /^\d{1,2}\.\d{3}\.\d{3}-\d$/;
-    if (!rutPattern.test(rut)) {
-      errors.push(`RUT con formato incorrecto: "${rut}"`);
+    const soloDigitos = rut.replace(/\D/g, '');
+    const esRUT = soloDigitos.length === 12;
+    const esFormatoViejo = /^\d{1,2}\.\d{3}\.\d{3}-\d$/.test(rut);
+    if (!esRUT && !esFormatoViejo) {
+      errors.push(`RUT con formato incorrecto: "${rut}" — el RUT uruguayo son 12 dígitos (ej: 100333100014)`);
     }
   }
 
