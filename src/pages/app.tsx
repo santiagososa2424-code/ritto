@@ -108,7 +108,7 @@ export default function AppPage() {
       setUser(data.user);
       supabase
         .from('profiles')
-        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_access_token, google_email, mp_subscription_id')
+        .select('id, nombre, empresa, rut, telefono, plan, subscription_status, trial_ends_at, onboarding_complete, excel_mapping, google_sheet_id, google_email, mp_subscription_id')
         .eq('id', data.user.id)
         .single()
         .then(({ data: p }) => {
@@ -129,7 +129,9 @@ export default function AppPage() {
           }
           if (p.empresa) setEmpresa(p.empresa);
           if (p.google_sheet_id) setGoogleSheetId(p.google_sheet_id as string);
-          if (p.google_access_token) setGoogleConnected(true);
+          // Se usa el mail como señal de conexión: el token de Google no debe salir
+          // del servidor, y en memoria del navegador un XSS se lo lleva.
+          if (p.google_email) setGoogleConnected(true);
           if (p.google_email) setGoogleEmail(p.google_email as string);
         });
     });

@@ -73,7 +73,11 @@ export default function SettingsPage() {
       const data = { user: session.user };
       setUser(data.user);
       setAccessToken(session.access_token);
-      supabase.from('profiles').select('*').eq('id', data.user.id).single().then(({ data: p }) => {
+      supabase.from('profiles')
+        // Lista explícita a propósito: con select('*') los tokens de Google viajaban
+        // al navegador sin que nadie los necesitara ahí.
+        .select('nombre, empresa, rut, telefono, plan, trial_ends_at, subscription_status, organization_id, role, excel_mapping, google_sheet_id, google_email, sheet_column_mapping')
+        .eq('id', data.user.id).single().then(({ data: p }) => {
         if (p) {
           setProfile({
             nombre: p.nombre ?? '',
@@ -90,7 +94,8 @@ export default function SettingsPage() {
             setExcelColumns(p.excel_mapping as ExcelColumn[]);
           }
           if (p.google_sheet_id) setGoogleSheetUrl(p.google_sheet_id);
-          if (p.google_access_token) setGoogleConnected(true);
+          // Ver comentario en app.tsx: el token nunca viaja al cliente.
+          if (p.google_email) setGoogleConnected(true);
           if (p.sheet_column_mapping && typeof p.sheet_column_mapping === 'object') {
             setColumnMapping(p.sheet_column_mapping as Record<string, string>);
           }
@@ -345,14 +350,43 @@ export default function SettingsPage() {
 
   async function disconnectGoogle() {
     if (!user) return;
-    await supabase.from('profiles').update({
-      google_access_token: null,
-      google_refresh_token: null,
-      google_token_expires_at: null,
-    }).eq('id', user.id);
+    // Lo hace el servidor: revocar el permiso en Google necesita el refresh token, y
+    // ese no tiene que estar nunca en el navegador.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/auth/google/disconnect', {
+      method: 'POST',
+      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+    });
+    if (!res.ok) {
+      setError('No se pudo desconectar. Intentá de nuevo.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
     setGoogleConnected(false);
     setSuccess('Google desconectado');
     setTimeout(() => setSuccess(''), 3000);
+  }
+
+  async function connectGoogle() {
+    if (!user) return;
+    // El userId ya no viaja en la URL: se pide un state firmado a un endpoint que
+    // exige sesión, y recién con eso se va a Google.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/auth/google/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.url) {
+      setError('No se pudo iniciar la conexión con Google. Intentá de nuevo.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+    window.location.href = data.url;
   }
 
   async function cancelInvite(inviteId: string) {
@@ -543,7 +577,7 @@ export default function SettingsPage() {
                   type="button"
                   className="btn-save"
                   style={{ marginTop: 12 }}
-                  onClick={() => user && (window.location.href = `/api/auth/google?userId=${user.id}`)}
+                  onClick={connectGoogle}
                 >
                   Conectar con Google →
                 </button>

@@ -481,7 +481,7 @@ async function appendRow(
       continue;
     }
     if (!run) run = { start: i, values: [] };
-    run.values.push(v);
+    run.values.push(sanitizeCell(v));
   }
   if (run) segments.push(run);
 
@@ -537,6 +537,20 @@ const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*
 
 function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));
+}
+
+// Escribimos con USER_ENTERED, que es lo que hace que Sheets interprete fechas y
+// montos como el usuario espera. El costo es que un texto que arranque con "=" se
+// ejecuta como fórmula: una factura preparada con =IMPORTRANGE o =HYPERLINK en la
+// razón social terminaría corriendo dentro de la planilla del cliente. La comilla
+// simple le dice a Sheets que trate la celda como texto y no se ve en la celda.
+// Sólo aplica a texto: los importes ya vienen convertidos a número, así que un
+// negativo como -2840 no se toca y sigue sumando.
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+function sanitizeCell(value: string | number): string | number {
+  if (typeof value !== 'string') return value;
+  return FORMULA_START.test(value.trim()) ? `'${value.trim()}` : value;
 }
 
 // Where a person would type the invoice amount by hand, best candidate first. A

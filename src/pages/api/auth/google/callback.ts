@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { unpackState } from '../../../../lib/oauthState';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { code, state: rawState, error } = req.query;
@@ -8,11 +9,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.redirect(`/settings?error=google_denied&detail=${encodeURIComponent(String(error ?? 'missing_code'))}`);
   }
 
-  const parts = (rawState as string).split(':');
-  const userId = parts[0];
-  const nonce = parts[1];
-  const returnTo = parts[2];
+  // El state va firmado por el servidor: si no verifica, o venció, o alguien lo
+  // fabricó. Antes el userId venía en texto plano en la URL y se usaba tal cual, así
+  // que se podían dejar los tokens de Google propios en el perfil de otra persona.
+  const state = unpackState(String(rawState));
+  if (!state) {
+    return res.redirect('/settings?error=google_state');
+  }
+  const { uid: userId, nonce, returnTo } = state;
 
+  // Además del firmado, el nonce prueba que quien vuelve de Google es el mismo
+  // navegador que arrancó el flujo.
   const cookieNonce = req.cookies['g_nonce'];
   if (!cookieNonce || cookieNonce !== nonce) {
     return res.redirect('/settings?error=google_csrf');

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable, { Fields, Files } from 'formidable';
 import fs from 'fs';
+import { unlink } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { parseCFE } from '../../lib/cfeParser';
 import { extractFromImage, extractFromPDF } from '../../lib/geminiExtractor';
@@ -117,5 +118,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // si algo se hubiera roto, y no se distinguía de un bug de verdad.
     // `detail` no se muestra en pantalla, queda para inspeccionar en el navegador.
     return res.status(422).json({ ...base, status: 'error', error: friendly, detail: msg.slice(0, 300) });
+  } finally {
+    // El comprobante queda escrito en el disco temporal de la función y ahí sobrevive
+    // entre invocaciones del mismo contenedor. Son facturas de clientes: se borran
+    // apenas se terminó de leerlas, salga bien o mal.
+    await unlink(file.filepath).catch(() => {});
   }
 }
