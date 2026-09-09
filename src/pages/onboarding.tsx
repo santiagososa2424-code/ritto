@@ -28,16 +28,19 @@ export default function OnboardingPage() {
   async function start() {
     if (!user) return;
     setSaving(true);
-    const { data: p } = await supabase.from('profiles').select('trial_ends_at').eq('id', user.id).maybeSingle();
-    const upsertData: Record<string, unknown> = {
-      id: user.id,
-      onboarding_complete: true,
-    };
-    if (!p?.trial_ends_at) {
-      upsertData.subscription_status = 'trial';
-      upsertData.trial_ends_at = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    }
-    await supabase.from('profiles').upsert(upsertData);
+    // El trial lo fija el servidor, que además no lo reinicia si ya existe: acá el
+    // cliente escribía subscription_status y trial_ends_at, o sea las columnas que
+    // deciden si la cuenta está paga.
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/profile/bootstrap', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    await supabase.from('profiles').update({ onboarding_complete: true }).eq('id', user.id);
     router.push('/app');
   }
 

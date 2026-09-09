@@ -70,44 +70,30 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
     if (data.user) {
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+      // El perfil lo crea el servidor: las columnas que definen si la cuenta está
+      // paga (plan, subscription_status, trial_ends_at) no las puede fijar el cliente.
+      const { data: { session } } = await supabase.auth.getSession();
+      const authHeader: Record<string, string> = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
 
-      const { data: invite } = await supabase
-        .from('org_invites')
-        .select('id, organization_id')
-        .eq('email', email.trim().toLowerCase())
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        nombre,
-        empresa,
-        rut: rut || null,
-        telefono: telefono || null,
-        plan: selectedPlan,
-        subscription_status: 'trial',
-        trial_ends_at: trialEndsAt.toISOString(),
-        onboarding_complete: false,
-        ...(invite ? { organization_id: invite.organization_id, role: 'member' } : {}),
+      const bootstrap = await fetch('/api/profile/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ nombre, empresa, rut, telefono, plan: selectedPlan }),
       });
-
-      if (invite) {
-        await supabase.from('org_invites').update({ status: 'accepted' }).eq('id', invite.id);
+      if (!bootstrap.ok) {
+        setError('No pudimos completar tu registro. Escribinos a santiagososa2424@gmail.com');
+        setLoading(false);
+        return;
       }
 
       // El destinatario lo resuelve el servidor desde la sesión; acá sólo va el token.
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        fetch('/api/send-welcome', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({ nombre, plan: selectedPlan, sistema: 'Ritto' }),
-        }).catch(() => {});
-      });
+      fetch('/api/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ nombre, plan: selectedPlan, sistema: 'Ritto' }),
+      }).catch(() => {});
 
       router.push('/onboarding');
     }

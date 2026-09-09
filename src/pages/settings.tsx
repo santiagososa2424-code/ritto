@@ -214,8 +214,25 @@ export default function SettingsPage() {
 
   async function removeMember(memberId: string) {
     setRemovingId(memberId);
-    await supabase.from('profiles').update({ organization_id: null, role: null }).eq('id', memberId);
-    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    // Antes se actualizaba el perfil del otro usuario desde el navegador, y el RLS lo
+    // bloqueaba sin avisar: la fila desaparecía de la pantalla pero el miembro seguía
+    // en la organización. Lo hace el endpoint, que además valida que quien pide sea
+    // el dueño.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/org/remove', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ memberId }),
+    });
+    if (res.ok) {
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    } else {
+      setError('No se pudo quitar el miembro.');
+      setTimeout(() => setError(''), 4000);
+    }
     setRemovingId(null);
   }
 
