@@ -615,9 +615,41 @@ function matchField(col: string): string | null {
   return bestField;
 }
 
+// Mira las filas que ya están cargadas y devuelve qué columnas contienen dinero, y
+// cuál de ellas maneja los importes más grandes. Es lo que hace un humano cuando abre
+// una planilla ajena: no lee los títulos, mira los números.
+//
+// Existe porque los títulos no alcanzan. Una columna puede llamarse "Costo", "Imp.",
+// "$" o algo que ninguna lista va a adivinar nunca, y aun así se reconoce por lo que
+// tiene adentro.
+function columnasConDinero(tabHeaders: string[], sampleRows: string[][]): { header: string; escala: number }[] {
+  const encontradas: { header: string; escala: number }[] = [];
+
+  for (let idx = 0; idx < tabHeaders.length; idx++) {
+    let montos = 0;
+    let suma = 0;
+    for (const row of sampleRows) {
+      const celda = row?.[idx];
+      if (celda == null || String(celda).trim() === '') continue;
+      const monto = parseAmount(String(celda));
+      // Se exige decimales o separador de miles: si no, un año o una cantidad
+      // pasarían por importe.
+      if (monto != null && /[.,]/.test(String(celda))) {
+        montos++;
+        suma += Math.abs(monto);
+      }
+    }
+    if (montos > 0) encontradas.push({ header: tabHeaders[idx], escala: suma / montos });
+  }
+
+  // De mayor a menor: el total de una factura es más grande que su IVA o su descuento.
+  return encontradas.sort((a, b) => b.escala - a.escala);
+}
+
 function fallbackMapInvoice(
   inv: Record<string, unknown>,
   tabHeaders: string[],
+  sampleRows: string[][] = [],
 ): Record<string, string | number | null> {
   const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
   const NUMERIC_SIGN = new Set(['neto', 'iva10', 'iva22', 'ivaTotal', 'total']);
@@ -636,6 +668,21 @@ function fallbackMapInvoice(
     }
     result[col] = null;
   }
+
+  // Si por el nombre no se ubicó dónde va la plata, se busca por el contenido: la
+  // columna cuyos valores ya cargados parecen importes y maneja los más grandes.
+  const yaTieneImporte = Object.entries(result).some(
+    ([col, v]) => v != null && v !== '' && matchField(col) === 'total',
+  );
+  if (!yaTieneImporte && typeof inv.total === 'number') {
+    const candidata = columnasConDinero(tabHeaders, sampleRows).find(
+      (c) => !isProtectedHeader(c.header) && (result[c.header] == null || result[c.header] === ''),
+    );
+    if (candidata) {
+      result[candidata.header] = isNC ? -Math.abs(inv.total) : inv.total;
+    }
+  }
+
   return result;
 }
 
@@ -853,7 +900,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const provider = typeof inv.proveedor === 'string' ? inv.proveedor : undefined;
         tabName = findBestTab(existingTabs, provider) || FALLBACK_TAB;
         const tabHeaders = tabHeaderMap[tabName];
-        datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
+        datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders, tabSampleRows[tabName] ?? []) : {};
       }
 
       // Precedencia: lo que el usuario elige ahora, después lo que enseñó antes, y
@@ -916,7 +963,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // se rearma con el mapeo por sinónimos.
       const mapeaEstaPestana = Object.keys(datosFila).some((col) => tabHeaders.includes(col));
       if (!mapeaEstaPestana) {
-        datosFila = fallbackMapInvoice(inv, tabHeaders);
+        datosFila = fallbackMapInvoice(inv, tabHeaders, tabSampleRows[tabName] ?? []);
       }
 
       // One cell per header, in header order — never a concatenation, so a value can
