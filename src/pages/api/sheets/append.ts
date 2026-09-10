@@ -692,6 +692,17 @@ function findBestTab(tabs: string[], providerName?: string): string {
 
 const FALLBACK_TAB = 'Ritto - Sin clasificar';
 
+// Con qué identificamos a un proveedor entre exportaciones. El RUT primero porque no
+// cambia; el nombre como respaldo, porque en una foto borrosa el RUT puede no leerse.
+function vendorKeys(inv: Record<string, unknown>): string[] {
+  const keys: string[] = [];
+  const rut = typeof inv.rut === 'string' ? inv.rut.replace(/\D/g, '') : '';
+  if (rut.length >= 8) keys.push(`rut:${rut}`);
+  const nombre = typeof inv.proveedor === 'string' ? normStr(inv.proveedor) : '';
+  if (nombre) keys.push(`nombre:${nombre}`);
+  return keys;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -750,6 +761,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const writtenTabs: string[] = [];
     const exportedIds: string[] = [];
     const sinPestana: string[] = [];
+    // Proveedores cuya pestaña quedó aprendida en esta exportación.
+    const aprendidos: string[] = [];
+
+    // Reglas que el usuario ya enseñó en exportaciones anteriores.
+    const { data: reglas } = await supabase
+      .from('vendor_mappings')
+      .select('vendor_key, sheet_name')
+      .eq('user_id', user.id);
+
+    const aprendidas: Record<string, string> = {};
+    for (const r of reglas ?? []) {
+      // Si la pestaña se renombró o se borró, la regla ya no sirve.
+      if (existingTabs.includes(r.sheet_name as string)) {
+        aprendidas[r.vendor_key as string] = r.sheet_name as string;
+      }
+    }
 
     // Sólo se aceptan pestañas que existan de verdad: el nombre viene del cliente.
     const elegidas: Record<string, string> = {};
@@ -758,7 +785,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (real && prov.trim()) elegidas[normStr(prov)] = real;
     }
 
-    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows, elegidas);
+    // Para el prompt hace falta la asignación por nombre de proveedor, que es como el
+    // modelo ve las facturas.
+    const forzadasParaPrompt: Record<string, string> = {};
+    for (const inv of invoices) {
+      const prov = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
+      if (!prov) continue;
+      const elegida = elegidas[normStr(prov)];
+      const aprendida = vendorKeys(inv).map((k) => aprendidas[k]).find(Boolean);
+      const destino = elegida ?? aprendida;
+      if (destino) forzadasParaPrompt[prov] = destino;
+    }
+
+    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows, forzadasParaPrompt);
     const geminiMappings = geminiResult.mappings;
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
@@ -800,10 +839,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
       }
 
-      // Lo que eligió el usuario gana: ya vio que no encontrábamos la pestaña y decidió.
+      // Precedencia: lo que el usuario elige ahora, después lo que enseñó antes, y
+      // recién al final lo que dedujo el sistema.
       const elegida = proveedorFactura ? elegidas[normStr(proveedorFactura)] : undefined;
-      if (elegida) {
-        tabName = elegida;
+      const aprendida = vendorKeys(inv).map((k) => aprendidas[k]).find(Boolean);
+      const destinoFijado = elegida ?? aprendida;
+      if (destinoFijado) {
+        tabName = destinoFijado;
         tieneSuPestana = true;
       }
 
@@ -914,6 +956,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalRows++;
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
         if (typeof inv.id === 'string') exportedIds.push(inv.id);
+
+        // Recién se aprende después de escribir bien: si la exportación falla, no
+        // queremos dejar una regla apuntando a una pestaña que no funcionó.
+        if (elegida) {
+          const filas = vendorKeys(inv).map((vendor_key) => ({
+            user_id: user.id,
+            vendor_key,
+            vendor_name: proveedorFactura || null,
+            sheet_name: tabName,
+            updated_at: new Date().toISOString(),
+          }));
+          if (filas.length > 0) {
+            const { error: reglaErr } = await supabase
+              .from('vendor_mappings')
+              .upsert(filas, { onConflict: 'user_id,vendor_key' });
+            if (reglaErr) console.error('[append] no se pudo guardar la regla:', reglaErr.message);
+            else if (!aprendidos.includes(proveedorFactura)) aprendidos.push(proveedorFactura);
+          }
+        }
       }
       invoiceDebug.push(debugEntry);
     }
@@ -942,6 +1003,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: totalRows > 0,
       rowsAdded: totalRows,
       sinPestana,
+      aprendidos,
       // Las pestañas que realmente tiene la planilla. Van al cliente para que, cuando
       // una factura no encuentre la suya, la pantalla pueda mostrar las que hay: sin
       // eso el usuario lee "creá una pestaña" y no tiene con qué comparar.

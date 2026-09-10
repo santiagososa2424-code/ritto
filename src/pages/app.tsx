@@ -77,6 +77,7 @@ export default function AppPage() {
   const [sheetsPestanas, setSheetsPestanas] = useState<string[]>([]);
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
+  const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -368,6 +369,7 @@ export default function AppPage() {
         setSheetsTabs(data.tabs ?? []);
         setSheetsSinPestana(data.sinPestana ?? []);
         setPestanaElegida({});
+        setSheetsAprendidos(data.aprendidos ?? []);
         setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
@@ -391,7 +393,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsRedirectUrl(''); }, 20000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsAprendidos([]); setSheetsRedirectUrl(''); }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -743,6 +745,12 @@ export default function AppPage() {
                   </a>
                 </div>
                 )}
+                {sheetsAprendidos.length > 0 && (
+                  <div style={{ fontSize: 12, color: '#166534', fontWeight: 500 }}>
+                    ✓ Aprendido: las próximas facturas de {sheetsAprendidos.map((p) => `«${p}»`).join(', ')}{' '}
+                    van solas a esa pestaña.
+                  </div>
+                )}
                 {sheetsRowsAdded > 0 && sheetsTabs.length > 0 && (
                   <div style={{ fontSize: 12, color: '#4b7a5e', fontWeight: 400 }}>
                     {sheetsTabs.length === 1 ? 'Pestaña:' : 'Pestañas:'} {sheetsTabs.join(', ')}
@@ -794,7 +802,7 @@ export default function AppPage() {
                             opacity: sheetsSinPestana.every((p) => !pestanaElegida[p]) ? 0.5 : 1,
                           }}
                         >
-                          Enviar a la pestaña elegida
+                          Enviar y recordar para la próxima
                         </button>
                         <div style={{ marginTop: 8, fontSize: 11 }}>
                           O, si alguna pestaña es la de ese proveedor pero se llama distinto, renombrala en tu
