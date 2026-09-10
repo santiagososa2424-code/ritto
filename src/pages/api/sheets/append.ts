@@ -961,7 +961,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // la factura a otra, esos nombres no existen acá y la fila saldría toda vacía.
       // Se detecta comparando contra los encabezados reales y, si no coincide ninguno,
       // se rearma con el mapeo por sinónimos.
-      const mapeaEstaPestana = Object.keys(datosFila).some((col) => tabHeaders.includes(col));
+      const encabezadosNorm = new Set(tabHeaders.map(normStr));
+      const mapeaEstaPestana = Object.keys(datosFila).some((col) => encabezadosNorm.has(normStr(col)));
       if (!mapeaEstaPestana) {
         datosFila = fallbackMapInvoice(inv, tabHeaders, tabSampleRows[tabName] ?? []);
       }
@@ -976,19 +977,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // the invoice on the sheet with no money in it at all. Move that amount to the
       // column the user actually types into, and if it never came through, fall back
       // to the total Ritto read off the document itself.
+      // El modelo devuelve las columnas por nombre, y ese nombre puede volver con otra
+      // caja, un espacio de más o el símbolo escrito distinto. Buscarlo por igualdad
+      // exacta hacía que el dato existiera y no se escribiera, sin ningún error a la
+      // vista: la celda quedaba vacía y parecía que el modelo no lo había mapeado.
+      const porNombre = new Map<string, string | number | null>();
+      for (const [clave, valor] of Object.entries(datosFila)) {
+        const k = normStr(clave);
+        const actual = porNombre.get(k);
+        if (actual == null || actual === '') porNombre.set(k, valor);
+      }
+      const valorDe = (col: string) => porNombre.get(normStr(col));
+
       const usable = (h: string) => writable.has(h) && !isProtectedHeader(h);
       const moneyCol = bestMoneyColumn(tabHeaders, usable);
       // Only step in when no money column got a value at all. A sheet with both
       // "Subtotal" and "Total" fills one of them legitimately, and rescuing into the
       // other would write the amount twice.
       const anyMoneyFilled = tabHeaders.some(
-        (h) => usable(h) && looksLikeMoney(h) && datosFila[h] != null && datosFila[h] !== '',
+        (h) => usable(h) && looksLikeMoney(h) && valorDe(h) != null && valorDe(h) !== '',
       );
       if (moneyCol && !anyMoneyFilled) {
         let rescued: number | null = null;
         for (const h of tabHeaders) {
           if (usable(h)) continue;
-          const v = datosFila[h];
+          const v = valorDe(h);
           if (v == null || v === '') continue;
           const amount = typeof v === 'number' ? v : parseAmount(String(v));
           if (amount != null) { rescued = amount; break; }
@@ -997,12 +1010,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const isNC = typeof inv.tipoDocumento === 'string' && /cr[eé]dito/i.test(inv.tipoDocumento);
           rescued = isNC ? -Math.abs(inv.total) : inv.total;
         }
-        if (rescued != null) datosFila[moneyCol] = rescued;
+        if (rescued != null) porNombre.set(normStr(moneyCol), rescued);
       }
 
       const row: (string | number | null)[] = tabHeaders.map((col) => {
         if (!writable.has(col) || isProtectedHeader(col)) return null;
-        const val = datosFila[col];
+        const val = valorDe(col);
         if (val == null) return '';
         if (typeof val === 'number') return val;
         return parseAmount(val) ?? val;
