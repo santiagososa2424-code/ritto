@@ -589,13 +589,28 @@ function sanitizeCell(value: string | number): string | number {
 // the sheet's own calculation.
 const MONEY_COLUMN = ['costo', 'monto', 'importe', 'precio', 'valor', 'subtotal', 'total', 'neto'];
 
+// El símbolo de moneda es la señal más clara de que una columna lleva plata, y era
+// justo la que se perdía: normStr borra la puntuación, así que una columna llamada
+// "$ xx" quedaba en "xx" y no coincidía con nada. Se mira el encabezado crudo.
+const CURRENCY_HEADER = /\$|u\$s|€|\busd\b|\buyu\b|pesos/i;
+// Salvo cuando la moneda es el tema de la columna y no su contenido.
+const NOT_MONEY = /cotizacion|tipo de cambio|\bcambio\b|moneda/;
+
+function hasCurrencySymbol(header: string): boolean {
+  return CURRENCY_HEADER.test(header) && !NOT_MONEY.test(normStr(header));
+}
+
 function looksLikeMoney(header: string): boolean {
+  if (hasCurrencySymbol(header)) return true;
   const h = normStr(header);
   return MONEY_COLUMN.some((k) => h.includes(k));
 }
 
 function bestMoneyColumn(headers: string[], usable: (h: string) => boolean): string | null {
   const open = headers.filter(usable);
+  // Antes de cualquier palabra: si hay una columna con símbolo de moneda, es esa.
+  const conSimbolo = open.find(hasCurrencySymbol);
+  if (conSimbolo) return conSimbolo;
   for (const key of MONEY_COLUMN) {
     const exact = open.find((h) => normStr(h) === key);
     if (exact) return exact;
@@ -617,8 +632,11 @@ function matchField(col: string): string | null {
   const n = normStr(col);
   if (!n) return null;
 
-  let bestField: string | null = null;
-  let bestScore = 0;
+  // Un encabezado con símbolo de moneda es dinero aunque no diga ninguna palabra
+  // conocida. Puntúa por debajo de un nombre explícito, para que "Total $" siga
+  // ganando por "total" y no por el símbolo.
+  let bestField: string | null = hasCurrencySymbol(col) ? 'total' : null;
+  let bestScore = bestField ? 45 : 0;
 
   for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
     for (const raw of aliases) {
