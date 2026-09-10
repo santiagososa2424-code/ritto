@@ -864,7 +864,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sinPestana: string[] = [];
     // Proveedores cuya pestaña quedó aprendida en esta exportación.
     const aprendidos: string[] = [];
-    const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string }> = [];
+    const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: string[] }> = [];
 
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
     const { data: reglas } = await supabase
@@ -1067,6 +1067,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       if (!importeEscrito) {
         const leido = typeof inv.total === 'number' && inv.total !== 0;
+        // Qué columnas de dinero había y por qué no se uso ninguna. Sin esto el aviso
+        // dice "no encontramos donde escribirlo" y no hay forma de saber si es que no
+        // existe la columna o que Ritto la considera calculada.
+        const descartadas = tabHeaders
+          .filter((h) => looksLikeMoney(h))
+          .map((h) => {
+            if (isProtectedHeader(h)) return `${h}: la salteamos porque el nombre indica que la calcula la planilla`;
+            if (!writable.has(h)) return `${h}: tiene fórmulas, así que no la pisamos`;
+            return null;
+          })
+          .filter((x): x is string => x !== null);
         sinImporte.push({
           factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : (typeof inv.fileName === 'string' ? inv.fileName : '—'),
           // Distinguir las dos causas es lo que decide qué hacer: releer el
@@ -1074,6 +1085,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           motivo: leido ? 'sin_columna' : 'no_se_leyo',
           importe: leido ? (inv.total as number) : null,
           pestana: tabName,
+          descartadas,
         });
       }
 

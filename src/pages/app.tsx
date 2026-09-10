@@ -78,7 +78,7 @@ export default function AppPage() {
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
-  const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string }[]>([]);
+  const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: string[] }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -757,6 +757,11 @@ export default function AppPage() {
                           {s.motivo === 'no_se_leyo'
                             ? 'no pudimos leer el importe del comprobante. Revisá la factura en la lista y corregí el total a mano.'
                             : `leímos ${s.importe} pero no encontramos en qué columna de «${s.pestana}» escribirlo.`}
+                          {s.descartadas && s.descartadas.length > 0 && (
+                            <ul style={{ margin: '4px 0 0 14px', padding: 0 }}>
+                              {s.descartadas.map((d, j) => <li key={j}>{d}</li>)}
+                            </ul>
+                          )}
                         </li>
                       ))}
                     </ul>
