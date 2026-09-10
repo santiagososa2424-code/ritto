@@ -74,6 +74,7 @@ export default function AppPage() {
   const [sheetsRowsAdded, setSheetsRowsAdded] = useState(0);
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
   const [sheetsSinPestana, setSheetsSinPestana] = useState<string[]>([]);
+  const [sheetsPestanas, setSheetsPestanas] = useState<string[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -364,6 +365,7 @@ export default function AppPage() {
         setSheetsRowsAdded(data.rowsAdded ?? 0);
         setSheetsTabs(data.tabs ?? []);
         setSheetsSinPestana(data.sinPestana ?? []);
+        setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
         // El servidor ya las marcó como exportadas y nos devuelve cuáles quedaron
@@ -386,7 +388,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsRedirectUrl(''); }, 20000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setSheetsRedirectUrl(''); }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -760,6 +762,16 @@ export default function AppPage() {
                       {sheetsSinPestana.length === 1 ? '.' : '.'} Esas facturas no se exportaron y siguen en tu lista.
                     </div>
                     Creá la pestaña en tu planilla con el nombre <strong>tal cual aparece en la factura</strong> y volvé a exportar.
+                    {sheetsPestanas.length > 0 && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #fde68a' }}>
+                        <strong>Las pestañas que encontramos en tu planilla:</strong>{' '}
+                        {sheetsPestanas.slice(0, 12).map((t) => `«${t}»`).join(', ')}
+                        {sheetsPestanas.length > 12 ? ` y ${sheetsPestanas.length - 12} más` : ''}.
+                        <div style={{ marginTop: 4 }}>
+                          Si alguna de esas es la del proveedor pero se llama distinto, renombrala y listo.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {sheetsRowsAdded > 0 && (

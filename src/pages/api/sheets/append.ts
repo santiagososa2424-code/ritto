@@ -911,6 +911,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: totalRows > 0,
       rowsAdded: totalRows,
       sinPestana,
+      // Las pestañas que realmente tiene la planilla. Van al cliente para que, cuando
+      // una factura no encuentre la suya, la pantalla pueda mostrar las que hay: sin
+      // eso el usuario lee "creá una pestaña" y no tiene con qué comparar.
+      pestanasDisponibles: existingTabs,
       exportedIds,
       exportedAt,
       tabs: writtenTabs,
