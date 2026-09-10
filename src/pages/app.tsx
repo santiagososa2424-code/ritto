@@ -75,6 +75,8 @@ export default function AppPage() {
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
   const [sheetsSinPestana, setSheetsSinPestana] = useState<string[]>([]);
   const [sheetsPestanas, setSheetsPestanas] = useState<string[]>([]);
+  // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
+  const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -345,7 +347,7 @@ export default function AppPage() {
     setDownloading(null);
   }
 
-  async function exportToSheets(invoiceList: ExtractedInvoice[]) {
+  async function exportToSheets(invoiceList: ExtractedInvoice[], pestanasElegidas?: Record<string, string>) {
     if (!user) return;
     setSheetsStatus('loading');
     setSheetsError('');
@@ -357,7 +359,7 @@ export default function AppPage() {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping }),
+        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping, pestanasElegidas }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -365,6 +367,7 @@ export default function AppPage() {
         setSheetsRowsAdded(data.rowsAdded ?? 0);
         setSheetsTabs(data.tabs ?? []);
         setSheetsSinPestana(data.sinPestana ?? []);
+        setPestanaElegida({});
         setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
@@ -388,7 +391,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setSheetsRedirectUrl(''); }, 20000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsRedirectUrl(''); }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -763,12 +766,39 @@ export default function AppPage() {
                     </div>
                     Creá la pestaña en tu planilla con el nombre <strong>tal cual aparece en la factura</strong> y volvé a exportar.
                     {sheetsPestanas.length > 0 && (
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #fde68a' }}>
-                        <strong>Las pestañas que encontramos en tu planilla:</strong>{' '}
-                        {sheetsPestanas.slice(0, 12).map((t) => `«${t}»`).join(', ')}
-                        {sheetsPestanas.length > 12 ? ` y ${sheetsPestanas.length - 12} más` : ''}.
-                        <div style={{ marginTop: 4 }}>
-                          Si alguna de esas es la del proveedor pero se llama distinto, renombrala y listo.
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #fde68a' }}>
+                        <div style={{ marginBottom: 8 }}>
+                          <strong>Elegí a qué pestaña mandarlas</strong> y las exportamos ahora:
+                        </div>
+                        {sheetsSinPestana.map((prov) => (
+                          <div key={prov} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                            <span style={{ minWidth: 130 }}>«{prov}»</span>
+                            <span>→</span>
+                            <select
+                              value={pestanaElegida[prov] ?? ''}
+                              onChange={(e) => setPestanaElegida((p) => ({ ...p, [prov]: e.target.value }))}
+                              style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #fde68a', fontFamily: 'inherit', fontSize: 12, background: '#fff' }}
+                            >
+                              <option value="">Elegir pestaña…</option>
+                              {sheetsPestanas.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => exportToSheets(filteredDone, pestanaElegida)}
+                          disabled={sheetsSinPestana.every((p) => !pestanaElegida[p])}
+                          style={{
+                            marginTop: 6, background: '#78350f', color: '#fff', border: 'none',
+                            padding: '8px 16px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                            fontFamily: 'inherit', cursor: 'pointer',
+                            opacity: sheetsSinPestana.every((p) => !pestanaElegida[p]) ? 0.5 : 1,
+                          }}
+                        >
+                          Enviar a la pestaña elegida
+                        </button>
+                        <div style={{ marginTop: 8, fontSize: 11 }}>
+                          O, si alguna pestaña es la de ese proveedor pero se llama distinto, renombrala en tu
+                          planilla y la próxima vez se va sola.
                         </div>
                       </div>
                     )}

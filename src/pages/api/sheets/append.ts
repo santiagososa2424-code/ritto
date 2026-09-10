@@ -226,6 +226,7 @@ async function mapWithGemini(
   invoices: Record<string, unknown>[],
   tabWritableHeaders: Record<string, string[]>,
   tabSampleRows: Record<string, string[][]>,
+  forzadas: Record<string, string>,
 ): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { mappings: null, called: false, reason: 'no_api_key' };
@@ -244,7 +245,10 @@ Tu tarea es entender la intención de cada columna usando su nombre Y los valore
 ESTRUCTURA DE LA PLANILLA DEL USUARIO (nombre + columnas escribibles + filas_ejemplo reales):
 ${JSON.stringify({ pestañas_disponibles: sheetStructure }, null, 2)}
 
-FACTURAS A PROCESAR:
+${Object.keys(forzadas).length > 0 ? `PESTAÑA YA DECIDIDA POR EL USUARIO (no la discutas, mapeá las columnas de ESA pestaña):
+${Object.entries(forzadas).map(([prov, tab]) => `- proveedor "${prov}" → pestaña "${tab}"`).join('\n')}
+
+` : ''}FACTURAS A PROCESAR:
 ${JSON.stringify(invoices.map((inv, i) => ({ index: i, ...inv })), null, 2)}
 
 REGLAS (en orden estricto de prioridad):
@@ -695,7 +699,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user = await getAuthUser(req);
     if (!user) return res.status(401).json({ error: 'No autorizado' });
 
-    const { invoices } = req.body as { invoices: Record<string, unknown>[] };
+    const { invoices, pestanasElegidas } = req.body as {
+      invoices: Record<string, unknown>[];
+      // El usuario eligió a mano a qué pestaña va cada proveedor que no encontramos.
+      pestanasElegidas?: Record<string, string>;
+    };
     if (!invoices?.length) return res.status(400).json({ error: 'invoices es requerido' });
 
     const supabase = createClient(
@@ -743,7 +751,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const exportedIds: string[] = [];
     const sinPestana: string[] = [];
 
-    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows);
+    // Sólo se aceptan pestañas que existan de verdad: el nombre viene del cliente.
+    const elegidas: Record<string, string> = {};
+    for (const [prov, tab] of Object.entries(pestanasElegidas ?? {})) {
+      const real = existingTabs.find((t) => t === tab) ?? resolveTab(String(tab), existingTabs);
+      if (real && prov.trim()) elegidas[normStr(prov)] = real;
+    }
+
+    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows, elegidas);
     const geminiMappings = geminiResult.mappings;
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
@@ -785,6 +800,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         datosFila = tabHeaders ? fallbackMapInvoice(inv, tabHeaders) : {};
       }
 
+      // Lo que eligió el usuario gana: ya vio que no encontrábamos la pestaña y decidió.
+      const elegida = proveedorFactura ? elegidas[normStr(proveedorFactura)] : undefined;
+      if (elegida) {
+        tabName = elegida;
+        tieneSuPestana = true;
+      }
+
       if (!tabHeaderMap[tabName] && existingTabs.includes(tabName)) {
         const result = await fetchTabHeaders(sheetId, tabName, accessToken);
         if (result) {
@@ -822,6 +844,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await ensureTab(sheetId, tabName, accessToken, existingTabs);
+
+      // El modelo mapea las columnas de la pestaña que él eligió. Si el usuario mandó
+      // la factura a otra, esos nombres no existen acá y la fila saldría toda vacía.
+      // Se detecta comparando contra los encabezados reales y, si no coincide ninguno,
+      // se rearma con el mapeo por sinónimos.
+      const mapeaEstaPestana = Object.keys(datosFila).some((col) => tabHeaders.includes(col));
+      if (!mapeaEstaPestana) {
+        datosFila = fallbackMapInvoice(inv, tabHeaders);
+      }
 
       // One cell per header, in header order — never a concatenation, so a value can
       // never slide into the neighbouring column. Cells Ritto does not own become
