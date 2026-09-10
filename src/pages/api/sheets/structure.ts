@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
+import { profileColumns } from '../../../lib/sheetProfile';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -70,24 +71,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allHeadersSet = new Set<string>();
     const tabHeaderMap: Record<string, string[]> = {};
 
+    // Además del encabezado se leen unas filas de datos: son las que dicen de qué es
+    // cada columna. Sin esto había que pedirle al usuario que copiara su planilla para
+    // poder entender por qué un dato caía donde caía.
+    const tabProfiles: Record<string, Record<string, string>> = {};
+
     for (const tab of tabs.slice(0, 15)) {
       const enc = encodeURIComponent(tab);
       const rowRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ1`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A1:ZZ8`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       if (!rowRes.ok) continue;
-      const rowData = await rowRes.json();
-      const headers: string[] = (rowData.values?.[0] ?? []).filter((h: unknown) => typeof h === 'string' && h.trim());
+      const rows: string[][] = (await rowRes.json()).values ?? [];
+      const headers: string[] = (rows[0] ?? []).filter((h: unknown) => typeof h === 'string' && h.trim());
       if (headers.length > 0) {
         tabHeaderMap[tab] = headers;
+        tabProfiles[tab] = profileColumns(headers, rows.slice(1));
         headers.forEach((h) => allHeadersSet.add(h));
       }
     }
 
     const sampleHeaders = Array.from(allHeadersSet);
 
-    return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap });
+    return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap, tabProfiles });
   } catch (err) {
     console.error('[structure] unhandled error:', err);
     return res.status(500).json({ error: 'Error interno. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });

@@ -67,6 +67,8 @@ export default function SettingsPage() {
   const [savingSheetMapping, setSavingSheetMapping] = useState(false);
   const [mappingMsg, setMappingMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [structureLoaded, setStructureLoaded] = useState(false);
+  // Cómo interpreta Ritto cada columna, deducido de los datos ya cargados.
+  const [tabProfiles, setTabProfiles] = useState<Record<string, Record<string, string>>>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -308,6 +310,7 @@ export default function SettingsPage() {
       }
       const headers: string[] = data.sampleHeaders ?? [];
       setSheetHeaders(headers);
+      setTabProfiles(data.tabProfiles ?? {});
       setStructureLoaded(true);
       setColumnMapping((prev) => {
         const guessed = guessMapping(headers);
@@ -723,6 +726,36 @@ export default function SettingsPage() {
                       <button type="button" className="btn-save" onClick={saveSheetMapping} disabled={savingSheetMapping}>
                         {savingSheetMapping ? 'Guardando…' : 'Guardar configuración'}
                       </button>
+                      {Object.keys(tabProfiles).length > 0 && (
+                        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Cómo entiende Ritto tu planilla</div>
+                          <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                            Esto no lo deduce del nombre de la columna sino de los datos que ya tenés cargados.
+                            Un dato que no coincida con el tipo de su columna no se escribe: Ritto prefiere avisarte
+                            antes que ensuciarte la planilla.
+                          </p>
+                          {Object.entries(tabProfiles).map(([tab, cols]) => (
+                            <div key={tab} style={{ marginBottom: 12 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 5 }}>{tab}</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {Object.entries(cols).map(([col, tipo]) => (
+                                  <span key={col} style={{
+                                    fontSize: 11, padding: '3px 9px', borderRadius: 20,
+                                    border: '1px solid var(--border)', background: 'var(--bg)',
+                                  }}>
+                                    {col}
+                                    <span style={{ color: 'var(--gray)' }}>
+                                      {' · '}
+                                      {tipo === 'fecha' ? 'fechas' : tipo === 'dinero' ? 'importes'
+                                        : tipo === 'numero' ? 'números' : tipo === 'vacia' ? 'sin datos aún' : 'texto'}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <button type="button" onClick={detectColumns} disabled={loadingStructure} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
                         {loadingStructure ? 'Leyendo…' : 'Volver a leer la planilla'}
                       </button>
