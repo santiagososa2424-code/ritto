@@ -95,26 +95,12 @@ function namedHeaders(raw: string[]): string[] {
 // La detección miraba una sola fila. Si esa estaba vacía y las fórmulas empezaban más
 // abajo, la columna pasaba por escribible y se pisaba el cálculo del usuario.
 function formulaColumns(headers: string[], formulaRows: string[][]): Set<string> {
-  const conFormula: number[] = new Array(headers.length).fill(0);
-  const conAlgo: number[] = new Array(headers.length).fill(0);
-
+  const found = new Set<string>();
   for (const row of formulaRows) {
     for (let idx = 0; idx < headers.length; idx++) {
       const cell = row?.[idx];
-      if (cell == null || String(cell).trim() === '') continue;
-      conAlgo[idx]++;
-      if (typeof cell === 'string' && cell.startsWith('=')) conFormula[idx]++;
+      if (typeof cell === 'string' && cell.startsWith('=')) found.add(headers[idx]);
     }
-  }
-
-  const found = new Set<string>();
-  for (let idx = 0; idx < headers.length; idx++) {
-    if (conFormula[idx] === 0) continue;
-    // Antes alcanzaba con una sola fórmula en veinte filas para bloquear la columna
-    // entera. Una fórmula suelta —un subtotal que alguien dejó a mitad de la tabla—
-    // dejaba a Ritto sin poder escribir el importe, y en silencio. Se pide que sea la
-    // forma habitual de esa columna, no una excepción.
-    if (conFormula[idx] / conAlgo[idx] >= 0.5) found.add(headers[idx]);
   }
   return found;
 }
