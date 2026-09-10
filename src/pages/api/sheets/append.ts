@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
 import { parseAmount } from '../../../lib/money';
-import { profileColumns, fitsColumn } from '../../../lib/sheetProfile';
+import { profileColumns, fitsColumn, isProtectedHeader } from '../../../lib/sheetProfile';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -546,24 +546,11 @@ function normStr(s: string): string {
 // accumulator sums many invoices, so one invoice's amount does not belong there.
 // The formula check already catches most of these; this covers the rest, e.g. the
 // first export into a template whose =SUM() rows have not been written yet.
-// La deuda, el saldo y el estado de pago no están en la factura: dependen de si el
-// cliente pagó, que es información de la empresa y no del comprobante. En casi todas
-// las planillas son columnas calculadas. Escribirlas rompe la fórmula que las calcula,
-// y como la detección de fórmulas mira las filas de abajo, una vez pisadas ya no se
-// detectan y el daño se repite en cada exportación.
-const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b|\bdeuda\b|\bpendiente\b|\bdebe\b|estado\s*(de\s*)?(pago|pedido)/;
-
-function isProtectedHeader(header: string): boolean {
-  return PROTECTED_HEADER.test(normStr(header));
-}
-
 // Escribimos con USER_ENTERED, que es lo que hace que Sheets interprete fechas y
 // montos como el usuario espera. El costo es que un texto que arranque con "=" se
-// ejecuta como fórmula: una factura preparada con =IMPORTRANGE o =HYPERLINK en la
-// razón social terminaría corriendo dentro de la planilla del cliente. La comilla
-// simple le dice a Sheets que trate la celda como texto y no se ve en la celda.
-// Sólo aplica a texto: los importes ya vienen convertidos a número, así que un
-// negativo como -2840 no se toca y sigue sumando.
+// ejecuta como fórmula: una factura preparada con =IMPORTRANGE en la razón social
+// terminaría corriendo dentro de la planilla del cliente. La comilla simple le dice
+// a Sheets que trate la celda como texto y no se ve en la celda.
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 function sanitizeCell(value: string | number): string | number {

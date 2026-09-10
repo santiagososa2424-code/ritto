@@ -69,6 +69,7 @@ export default function SettingsPage() {
   const [structureLoaded, setStructureLoaded] = useState(false);
   // Cómo interpreta Ritto cada columna, deducido de los datos ya cargados.
   const [tabProfiles, setTabProfiles] = useState<Record<string, Record<string, string>>>({});
+  const [tabWritable, setTabWritable] = useState<Record<string, Record<string, string>>>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -311,6 +312,7 @@ export default function SettingsPage() {
       const headers: string[] = data.sampleHeaders ?? [];
       setSheetHeaders(headers);
       setTabProfiles(data.tabProfiles ?? {});
+      setTabWritable(data.tabWritable ?? {});
       setStructureLoaded(true);
       setColumnMapping((prev) => {
         const guessed = guessMapping(headers);
@@ -738,19 +740,26 @@ export default function SettingsPage() {
                             <div key={tab} style={{ marginBottom: 12 }}>
                               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 5 }}>{tab}</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {Object.entries(cols).map(([col, tipo]) => (
-                                  <span key={col} style={{
-                                    fontSize: 11, padding: '3px 9px', borderRadius: 20,
-                                    border: '1px solid var(--border)', background: 'var(--bg)',
-                                  }}>
-                                    {col}
-                                    <span style={{ color: 'var(--gray)' }}>
-                                      {' · '}
-                                      {tipo === 'fecha' ? 'fechas' : tipo === 'dinero' ? 'importes'
-                                        : tipo === 'numero' ? 'números' : tipo === 'vacia' ? 'sin datos aún' : 'texto'}
+                                {Object.entries(cols).map(([col, tipo]) => {
+                                  const estado = tabWritable[tab]?.[col] ?? 'escribible';
+                                  const puedeEscribir = estado === 'escribible';
+                                  return (
+                                    <span key={col} style={{
+                                      fontSize: 11, padding: '3px 9px', borderRadius: 20,
+                                      border: `1px solid ${puedeEscribir ? 'var(--border)' : '#fde68a'}`,
+                                      background: puedeEscribir ? 'var(--bg)' : '#fffbeb',
+                                    }}>
+                                      {col}
+                                      <span style={{ color: 'var(--gray)' }}>
+                                        {' · '}
+                                        {tipo === 'fecha' ? 'fechas' : tipo === 'dinero' ? 'importes'
+                                          : tipo === 'numero' ? 'números' : tipo === 'vacia' ? 'sin datos aún' : 'texto'}
+                                        {estado === 'formula' ? ' · tiene fórmulas, no la tocamos' : ''}
+                                        {estado === 'protegida' ? ' · la calcula tu planilla' : ''}
+                                      </span>
                                     </span>
-                                  </span>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           ))}

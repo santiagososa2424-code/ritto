@@ -1,5 +1,11 @@
 import { parseAmount } from './money';
 
+// La puntuación se reemplaza por espacio y no se borra: "Serie/N°" tiene que quedar
+// "serie n" y no "serien", que no coincide con nada.
+export function normStr(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // ---------------------------------------------------------------------------
 // Perfil de columnas
 //
@@ -67,4 +73,29 @@ export function fitsColumn(value: string | number, kind: ColumnKind): boolean {
   if (kind === 'fecha') return k === 'fecha';
   if (kind === 'dinero' || kind === 'numero') return k === 'dinero' || k === 'numero';
   return true;
+}
+
+// La deuda, el saldo y el estado de pago no están en la factura: dependen de si el
+// cliente pagó, que es información de la empresa y no del comprobante. En casi todas
+// las planillas son columnas calculadas. Escribirlas rompe la fórmula que las calcula,
+// y como la detección de fórmulas mira las filas de abajo, una vez pisadas ya no se
+// detectan y el daño se repite en cada exportación.
+export const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b|\bdeuda\b|\bpendiente\b|\bdebe\b|estado\s*(de\s*)?(pago|pedido)/;
+
+export function isProtectedHeader(header: string): boolean {
+  return PROTECTED_HEADER.test(normStr(header));
+}
+
+// Escribimos con USER_ENTERED, que es lo que hace que Sheets interprete fechas y
+// montos como el usuario espera. El costo es que un texto que arranque con "=" se
+// ejecuta como fórmula: una factura preparada con =IMPORTRANGE o =HYPERLINK en la
+// razón social terminaría corriendo dentro de la planilla del cliente. La comilla
+// simple le dice a Sheets que trate la celda como texto y no se ve en la celda.
+// Sólo aplica a texto: los importes ya vienen convertidos a número, así que un
+// negativo como -2840 no se toca y sigue sumando.
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+function sanitizeCell(value: string | number): string | number {
+  if (typeof value !== 'string') return value;
+  return FORMULA_START.test(value.trim()) ? `'${value.trim()}` : value;
 }

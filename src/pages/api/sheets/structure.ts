@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
-import { profileColumns } from '../../../lib/sheetProfile';
+import { profileColumns, isProtectedHeader } from '../../../lib/sheetProfile';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -75,6 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // cada columna. Sin esto había que pedirle al usuario que copiara su planilla para
     // poder entender por qué un dato caía donde caía.
     const tabProfiles: Record<string, Record<string, string>> = {};
+    // Por qué Ritto puede o no escribir en cada columna. Es la mitad que faltaba: el
+    // perfil dice de qué es la columna, esto dice si la vamos a tocar. Una columna
+    // perfilada como importes pero con fórmulas no recibe nada, y hasta ahora eso no
+    // se veía en ningún lado.
+    const tabWritable: Record<string, Record<string, string>> = {};
 
     for (const tab of tabs.slice(0, 15)) {
       const enc = encodeURIComponent(tab);
@@ -89,12 +94,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tabHeaderMap[tab] = headers;
         tabProfiles[tab] = profileColumns(headers, rows.slice(1));
         headers.forEach((h) => allHeadersSet.add(h));
+
+        // Segunda lectura del mismo rango pidiendo las fórmulas en vez de sus
+        // resultados: es la única forma de saber si una celda tiene un cálculo.
+        const fRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${enc}!A2:ZZ8?valueRenderOption=FORMULA`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        const fRows: string[][] = fRes.ok ? ((await fRes.json()).values ?? []) : [];
+        const estado: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          const tieneFormula = fRows.some((r) => typeof r?.[idx] === 'string' && r[idx].startsWith('='));
+          if (tieneFormula) estado[h] = 'formula';
+          else if (isProtectedHeader(h)) estado[h] = 'protegida';
+          else estado[h] = 'escribible';
+        });
+        tabWritable[tab] = estado;
       }
     }
 
     const sampleHeaders = Array.from(allHeadersSet);
 
-    return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap, tabProfiles });
+    return res.status(200).json({ tabs, sampleHeaders, tabHeaderMap, tabProfiles, tabWritable });
   } catch (err) {
     console.error('[structure] unhandled error:', err);
     return res.status(500).json({ error: 'Error interno. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });
