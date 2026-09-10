@@ -380,8 +380,29 @@ async function templateLastRow(
   return last;
 }
 
+// Las celdas de una fila puntual, tal como están escritas: una fórmula vuelve como
+// "=..." y no como su resultado. Es lo que permite preguntar por la celda concreta que
+// vamos a ocupar en vez de por la columna entera.
+async function rowCells(
+  sheetId: string,
+  tabName: string,
+  rowNum: number,
+  accessToken: string,
+): Promise<string[]> {
+  if (rowNum < 1) return [];
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `A${rowNum}:ZZ${rowNum}`)}?valueRenderOption=FORMULA`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) return [];
+  const values = ((await res.json()) as { values?: string[][] }).values ?? [];
+  return (values[0] ?? []).map((c) => (c == null ? '' : String(c)));
+}
+
 // `row` is aligned 1:1 with the tab's headers. null means "this cell is not ours" —
 // a formula column or a field Ritto must never fill — and is skipped entirely.
+// `tentative` lleva, en las columnas que la lectura de la columna entera dio por
+// calculadas, el valor que Ritto escribiría si la celda de destino resultara libre.
 async function appendRow(
   sheetId: string,
   tabName: string,
@@ -390,7 +411,8 @@ async function appendRow(
   tabGid: number | undefined,
   formulaIdx: number[],
   headerRow: number,
-): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean }> {
+  tentative: (string | number | null)[] = [],
+): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean; writtenIdx?: number[] }> {
   // Measure occupancy on a column Ritto actually fills with a value. A column it
   // only ever blanks would read as empty forever and every export would land on
   // row 2, on top of the previous one.
@@ -441,6 +463,15 @@ async function appendRow(
     nextRow = Math.max(used + headerRow, headerRow + 1); // no formulas here, nothing to stay inside of
   }
 
+  // Una columna puede tener fórmula en unas filas y no en otras. "Costo" suele llevar
+  // la suma sólo en la línea de totales; "Deuda" una por cada fila. Mirar la columna
+  // entera trata a las dos igual: bloquea Costo y la factura entra sin importe. Lo que
+  // decide es la celda concreta que vamos a ocupar — o, si hay que insertar la fila, la
+  // de arriba, que es de la que se hereda.
+  let refRow = grewTemplate ? nextRow - 1 : nextRow;
+  let ref = await rowCells(sheetId, tabName, refRow, accessToken);
+  const esFormula = (cells: string[], i: number) => cells[i] != null && cells[i].startsWith('=');
+
   if (grewTemplate && tabGid != null) {
     const requests: unknown[] = [{
       insertDimension: {
@@ -451,7 +482,11 @@ async function appendRow(
     // An inserted row inherits formatting but not formulas. Copy them column by
     // column — copying the whole row would drag the neighbouring invoice's values
     // along with them.
-    for (const run of runsOf(formulaIdx)) {
+    // Se copian las que la fila de arriba tiene de verdad, no las de la columna: en
+    // "Costo" la de arriba es un importe escrito a mano, y copiarla habría arrastrado
+    // el monto de la factura anterior a la nueva fila.
+    const heredables = ref.map((_, i) => i).filter((i) => esFormula(ref, i));
+    for (const run of runsOf(heredables)) {
       requests.push({
         copyPaste: {
           source: { sheetId: tabGid, startRowIndex: nextRow - 2, endRowIndex: nextRow - 1, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
@@ -470,7 +505,27 @@ async function appendRow(
       // of the user's template.
       grewTemplate = false;
       nextRow = Math.max(used + headerRow, lastTemplate + 1, headerRow + 1);
+      refRow = nextRow;
+      ref = await rowCells(sheetId, tabName, refRow, accessToken);
     }
+  }
+
+  // Con la fila de destino a la vista se decide celda por celda. Una fórmula no se pisa
+  // nunca, venga de donde venga la orden. Y una columna dada por calculada que en esta
+  // fila está libre se escribe, que es el caso de "Costo": la planilla la suma abajo,
+  // pero la línea de la factura la llena el usuario.
+  const writtenIdx: number[] = [];
+  for (let i = 0; i < row.length; i++) {
+    if (esFormula(ref, i)) { row[i] = null; continue; }
+    if (row[i] === null) {
+      const t = tentative[i];
+      if (t == null || t === '') continue;
+      // Si vamos a insertar, la fila nueva nace vacía. Si vamos a usar una fila que ya
+      // está, sólo se ocupa la celda si no había nada escrito.
+      if (!grewTemplate && String(ref[i] ?? '').trim() !== '') continue;
+      row[i] = t;
+    }
+    if (row[i] !== null && row[i] !== '') writtenIdx.push(i);
   }
 
   // A single PUT over A:N would blank every protected cell in between, because ""
@@ -514,7 +569,7 @@ async function appendRow(
       return { ok: false, status: r.status, error: r.statusText };
     }
   }
-  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate };
+  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate, writtenIdx };
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
@@ -1018,7 +1073,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const valorDe = (col: string) => porNombre.get(normStr(col));
 
-      const usable = (h: string) => writable.has(h) && (autorizada(h) || !isProtectedHeader(h));
+      // Para decidir a qué columna rescatar un importe alcanza con que el usuario sea el
+      // dueño de esa columna. Tener fórmulas ya no la descarta acá: eso se resuelve
+      // mirando la celda de destino, y si resultara ocupada el dato no entra igual.
+      const usable = (h: string) => autorizada(h) || !isProtectedHeader(h);
       const moneyCol = bestMoneyColumn(tabHeaders, usable);
       // Only step in when no money column got a value at all. A sheet with both
       // "Subtotal" and "Total" fills one of them legitimately, and rescuing into the
@@ -1046,8 +1104,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const perfil = profileColumns(tabHeaders, tabSampleRows[tabName] ?? []);
       const rechazados: string[] = [];
 
-      const row: (string | number | null)[] = tabHeaders.map((col) => {
-        if (!writable.has(col) || (isProtectedHeader(col) && !autorizada(col))) return null;
+      // Lo que le toca a una columna, ya convertido y verificado, o '' si no hay nada
+      // que escribir ahí.
+      const valorLimpio = (col: string): string | number => {
         const val = valorDe(col);
         if (val == null) return '';
         const limpio = typeof val === 'number' ? val : (parseAmount(val) ?? val);
@@ -1061,52 +1120,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return '';
         }
         return limpio;
-      });
+      };
 
-      // Una fila sin importe entra igual —el número y la fecha sirven— pero hay que
-      // decirlo. Antes se exportaba "bien" y el usuario descubría la celda vacía
-      // después, sin saber si falló la lectura de la factura o el mapeo de la columna.
-      const importeEscrito = tabHeaders.some(
-        (h, i) => looksLikeMoney(h) && !isProtectedHeader(h) && typeof row[i] === 'number' && row[i] !== 0,
+      const row: (string | number | null)[] = tabHeaders.map((col) =>
+        !writable.has(col) || (isProtectedHeader(col) && !autorizada(col)) ? null : valorLimpio(col),
       );
-      if (!importeEscrito) {
-        const leido = typeof inv.total === 'number' && inv.total !== 0;
-        // Qué columnas de dinero había y por qué no se uso ninguna. Sin esto el aviso
-        // dice "no encontramos donde escribirlo" y no hay forma de saber si es que no
-        // existe la columna o que Ritto la considera calculada.
-        const descartadas = tabHeaders
-          .filter((h) => looksLikeMoney(h))
-          .map((h) => {
-            if (!writable.has(h)) return { columna: h, motivo: 'formula' as const };
-            if (isProtectedHeader(h)) return { columna: h, motivo: 'protegida' as const };
-            return null;
-          })
-          .filter((x): x is { columna: string; motivo: 'formula' | 'protegida' } => x !== null);
-        sinImporte.push({
-          factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : (typeof inv.fileName === 'string' ? inv.fileName : '—'),
-          // Distinguir las dos causas es lo que decide qué hacer: releer el
-          // comprobante, o revisar la planilla.
-          motivo: leido ? 'sin_columna' : 'no_se_leyo',
-          importe: leido ? (inv.total as number) : null,
-          pestana: tabName,
-          descartadas,
-          notas: rechazados,
-        });
-      }
 
-      if (importeEscrito && rechazados.length > 0) {
-        sinImporte.push({
-          factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
-          motivo: 'dato_rechazado',
-          importe: null,
-          pestana: tabName,
-          descartadas: [],
-          notas: rechazados,
-        });
-      }
+      // Una columna con fórmulas ya no se descarta acá. Se lleva como candidata y se
+      // decide contra la celda real de la fila de destino: si esa celda está libre, el
+      // dato entra. Las protegidas por nombre —"Total del mes", "Saldo"— sí quedan
+      // afuera, porque ahí el cálculo es del usuario aunque la celda esté vacía.
+      const tentativo: (string | number | null)[] = tabHeaders.map((col, i) =>
+        row[i] === null && !isProtectedHeader(col) ? valorLimpio(col) : null,
+      );
 
       // Don't write a row where every cell is empty (fallback had no alias matches)
-      const hasData = row.some((v) => v !== '' && v != null);
+      const hasData = row.some((v) => v !== '' && v != null) || tentativo.some((v) => v !== '' && v != null);
       if (!hasData) {
         debugEntry.appendError = 'skipped_empty_row';
         invoiceDebug.push(debugEntry);
@@ -1115,9 +1144,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       debugEntry.rowAttempted = true;
       const formulaIdx = tabHeaders.map((h, i) => (writable.has(h) ? -1 : i)).filter((i) => i >= 0);
-      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1);
+      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1, tentativo);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
+
+      // El aviso se arma después de escribir, no antes: hasta que no se mira la celda
+      // de destino no se sabe si el importe entró. Calcularlo antes avisaba "sin
+      // importe" en facturas que sí lo habían recibido.
+      if (result.ok) {
+        const escritas = new Set(result.writtenIdx ?? []);
+        const importeEscrito = tabHeaders.some(
+          (h, i) => looksLikeMoney(h) && !isProtectedHeader(h) && escritas.has(i) && typeof row[i] === 'number' && row[i] !== 0,
+        );
+        if (!importeEscrito) {
+          const leido = typeof inv.total === 'number' && inv.total !== 0;
+          // Qué columnas de dinero había y por qué no se uso ninguna. Sin esto el aviso
+          // dice "no encontramos donde escribirlo" y no hay forma de saber si es que no
+          // existe la columna o que Ritto la considera calculada.
+          const descartadas = tabHeaders
+            .map((h, i) => ({ h, i }))
+            .filter(({ h, i }) => looksLikeMoney(h) && !escritas.has(i))
+            .map(({ h }) => {
+              if (isProtectedHeader(h)) return { columna: h, motivo: 'protegida' as const };
+              if (!writable.has(h)) return { columna: h, motivo: 'formula' as const };
+              return null;
+            })
+            .filter((x): x is { columna: string; motivo: 'formula' | 'protegida' } => x !== null);
+          sinImporte.push({
+            factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : (typeof inv.fileName === 'string' ? inv.fileName : '—'),
+            // Distinguir las dos causas es lo que decide qué hacer: releer el
+            // comprobante, o revisar la planilla.
+            motivo: leido ? 'sin_columna' : 'no_se_leyo',
+            importe: leido ? (inv.total as number) : null,
+            pestana: tabName,
+            descartadas,
+            notas: rechazados,
+          });
+        } else if (rechazados.length > 0) {
+          sinImporte.push({
+            factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
+            motivo: 'dato_rechazado',
+            importe: null,
+            pestana: tabName,
+            descartadas: [],
+            notas: rechazados,
+          });
+        }
+      }
 
       if (result.ok) {
         totalRows++;
