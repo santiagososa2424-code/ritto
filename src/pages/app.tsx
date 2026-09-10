@@ -78,7 +78,7 @@ export default function AppPage() {
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
-  const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: string[] }[]>([]);
+  const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: { columna: string; motivo: string }[]; notas?: string[] }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -349,7 +349,7 @@ export default function AppPage() {
     setDownloading(null);
   }
 
-  async function exportToSheets(invoiceList: ExtractedInvoice[], pestanasElegidas?: Record<string, string>) {
+  async function exportToSheets(invoiceList: ExtractedInvoice[], pestanasElegidas?: Record<string, string>, forzarColumnas?: string[]) {
     if (!user) return;
     setSheetsStatus('loading');
     setSheetsError('');
@@ -361,7 +361,7 @@ export default function AppPage() {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping, pestanasElegidas }),
+        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping, pestanasElegidas, forzarColumnas }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -757,10 +757,37 @@ export default function AppPage() {
                           {s.motivo === 'no_se_leyo'
                             ? 'no pudimos leer el importe del comprobante. Revisá la factura en la lista y corregí el total a mano.'
                             : `leímos ${s.importe} pero no encontramos en qué columna de «${s.pestana}» escribirlo.`}
-                          {s.descartadas && s.descartadas.length > 0 && (
+                          {s.notas && s.notas.length > 0 && (
                             <ul style={{ margin: '4px 0 0 14px', padding: 0 }}>
-                              {s.descartadas.map((d, j) => <li key={j}>{d}</li>)}
+                              {s.notas.map((d, j) => <li key={j}>{d}</li>)}
                             </ul>
+                          )}
+                          {s.descartadas && s.descartadas.length > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              {s.descartadas.map((d, j) => (
+                                <div key={j} style={{ marginBottom: 5 }}>
+                                  <strong>{d.columna}</strong>{' — '}
+                                  {d.motivo === 'formula'
+                                    ? 'tiene fórmulas, así que no la pisamos.'
+                                    : 'el nombre indica que la calcula tu planilla.'}
+                                  {' '}
+                                  <button
+                                    onClick={() => exportToSheets(filteredDone, undefined, [d.columna])}
+                                    style={{
+                                      background: '#78350f', color: '#fff', border: 'none',
+                                      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                      fontFamily: 'inherit', cursor: 'pointer', marginLeft: 2,
+                                    }}
+                                  >
+                                    Escribir igual acá
+                                  </button>
+                                </div>
+                              ))}
+                              <div style={{ fontSize: 11, marginTop: 4 }}>
+                                Si elegís escribir igual, Ritto reemplaza la fórmula de esa celda por el importe
+                                — solo en las filas que agrega— y lo recuerda para las próximas facturas.
+                              </div>
+                            </div>
                           )}
                         </li>
                       ))}

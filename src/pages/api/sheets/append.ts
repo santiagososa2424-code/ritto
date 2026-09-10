@@ -798,6 +798,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       invoices: Record<string, unknown>[];
       // El usuario eligió a mano a qué pestaña va cada proveedor que no encontramos.
       pestanasElegidas?: Record<string, string>;
+      // Columnas que el usuario autorizó a escribir aunque tengan fórmulas. Es su
+      // planilla y su decisión: Ritto avisa, no impone.
+      forzarColumnas?: string[];
     };
     if (!invoices?.length) return res.status(400).json({ error: 'invoices es requerido' });
 
@@ -838,13 +841,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sinPestana: string[] = [];
     // Proveedores cuya pestaña quedó aprendida en esta exportación.
     const aprendidos: string[] = [];
-    const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: string[] }> = [];
+    const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: Array<{ columna: string; motivo: string }>; notas: string[] }> = [];
 
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
     const { data: reglas } = await supabase
       .from('vendor_mappings')
       .select('vendor_key, sheet_name')
       .eq('user_id', user.id);
+
+    // Autorizaciones guardadas de exportaciones anteriores.
+    const columnasAutorizadas = new Set<string>();
+    for (const r of reglas ?? []) {
+      const k = String(r.vendor_key ?? '');
+      if (k.startsWith('columna:')) columnasAutorizadas.add(k.slice('columna:'.length));
+    }
+    for (const c of (req.body as { forzarColumnas?: string[] }).forzarColumnas ?? []) {
+      if (typeof c === 'string' && c.trim()) columnasAutorizadas.add(normStr(c));
+    }
 
     const aprendidas: Record<string, string> = {};
     for (const r of reglas ?? []) {
@@ -983,6 +996,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // never slide into the neighbouring column. Cells Ritto does not own become
       // null and are left untouched rather than blanked.
       const writable = new Set(tabWritableHeaders[tabName] ?? tabHeaders);
+      const autorizada = (h: string) => columnasAutorizadas.has(normStr(h));
+      // Autorizada por el usuario: se escribe aunque tenga fórmula. Pisarla es
+      // exactamente lo que pidió.
+      for (const h of tabHeaders) if (autorizada(h)) writable.add(h);
 
       // Dropping a value assigned to a protected column is not enough: if the model
       // decided the amount belonged in "TOTAL MES", refusing to write it there leaves
@@ -1001,7 +1018,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const valorDe = (col: string) => porNombre.get(normStr(col));
 
-      const usable = (h: string) => writable.has(h) && !isProtectedHeader(h);
+      const usable = (h: string) => writable.has(h) && (autorizada(h) || !isProtectedHeader(h));
       const moneyCol = bestMoneyColumn(tabHeaders, usable);
       // Only step in when no money column got a value at all. A sheet with both
       // "Subtotal" and "Total" fills one of them legitimately, and rescuing into the
@@ -1030,7 +1047,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const rechazados: string[] = [];
 
       const row: (string | number | null)[] = tabHeaders.map((col) => {
-        if (!writable.has(col) || isProtectedHeader(col)) return null;
+        if (!writable.has(col) || (isProtectedHeader(col) && !autorizada(col))) return null;
         const val = valorDe(col);
         if (val == null) return '';
         const limpio = typeof val === 'number' ? val : (parseAmount(val) ?? val);
@@ -1060,11 +1077,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const descartadas = tabHeaders
           .filter((h) => looksLikeMoney(h))
           .map((h) => {
-            if (isProtectedHeader(h)) return `${h}: la salteamos porque el nombre indica que la calcula la planilla`;
-            if (!writable.has(h)) return `${h}: tiene fórmulas, así que no la pisamos`;
+            if (!writable.has(h)) return { columna: h, motivo: 'formula' as const };
+            if (isProtectedHeader(h)) return { columna: h, motivo: 'protegida' as const };
             return null;
           })
-          .filter((x): x is string => x !== null);
+          .filter((x): x is { columna: string; motivo: 'formula' | 'protegida' } => x !== null);
         sinImporte.push({
           factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : (typeof inv.fileName === 'string' ? inv.fileName : '—'),
           // Distinguir las dos causas es lo que decide qué hacer: releer el
@@ -1072,7 +1089,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           motivo: leido ? 'sin_columna' : 'no_se_leyo',
           importe: leido ? (inv.total as number) : null,
           pestana: tabName,
-          descartadas: descartadas.concat(rechazados),
+          descartadas,
+          notas: rechazados,
         });
       }
 
@@ -1082,7 +1100,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           motivo: 'dato_rechazado',
           importe: null,
           pestana: tabName,
-          descartadas: rechazados,
+          descartadas: [],
+          notas: rechazados,
         });
       }
 
@@ -1107,6 +1126,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Recién se aprende después de escribir bien: si la exportación falla, no
         // queremos dejar una regla apuntando a una pestaña que no funcionó.
+        for (const col of tabHeaders) {
+          if (!autorizada(col)) continue;
+          await supabase.from('vendor_mappings').upsert({
+            user_id: user.id,
+            vendor_key: `columna:${normStr(col)}`,
+            vendor_name: col,
+            sheet_name: tabName,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,vendor_key' });
+        }
+
         if (elegida) {
           const filas = vendorKeys(inv).map((vendor_key) => ({
             user_id: user.id,
