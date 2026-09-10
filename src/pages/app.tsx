@@ -78,6 +78,7 @@ export default function AppPage() {
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
+  const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -370,6 +371,7 @@ export default function AppPage() {
         setSheetsSinPestana(data.sinPestana ?? []);
         setPestanaElegida({});
         setSheetsAprendidos(data.aprendidos ?? []);
+        setSheetsSinImporte(data.sinImporte ?? []);
         setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
         setSheetsStatus('ok');
@@ -393,7 +395,7 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsAprendidos([]); setSheetsRedirectUrl(''); }, 20000);
+    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsAprendidos([]); setSheetsSinImporte([]); setSheetsRedirectUrl(''); }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -744,6 +746,21 @@ export default function AppPage() {
                     {sheetsRedirectUrl ? 'Abrir en la pestaña correcta →' : 'Abrir planilla →'}
                   </a>
                 </div>
+                )}
+                {sheetsSinImporte.length > 0 && (
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', color: '#78350f', fontSize: 12, lineHeight: 1.55 }}>
+                    <strong>Se exportaron sin importe:</strong>
+                    <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
+                      {sheetsSinImporte.map((s, i) => (
+                        <li key={i} style={{ marginBottom: 3 }}>
+                          <strong>{s.factura}</strong> —{' '}
+                          {s.motivo === 'no_se_leyo'
+                            ? 'no pudimos leer el importe del comprobante. Revisá la factura en la lista y corregí el total a mano.'
+                            : `leímos ${s.importe} pero no encontramos en qué columna de «${s.pestana}» escribirlo.`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {sheetsAprendidos.length > 0 && (
                   <div style={{ fontSize: 12, color: '#166534', fontWeight: 500 }}>

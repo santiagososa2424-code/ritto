@@ -827,6 +827,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sinPestana: string[] = [];
     // Proveedores cuya pestaña quedó aprendida en esta exportación.
     const aprendidos: string[] = [];
+    const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string }> = [];
 
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
     const { data: reglas } = await supabase
@@ -1021,6 +1022,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return parseAmount(val) ?? val;
       });
 
+      // Una fila sin importe entra igual —el número y la fecha sirven— pero hay que
+      // decirlo. Antes se exportaba "bien" y el usuario descubría la celda vacía
+      // después, sin saber si falló la lectura de la factura o el mapeo de la columna.
+      const importeEscrito = tabHeaders.some(
+        (h, i) => looksLikeMoney(h) && !isProtectedHeader(h) && typeof row[i] === 'number' && row[i] !== 0,
+      );
+      if (!importeEscrito) {
+        const leido = typeof inv.total === 'number' && inv.total !== 0;
+        sinImporte.push({
+          factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : (typeof inv.fileName === 'string' ? inv.fileName : '—'),
+          // Distinguir las dos causas es lo que decide qué hacer: releer el
+          // comprobante, o revisar la planilla.
+          motivo: leido ? 'sin_columna' : 'no_se_leyo',
+          importe: leido ? (inv.total as number) : null,
+          pestana: tabName,
+        });
+      }
+
       // Don't write a row where every cell is empty (fallback had no alias matches)
       const hasData = row.some((v) => v !== '' && v != null);
       if (!hasData) {
@@ -1087,6 +1106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rowsAdded: totalRows,
       sinPestana,
       aprendidos,
+      sinImporte,
       // Las pestañas que realmente tiene la planilla. Van al cliente para que, cuando
       // una factura no encuentre la suya, la pantalla pueda mostrar las que hay: sin
       // eso el usuario lee "creá una pestaña" y no tiene con qué comparar.
