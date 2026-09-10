@@ -545,7 +545,12 @@ function normStr(s: string): string {
 // accumulator sums many invoices, so one invoice's amount does not belong there.
 // The formula check already catches most of these; this covers the rest, e.g. the
 // first export into a template whose =SUM() rows have not been written yet.
-const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b/;
+// La deuda, el saldo y el estado de pago no están en la factura: dependen de si el
+// cliente pagó, que es información de la empresa y no del comprobante. En casi todas
+// las planillas son columnas calculadas. Escribirlas rompe la fórmula que las calcula,
+// y como la detección de fórmulas mira las filas de abajo, una vez pisadas ya no se
+// detectan y el daño se repite en cada exportación.
+const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b|\bdeuda\b|\bpendiente\b|\bdebe\b|estado\s*(de\s*)?(pago|pedido)/;
 
 function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));
