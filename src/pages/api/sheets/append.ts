@@ -520,16 +520,24 @@ const FIELD_ALIASES: Record<string, string[]> = {
   proveedor: ['proveedor', 'empresa', 'supplier', 'vendedor', 'emisor', 'razon social', 'nombre', 'comercio', 'distribuidor'],
   rut: ['rut', 'cuit', 'nit', 'id fiscal', 'identificacion fiscal', 'ruc', 'rut proveedor', 'rut emisor'],
   fecha: ['fecha', 'fecha factura', 'fecha emision', 'fecha de emision', 'date', 'fecha comprobante'],
-  nroDocumento: ['numero', 'n', 'factura n', 'numero factura', 'nro factura', 'nro doc', 'comprobante', 'serie', 'serie / numero'],
+  // Sin la 'n' suelta: matcheaba con cualquier columna que tuviera una ene. "Neto"
+  // contiene una, así que el número de factura terminaba escrito ahí. Una columna
+  // llamada "N°" sigue enganchando, porque 'numero' la contiene.
+  nroDocumento: ['numero', 'n factura', 'factura n', 'numero factura', 'nro factura', 'nro doc', 'nro comprobante', 'comprobante', 'serie', 'serie n', 'serie numero'],
   tipoDocumento: ['tipo', 'tipo documento', 'tipo comprobante', 'tipo de cfe', 'tipo cfe'],
   moneda: ['moneda', 'currency', 'divisa'],
   neto: ['neto', 'subtotal', 'base imponible', 'monto neto', 'base', 'subtotal tasa basica'],
   ivaTotal: ['iva', 'impuesto', 'tax', 'total iva', 'iva 22', 'iva22'],
-  total: ['total', 'monto', 'importe', 'monto total', 'valor total', 'total factura', 'amount'],
+  // 'costo' faltaba, y es como se llama la columna de importe en la mayoría de las
+  // planillas de comercio que vimos: la factura entraba con número y fecha pero sin
+  // el monto.
+  total: ['total', 'costo', 'costos', 'monto', 'importe', 'precio', 'gasto', 'monto total', 'valor total', 'total factura', 'amount'],
 };
 
+// La puntuación se reemplaza por espacio y no se borra: "Serie/N°" tiene que quedar
+// "serie n" y no "serien", que no coincide con nada.
 function normStr(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // Columns Ritto must never fill, whatever the model returns for them. A payment date
@@ -581,6 +589,32 @@ function bestMoneyColumn(headers: string[], usable: (h: string) => boolean): str
 }
 
 
+// El matcher anterior comparaba subcadenas sueltas y se quedaba con el primer campo
+// declarado que enganchara. Eso hacía que "Total" cayera en neto —porque "subtotal"
+// contiene "total"— y que "RUT Emisor" cayera en proveedor, porque contiene "emisor".
+// Ahora se puntúan todas las opciones y gana la más específica: coincidencia exacta
+// primero, y después por palabra completa, valorando el sinónimo más largo.
+function matchField(col: string): string | null {
+  const n = normStr(col);
+  if (!n) return null;
+
+  let bestField: string | null = null;
+  let bestScore = 0;
+
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    for (const raw of aliases) {
+      const a = normStr(raw);
+      if (!a) continue;
+      let score = 0;
+      if (n === a) score = 100 + a.length;
+      else if (new RegExp(`\\b${a}\\b`).test(n)) score = 50 + a.length;
+      else if (new RegExp(`\\b${n}\\b`).test(a)) score = 30 + n.length;
+      if (score > bestScore) { bestScore = score; bestField = field; }
+    }
+  }
+  return bestField;
+}
+
 function fallbackMapInvoice(
   inv: Record<string, unknown>,
   tabHeaders: string[],
@@ -590,25 +624,17 @@ function fallbackMapInvoice(
   const result: Record<string, string | number | null> = {};
 
   for (const col of tabHeaders) {
-    const normCol = normStr(col);
-    let matched = false;
-    for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
-      if (aliases.some((a) => normCol === a || normCol.includes(a) || a.includes(normCol))) {
-        const v = inv[field];
-        if (v != null) {
-          if (typeof v === 'number' && isNC && NUMERIC_SIGN.has(field)) {
-            result[col] = -v;
-          } else {
-            result[col] = typeof v === 'number' ? v : String(v);
-          }
-        } else {
-          result[col] = null;
-        }
-        matched = true;
-        break;
+    const field = matchField(col);
+    if (field) {
+      const v = inv[field];
+      if (v != null) {
+        result[col] = typeof v === 'number' && isNC && NUMERIC_SIGN.has(field) ? -v : (typeof v === 'number' ? v : String(v));
+      } else {
+        result[col] = null;
       }
+      continue;
     }
-    if (!matched) result[col] = null;
+    result[col] = null;
   }
   return result;
 }
@@ -748,15 +774,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'No se pudieron obtener las pestañas de la planilla. Revisá la URL y los permisos.' });
     }
 
-    // Bloquear la exportación solo tiene sentido si la planilla está organizada por
-    // proveedor. Si ninguna factura del lote encuentra su pestaña, lo más probable es
-    // que esté organizada de otra forma —por mes, por rubro, una sola hoja— y entonces
-    // no exportar nada sería dejar al usuario sin producto.
-    const planillaPorProveedor = invoices.some((inv) => {
-      const p = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
-      return p ? matchTabByProvider(existingTabs, p) !== null : false;
-    });
-
     let totalRows = 0;
     const writtenTabs: string[] = [];
     const exportedIds: string[] = [];
@@ -878,7 +895,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // igual. Se la deja sin exportar para que pueda reintentar después de arreglar el
       // nombre en la planilla. La excepción es una planilla de una sola pestaña: ahí no
       // hay ninguna decisión que tomar y ese es el destino.
-      if (planillaPorProveedor && proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
+      // Si el proveedor no tiene pestaña, se pregunta. Antes había una excepción: si
+      // ninguna factura del lote encontraba la suya, se asumía que la planilla no
+      // estaba organizada por proveedor y se escribía igual en una pestaña general.
+      // Esa excepción existía porque preguntar era un callejón sin salida. Ahora que
+      // el aviso deja elegir la pestaña y la recuerda, adivinar es siempre peor: la
+      // factura terminaba en Resumen y el usuario se enteraba después.
+      if (proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
         if (!sinPestana.includes(proveedorFactura)) sinPestana.push(proveedorFactura);
         debugEntry.appendError = 'sin_pestana_del_proveedor';
         invoiceDebug.push(debugEntry);
