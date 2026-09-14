@@ -1,4 +1,4 @@
-import { parseAmount } from './money';
+import { parseAmount } from './money.ts';
 
 // La puntuación se reemplaza por espacio y no se borra: "Serie/N°" tiene que quedar
 // "serie n" y no "serien", que no coincide con nada.
@@ -80,7 +80,11 @@ export function fitsColumn(value: string | number, kind: ColumnKind): boolean {
 // las planillas son columnas calculadas. Escribirlas rompe la fórmula que las calcula,
 // y como la detección de fórmulas mira las filas de abajo, una vez pisadas ya no se
 // detectan y el daño se repite en cada exportación.
-export const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal)\s*(del\s*)?(mes|ano|anual|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b|\bdeuda\b|\bpendiente\b|\bdebe\b|estado\s*(de\s*)?(pago|pedido)/;
+// Ojo con el \b del final: "mes" seguido de \b no matchea adentro de "mensual", así que
+// "Total Mensual" pasaba por columna escribible y ahí terminó escrita la fecha de una
+// factura. Por eso "mensual" va listado aparte y antes que "mes", y por eso hay un test
+// que recorre estos nombres uno por uno.
+export const PROTECTED_HEADER = /(fecha|dia)\s*(de\s*)?(pago|cobro)|(total|subtotal|gasto|resumen)\s*(del\s*)?(mensual|mes|anual|ano|general)\b|acumulad|\bsuma(s|toria)?\b|\bsaldo\b|\bdiferencia\b|\bdeuda\b|\bpendiente\b|\bdebe\b|estado\s*(de\s*)?(pago|pedido)/;
 
 export function isProtectedHeader(header: string): boolean {
   return PROTECTED_HEADER.test(normStr(header));

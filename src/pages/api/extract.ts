@@ -8,6 +8,7 @@ import { extractFromImage, extractFromPDF } from '../../lib/geminiExtractor';
 import type { ExtractedInvoice } from '../../lib/types';
 import { getAuthUser } from '../../lib/auth';
 import { rateLimit } from '../../lib/rateLimit';
+import { logError } from '../../lib/errorLog';
 
 export const config = { api: { bodyParser: false }, maxDuration: 60 };
 
@@ -129,7 +130,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ ...base, status: 'error', error: 'Tipo de archivo no soportado' });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('Error extrayendo:', fileName, msg);
+    // Un comprobante ilegible no es un bug: se registra igual, porque una racha de
+    // fallos del mismo tipo sí lo es, y es la unica forma de verla sin que el cliente avise.
+    void logError('extract', err, { contexto: { archivo: fileName, tipo: isPDF ? 'pdf' : isImage ? 'image' : 'other' } });
     const friendly = friendlyError(msg, isPDF ? 'pdf' : isImage ? 'image' : 'other');
     // 422 y no 500: que no hayamos podido leer un comprobante no es una falla del
     // servidor. Devolviendo 500 cada documento ilegible aparecía en la consola como

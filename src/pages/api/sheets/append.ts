@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { getAuthUser } from '../../../lib/auth';
 import { parseAmount } from '../../../lib/money';
 import { profileColumns, fitsColumn, isProtectedHeader } from '../../../lib/sheetProfile';
+import { fechaComparable, ordenPorFecha, elegirFilaDestino, type OrdenFecha } from '../../../lib/sheetLayout';
+import { vendorKeys, reglaAprendida } from '../../../lib/vendorRules';
+import { logError } from '../../../lib/errorLog';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -380,41 +383,7 @@ async function templateLastRow(
   return last;
 }
 
-// Sheets cuenta los días desde el 30/12/1899 y JavaScript desde el 1/1/1970. Para
-// comparar una celda contra la fecha de la factura hay que llevarlas a la misma cuenta.
-const SERIE_SHEETS_A_UNIX = 25569;
-
-// Una fecha convertida a un número que se puede comparar. Una celda de fecha de verdad
-// vuelve como número de serie, que es lo que más conviene: no hay ambigüedad posible
-// entre día y mes. Si la columna guarda texto se parsea, y ahí sí manda el orden
-// uruguayo: D/M/Y.
-function fechaComparable(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) {
-    // Un número fuera del rango de fechas razonables es otra cosa, no una fecha.
-    if (v < 20000 || v > 80000) return null;
-    return v - SERIE_SHEETS_A_UNIX;
-  }
-  const s = String(v ?? '').trim();
-  if (!s) return null;
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) return Date.UTC(+iso[1], +iso[2] - 1, +iso[3]) / 86400000;
-  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
-  if (dmy) {
-    const y = +dmy[3] < 100 ? 2000 + +dmy[3] : +dmy[3];
-    return Date.UTC(y, +dmy[2] - 1, +dmy[1]) / 86400000;
-  }
-  return null;
-}
-
-// Dónde va la factura según la fecha. `pos` es la fila delante de la cual hay que
-// meterla, o null si es la más nueva y va al final. `ultima` es la última fila con
-// fecha: hace falta incluso cuando `pos` es null, porque "al final" significa después
-// de esa fila y no en el primer hueco que aparezca —la planilla tiene huecos entre
-// medio, y caer en uno dejaba la factura nueva por encima de las viejas—.
-// Devuelve null entero cuando la columna no viene ordenada: ahí meterla "en su lugar"
-// sería imponerle al usuario un orden que su planilla no tiene.
-type OrdenFecha = { pos: number | null; ultima: number };
-
+// Lee la columna de fechas de la pestaña y delega la decisión en sheetLayout.ts.
 async function filaPorFecha(
   sheetId: string,
   tabName: string,
@@ -432,28 +401,7 @@ async function filaPorFecha(
   );
   if (!res.ok) return null;
   const cells = ((await res.json()) as { values?: unknown[][] }).values ?? [];
-
-  const filas: Array<{ row: number; fecha: number }> = [];
-  for (let i = 0; i < cells.length; i++) {
-    const f = fechaComparable(cells[i]?.[0]);
-    if (f != null) filas.push({ row: headerRow + 1 + i, fecha: f });
-  }
-  // Con una sola fecha cargada no hay orden que respetar todavía.
-  if (filas.length < 2) return null;
-
-  // Unas pocas filas fuera de lugar no quieren decir que la pestaña no sea cronológica:
-  // suelen ser de exportaciones viejas de Ritto, justo las que hay que dejar de
-  // producir. Exigir orden perfecto se mordía la cola —una planilla ya desordenada no
-  // se podía volver a ordenar nunca— y era la razón por la que una factura del 1/8
-  // terminaba abajo de una del 19/8.
-  let inversiones = 0;
-  for (let i = 1; i < filas.length; i++) {
-    if (filas[i].fecha < filas[i - 1].fecha) inversiones++;
-  }
-  if (inversiones > Math.max(1, Math.floor(filas.length * 0.25))) return null;
-
-  const posterior = filas.find((f) => f.fecha > fecha);
-  return { pos: posterior ? posterior.row : null, ultima: filas[filas.length - 1].row };
+  return ordenPorFecha(cells.map((c) => c?.[0]), fecha, headerRow);
 }
 
 // Las celdas de una fila puntual, tal como están escritas: una fórmula vuelve como
@@ -512,17 +460,6 @@ async function appendRow(
     used = checkCells.length;
   }
 
-  // Take the FIRST free row, not the one after the last used cell. These templates
-  // usually carry a totals row, a second block or notes well below the data, and
-  // counting to the end drops the invoice underneath all of it.
-  const primeraLibre = (desde: number): number => {
-    for (let i = Math.max(1, desde - headerRow); i < checkCells.length; i++) {
-      const cell = checkCells[i]?.[0];
-      if (cell == null || String(cell).trim() === '') return headerRow + i;
-    }
-    return -1;
-  };
-
   // Si la pestaña viene ordenada por fecha, la factura va en su lugar y no al final.
   // Subir el lunes una factura de agosto la dejaba debajo de las de setiembre, porque
   // el orden que mandaba era el de subida de los archivos, no el de los comprobantes.
@@ -530,58 +467,19 @@ async function appendRow(
     ? await filaPorFecha(sheetId, tabName, orden.colIdx, orden.fecha, headerRow, lastTemplate, accessToken)
     : null;
 
-  // Cuando hay orden por fecha y la factura es la más nueva, "al final" es después de
-  // la última fila con fecha. Buscar el primer hueco desde el encabezado la metía en
-  // cualquier fila vacía intermedia, por encima de facturas más viejas: era el caso de
-  // una del 18/8 quedando arriba de una del 6/8.
-  const desdeFila = ordenFecha && ordenFecha.pos == null ? ordenFecha.ultima + 1 : headerRow + 1;
-  const free = primeraLibre(desdeFila);
-
-  // Only a free row that falls *inside* the template is usable. A blank row further
-  // down is not free space, it is the empty sheet past where the formulas stop.
-  let nextRow: number;
-  let grewTemplate = false;
+  // La decisión en sí vive en sheetLayout.ts, sin red de por medio, para poder probarla.
+  const destino = elegirFilaDestino(
+    checkCells.map((c) => c?.[0]),
+    headerRow,
+    lastTemplate,
+    ordenFecha,
+    tabGid != null,
+  );
+  let nextRow = destino.fila;
+  let grewTemplate = destino.modo === 'insertar';
   // La factura va en la primera fila de datos y hay que correr una fila para abajo a
   // la que estaba ahí.
-  let correrPrimera = false;
-  // Trailing blanks are omitted from the response, so a template that is only half
-  // filled ends the read early: past the last value, the next row is free too.
-  const firstFree = free > 0 ? free : Math.max(used + headerRow, desdeFila);
-
-  if (ordenFecha?.pos != null) {
-    // Entra delante de una factura posterior. Si justo encima hay una fila vacía del
-    // template, se usa esa y no hace falta agrandar nada.
-    const hueco = ordenFecha.pos - 1;
-    const celdaHueco = checkCells[hueco - headerRow]?.[0];
-    // Es seguro: `pos` es la primera fila con fecha posterior, así que todo lo de
-    // arriba tiene fecha anterior o igual a la nuestra.
-    if (hueco > headerRow && (celdaHueco == null || String(celdaHueco).trim() === '')) {
-      nextRow = hueco;
-    } else if (ordenFecha.pos === headerRow + 1) {
-      // La factura es más vieja que todas y le toca la primera fila de datos. Insertar
-      // ahí la dejaría afuera del gasto mensual: Sheets estira un rango cuando la fila
-      // nueva cae adentro, pero no cuando cae justo antes de donde empieza —=SUMA(D2:D40)
-      // pasa a ser =SUMA(D3:D41) y la fila 2, la nuestra, queda sin sumar—.
-      // Así que se inserta una fila más abajo, que sí estira el rango, se corre ahí la
-      // primera factura y la nuestra ocupa el lugar que le corresponde.
-      nextRow = headerRow + 1;
-      correrPrimera = true;
-    } else {
-      nextRow = ordenFecha.pos;
-      grewTemplate = true;
-    }
-  } else if (lastTemplate === 0 || firstFree <= lastTemplate) {
-    nextRow = firstFree;                  // a real gap inside the table
-  } else if (lastTemplate > 0 && tabGid != null) {
-    // The table is full. Insert *inside* it, at its last row, pushing that line and
-    // everything below one down. Inserting after the last row would leave the
-    // invoice outside a total that sums up to it: Sheets only stretches a range
-    // when the new row falls within it, never when it lands just past the end.
-    nextRow = Math.max(lastTemplate, headerRow + 2);
-    grewTemplate = true;
-  } else {
-    nextRow = Math.max(used + headerRow, headerRow + 1); // no formulas here, nothing to stay inside of
-  }
+  let correrPrimera = destino.modo === 'correrPrimera';
 
   // Una columna puede tener fórmula en unas filas y no en otras. "Costo" suele llevar
   // la suma sólo en la línea de totales; "Deuda" una por cada fila. Mirar la columna
@@ -1003,48 +901,6 @@ const FALLBACK_TAB = 'Ritto - Sin clasificar';
 
 // Con qué identificamos a un proveedor entre exportaciones. El RUT primero porque no
 // cambia; el nombre como respaldo, porque en una foto borrosa el RUT puede no leerse.
-// Busca la regla que el usuario enseñó para este proveedor. Primero por clave exacta
-// —el RUT, que no se mueve—. Pero el RUT no siempre se lee: en una foto borrosa o un
-// escaneo torcido lo único que queda es el nombre, y el nombre cambia entre facturas
-// del mismo proveedor: razón social en una, nombre fantasía en la otra. Ahí alcanza con
-// que uno empiece con el otro —"distribuidora del sol sas" y "distribuidora del sol"
-// son el mismo— y no con que uno contenga al otro en cualquier posición, que haría que
-// "sol" enganchara con cualquier cosa.
-function reglaAprendida(
-  inv: Record<string, unknown>,
-  aprendidas: Record<string, string>,
-): { pestana: string; exacta: boolean } | null {
-  const keys = vendorKeys(inv);
-  for (const k of keys) {
-    if (aprendidas[k]) return { pestana: aprendidas[k], exacta: true };
-  }
-
-  const nombre = keys.find((k) => k.startsWith('nombre:'))?.slice('nombre:'.length) ?? '';
-  if (nombre.length < 5) return null;
-  for (const [k, pestana] of Object.entries(aprendidas)) {
-    if (!k.startsWith('nombre:')) continue;
-    const guardado = k.slice('nombre:'.length);
-    if (guardado.length < 5) continue;
-    // El prefijo tiene que cortar en un espacio: si no, "distribuidora" engancharía
-    // con "distribuidoranorte", que es otro proveedor.
-    const prefijo = (largo: string, corto: string) =>
-      largo === corto || (largo.startsWith(corto) && largo[corto.length] === ' ');
-    if (prefijo(guardado, nombre) || prefijo(nombre, guardado)) {
-      return { pestana, exacta: false };
-    }
-  }
-  return null;
-}
-
-function vendorKeys(inv: Record<string, unknown>): string[] {
-  const keys: string[] = [];
-  const rut = typeof inv.rut === 'string' ? inv.rut.replace(/\D/g, '') : '';
-  if (rut.length >= 8) keys.push(`rut:${rut}`);
-  const nombre = typeof inv.proveedor === 'string' ? normStr(inv.proveedor) : '';
-  if (nombre) keys.push(`nombre:${nombre}`);
-  return keys;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -1542,7 +1398,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (err) {
-    console.error('[append] unhandled error:', err);
+    // Sin await: el usuario no tiene que esperar a que se registre el error.
+    void logError('sheets/append', err, {
+      contexto: { facturas: Array.isArray(req.body?.invoices) ? req.body.invoices.length : null },
+    });
     return res.status(500).json({ error: 'Error interno al exportar. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });
   }
 }
