@@ -380,6 +380,70 @@ async function templateLastRow(
   return last;
 }
 
+// Sheets cuenta los días desde el 30/12/1899 y JavaScript desde el 1/1/1970. Para
+// comparar una celda contra la fecha de la factura hay que llevarlas a la misma cuenta.
+const SERIE_SHEETS_A_UNIX = 25569;
+
+// Una fecha convertida a un número que se puede comparar. Una celda de fecha de verdad
+// vuelve como número de serie, que es lo que más conviene: no hay ambigüedad posible
+// entre día y mes. Si la columna guarda texto se parsea, y ahí sí manda el orden
+// uruguayo: D/M/Y.
+function fechaComparable(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    // Un número fuera del rango de fechas razonables es otra cosa, no una fecha.
+    if (v < 20000 || v > 80000) return null;
+    return v - SERIE_SHEETS_A_UNIX;
+  }
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return Date.UTC(+iso[1], +iso[2] - 1, +iso[3]) / 86400000;
+  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (dmy) {
+    const y = +dmy[3] < 100 ? 2000 + +dmy[3] : +dmy[3];
+    return Date.UTC(y, +dmy[2] - 1, +dmy[1]) / 86400000;
+  }
+  return null;
+}
+
+// En qué fila hay que insertar la factura para que la pestaña siga ordenada por fecha.
+// Devuelve null cuando corresponde dejarla al final —que es el camino normal, el de la
+// factura más nueva— y también cuando la columna no viene ordenada: ahí meterla "en su
+// lugar" sería imponerle al usuario un orden que su planilla no tiene.
+async function filaPorFecha(
+  sheetId: string,
+  tabName: string,
+  colIdx: number,
+  fecha: number,
+  headerRow: number,
+  lastTemplate: number,
+  accessToken: string,
+): Promise<number | null> {
+  const col = colLetter(colIdx);
+  const hasta = lastTemplate > headerRow ? String(lastTemplate) : '';
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange(tabName, `${col}${headerRow + 1}:${col}${hasta}`)}?valueRenderOption=UNFORMATTED_VALUE`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) return null;
+  const cells = ((await res.json()) as { values?: unknown[][] }).values ?? [];
+
+  const filas: Array<{ row: number; fecha: number }> = [];
+  for (let i = 0; i < cells.length; i++) {
+    const f = fechaComparable(cells[i]?.[0]);
+    if (f != null) filas.push({ row: headerRow + 1 + i, fecha: f });
+  }
+  // Con una sola fecha cargada no hay orden que respetar todavía.
+  if (filas.length < 2) return null;
+
+  for (let i = 1; i < filas.length; i++) {
+    if (filas[i].fecha < filas[i - 1].fecha) return null;  // no está ordenada
+  }
+
+  const posterior = filas.find((f) => f.fecha > fecha);
+  return posterior ? posterior.row : null;
+}
+
 // Las celdas de una fila puntual, tal como están escritas: una fórmula vuelve como
 // "=..." y no como su resultado. Es lo que permite preguntar por la celda concreta que
 // vamos a ocupar en vez de por la columna entera.
@@ -412,7 +476,8 @@ async function appendRow(
   formulaIdx: number[],
   headerRow: number,
   tentative: (string | number | null)[] = [],
-): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean; writtenIdx?: number[] }> {
+  orden: { colIdx: number; fecha: number } | null = null,
+): Promise<{ ok: boolean; status: number; error?: string; targetRow?: number; grewTemplate?: boolean; writtenIdx?: number[]; ordenada?: boolean }> {
   // Measure occupancy on a column Ritto actually fills with a value. A column it
   // only ever blanks would read as empty forever and every export would land on
   // row 2, on top of the previous one.
@@ -450,7 +515,17 @@ async function appendRow(
   // filled ends the read early: past the last value, the next row is free too.
   const firstFree = free > 0 ? free : Math.max(used + headerRow, headerRow + 1);
 
-  if (lastTemplate === 0 || firstFree <= lastTemplate) {
+  // Si la pestaña viene ordenada por fecha, la factura va en su lugar y no al final.
+  // Subir el lunes una factura de agosto la dejaba debajo de las de setiembre, porque
+  // el orden que mandaba era el de subida de los archivos, no el de los comprobantes.
+  const posFecha = orden && tabGid != null
+    ? await filaPorFecha(sheetId, tabName, orden.colIdx, orden.fecha, headerRow, lastTemplate, accessToken)
+    : null;
+
+  if (posFecha != null) {
+    nextRow = posFecha;
+    grewTemplate = true;
+  } else if (lastTemplate === 0 || firstFree <= lastTemplate) {
     nextRow = firstFree;                  // a real gap inside the table
   } else if (lastTemplate > 0 && tabGid != null) {
     // The table is full. Insert *inside* it, at its last row, pushing that line and
@@ -468,7 +543,11 @@ async function appendRow(
   // entera trata a las dos igual: bloquea Costo y la factura entra sin importe. Lo que
   // decide es la celda concreta que vamos a ocupar — o, si hay que insertar la fila, la
   // de arriba, que es de la que se hereda.
-  let refRow = grewTemplate ? nextRow - 1 : nextRow;
+  // Normalmente se mira la fila de arriba, que es de la que se hereda. Pero si la
+  // factura es la más vieja y entra pegada al encabezado, arriba no hay fila de datos:
+  // el modelo a seguir es la que va a quedar debajo.
+  const desdeArriba = !grewTemplate || nextRow - 1 > headerRow;
+  let refRow = !grewTemplate ? nextRow : desdeArriba ? nextRow - 1 : nextRow;
   let ref = await rowCells(sheetId, tabName, refRow, accessToken);
   const esFormula = (cells: string[], i: number) => cells[i] != null && cells[i].startsWith('=');
 
@@ -476,7 +555,10 @@ async function appendRow(
     const requests: unknown[] = [{
       insertDimension: {
         range: { sheetId: tabGid, dimension: 'ROWS', startIndex: nextRow - 1, endIndex: nextRow },
-        inheritFromBefore: true,  // borders, colours and number formats of the row above
+        // borders, colours and number formats of the row above. Salvo cuando la factura
+        // es la más vieja de todas y entra pegada al encabezado: ahí arriba está el
+        // encabezado, y heredar de él le daría a la fila el formato de los títulos.
+        inheritFromBefore: nextRow - 1 > headerRow,
       },
     }];
     // An inserted row inherits formatting but not formulas. Copy them column by
@@ -486,10 +568,13 @@ async function appendRow(
     // "Costo" la de arriba es un importe escrito a mano, y copiarla habría arrastrado
     // el monto de la factura anterior a la nueva fila.
     const heredables = ref.map((_, i) => i).filter((i) => esFormula(ref, i));
+    // La fila modelo, en índices desde cero y ya contando el corrimiento: si entra
+    // pegada al encabezado, la que era su vecina de abajo quedó una más abajo todavía.
+    const srcIndex = desdeArriba ? nextRow - 2 : nextRow;
     for (const run of runsOf(heredables)) {
       requests.push({
         copyPaste: {
-          source: { sheetId: tabGid, startRowIndex: nextRow - 2, endRowIndex: nextRow - 1, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
+          source: { sheetId: tabGid, startRowIndex: srcIndex, endRowIndex: srcIndex + 1, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
           destination: { sheetId: tabGid, startRowIndex: nextRow - 1, endRowIndex: nextRow, startColumnIndex: run.start, endColumnIndex: run.end + 1 },
           pasteType: 'PASTE_FORMULA',
         },
@@ -569,7 +654,7 @@ async function appendRow(
       return { ok: false, status: r.status, error: r.statusText };
     }
   }
-  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate, writtenIdx };
+  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate, writtenIdx, ordenada: posFecha != null };
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
@@ -1200,7 +1285,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       debugEntry.rowAttempted = true;
       const formulaIdx = tabHeaders.map((h, i) => (writable.has(h) ? -1 : i)).filter((i) => i >= 0);
-      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1, tentativo);
+
+      // Por dónde ordenar: la columna que contiene fechas —según lo que la pestaña ya
+      // tiene cargado, no según cómo se llame— y en la que Ritto está escribiendo una.
+      // Se compara el valor que va a escribir contra los que ya están, que es la única
+      // forma de que el orden sea el de los comprobantes y no el de subida.
+      let orden: { colIdx: number; fecha: number } | null = null;
+      for (let i = 0; i < tabHeaders.length; i++) {
+        if (perfil[tabHeaders[i]] !== 'fecha') continue;
+        const f = fechaComparable(row[i]);
+        if (f != null) { orden = { colIdx: i, fecha: f }; break; }
+      }
+
+      const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1, tentativo, orden);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
 
