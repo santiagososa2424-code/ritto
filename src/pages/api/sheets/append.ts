@@ -441,9 +441,16 @@ async function filaPorFecha(
   // Con una sola fecha cargada no hay orden que respetar todavía.
   if (filas.length < 2) return null;
 
+  // Unas pocas filas fuera de lugar no quieren decir que la pestaña no sea cronológica:
+  // suelen ser de exportaciones viejas de Ritto, justo las que hay que dejar de
+  // producir. Exigir orden perfecto se mordía la cola —una planilla ya desordenada no
+  // se podía volver a ordenar nunca— y era la razón por la que una factura del 1/8
+  // terminaba abajo de una del 19/8.
+  let inversiones = 0;
   for (let i = 1; i < filas.length; i++) {
-    if (filas[i].fecha < filas[i - 1].fecha) return null;  // no está ordenada
+    if (filas[i].fecha < filas[i - 1].fecha) inversiones++;
   }
+  if (inversiones > Math.max(1, Math.floor(filas.length * 0.25))) return null;
 
   const posterior = filas.find((f) => f.fecha > fecha);
   return { pos: posterior ? posterior.row : null, ultima: filas[filas.length - 1].row };
@@ -534,6 +541,9 @@ async function appendRow(
   // down is not free space, it is the empty sheet past where the formulas stop.
   let nextRow: number;
   let grewTemplate = false;
+  // La factura va en la primera fila de datos y hay que correr una fila para abajo a
+  // la que estaba ahí.
+  let correrPrimera = false;
   // Trailing blanks are omitted from the response, so a template that is only half
   // filled ends the read early: past the last value, the next row is free too.
   const firstFree = free > 0 ? free : Math.max(used + headerRow, desdeFila);
@@ -547,6 +557,15 @@ async function appendRow(
     // arriba tiene fecha anterior o igual a la nuestra.
     if (hueco > headerRow && (celdaHueco == null || String(celdaHueco).trim() === '')) {
       nextRow = hueco;
+    } else if (ordenFecha.pos === headerRow + 1) {
+      // La factura es más vieja que todas y le toca la primera fila de datos. Insertar
+      // ahí la dejaría afuera del gasto mensual: Sheets estira un rango cuando la fila
+      // nueva cae adentro, pero no cuando cae justo antes de donde empieza —=SUMA(D2:D40)
+      // pasa a ser =SUMA(D3:D41) y la fila 2, la nuestra, queda sin sumar—.
+      // Así que se inserta una fila más abajo, que sí estira el rango, se corre ahí la
+      // primera factura y la nuestra ocupa el lugar que le corresponde.
+      nextRow = headerRow + 1;
+      correrPrimera = true;
     } else {
       nextRow = ordenFecha.pos;
       grewTemplate = true;
@@ -576,6 +595,40 @@ async function appendRow(
   let refRow = !grewTemplate ? nextRow : desdeArriba ? nextRow - 1 : nextRow;
   let ref = await rowCells(sheetId, tabName, refRow, accessToken);
   const esFormula = (cells: string[], i: number) => cells[i] != null && cells[i].startsWith('=');
+
+  if (correrPrimera && tabGid != null) {
+    const ins = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [
+          {
+            insertDimension: {
+              range: { sheetId: tabGid, dimension: 'ROWS', startIndex: headerRow + 1, endIndex: headerRow + 2 },
+              inheritFromBefore: true,
+            },
+          },
+          {
+            // La primera factura baja entera —valores y fórmulas, con sus referencias
+            // ya corregidas por Sheets— a la fila que se acaba de abrir.
+            copyPaste: {
+              source: { sheetId: tabGid, startRowIndex: headerRow, endRowIndex: headerRow + 1 },
+              destination: { sheetId: tabGid, startRowIndex: headerRow + 1, endRowIndex: headerRow + 2 },
+              pasteType: 'PASTE_NORMAL',
+            },
+          },
+        ],
+      }),
+    });
+    if (!ins.ok) {
+      // No se pudo hacer lugar. Antes que pisar la primera factura del usuario, la
+      // nuestra va al final aunque quede fuera de orden.
+      correrPrimera = false;
+      nextRow = Math.max(used + headerRow, lastTemplate + 1, headerRow + 1);
+      refRow = nextRow;
+      ref = await rowCells(sheetId, tabName, refRow, accessToken);
+    }
+  }
 
   if (grewTemplate && tabGid != null) {
     const requests: unknown[] = [{
@@ -630,11 +683,17 @@ async function appendRow(
     if (esFormula(ref, i)) { row[i] = null; continue; }
     if (row[i] === null) {
       const t = tentative[i];
-      if (t == null || t === '') continue;
       // Si vamos a insertar, la fila nueva nace vacía. Si vamos a usar una fila que ya
       // está, sólo se ocupa la celda si no había nada escrito.
-      if (!grewTemplate && String(ref[i] ?? '').trim() !== '') continue;
-      row[i] = t;
+      const libre = grewTemplate || correrPrimera || String(ref[i] ?? '').trim() === '';
+      if (t != null && t !== '' && libre) {
+        row[i] = t;
+      } else if (correrPrimera) {
+        // Al correr la primera factura una fila para abajo, su contenido sigue estando
+        // también en la fila que ahora es nuestra. Lo que no es fórmula y no llenamos
+        // nosotros hay que borrarlo, o la factura nueva saldría con datos de la vieja.
+        row[i] = '';
+      }
     }
     if (row[i] !== null && row[i] !== '') writtenIdx.push(i);
   }
