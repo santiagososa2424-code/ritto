@@ -833,6 +833,39 @@ const FALLBACK_TAB = 'Ritto - Sin clasificar';
 
 // Con qué identificamos a un proveedor entre exportaciones. El RUT primero porque no
 // cambia; el nombre como respaldo, porque en una foto borrosa el RUT puede no leerse.
+// Busca la regla que el usuario enseñó para este proveedor. Primero por clave exacta
+// —el RUT, que no se mueve—. Pero el RUT no siempre se lee: en una foto borrosa o un
+// escaneo torcido lo único que queda es el nombre, y el nombre cambia entre facturas
+// del mismo proveedor: razón social en una, nombre fantasía en la otra. Ahí alcanza con
+// que uno empiece con el otro —"distribuidora del sol sas" y "distribuidora del sol"
+// son el mismo— y no con que uno contenga al otro en cualquier posición, que haría que
+// "sol" enganchara con cualquier cosa.
+function reglaAprendida(
+  inv: Record<string, unknown>,
+  aprendidas: Record<string, string>,
+): { pestana: string; exacta: boolean } | null {
+  const keys = vendorKeys(inv);
+  for (const k of keys) {
+    if (aprendidas[k]) return { pestana: aprendidas[k], exacta: true };
+  }
+
+  const nombre = keys.find((k) => k.startsWith('nombre:'))?.slice('nombre:'.length) ?? '';
+  if (nombre.length < 5) return null;
+  for (const [k, pestana] of Object.entries(aprendidas)) {
+    if (!k.startsWith('nombre:')) continue;
+    const guardado = k.slice('nombre:'.length);
+    if (guardado.length < 5) continue;
+    // El prefijo tiene que cortar en un espacio: si no, "distribuidora" engancharía
+    // con "distribuidoranorte", que es otro proveedor.
+    const prefijo = (largo: string, corto: string) =>
+      largo === corto || (largo.startsWith(corto) && largo[corto.length] === ' ');
+    if (prefijo(guardado, nombre) || prefijo(nombre, guardado)) {
+      return { pestana, exacta: false };
+    }
+  }
+  return null;
+}
+
 function vendorKeys(inv: Record<string, unknown>): string[] {
   const keys: string[] = [];
   const rut = typeof inv.rut === 'string' ? inv.rut.replace(/\D/g, '') : '';
@@ -941,8 +974,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const prov = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
       if (!prov) continue;
       const elegida = elegidas[normStr(prov)];
-      const aprendida = vendorKeys(inv).map((k) => aprendidas[k]).find(Boolean);
-      const destino = elegida ?? aprendida;
+      const destino = elegida ?? reglaAprendida(inv, aprendidas)?.pestana;
       if (destino) forzadasParaPrompt[prov] = destino;
     }
 
@@ -968,6 +1000,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rowAttempted: boolean;
       appendStatus: number | null;
       appendError: string | null;
+      // Con qué claves se buscó la regla del proveedor y si enganchó. Sin esto, cuando
+      // Ritto vuelve a preguntar una pestaña que el usuario ya había elegido no hay
+      // forma de saber si el problema es que no se guardó o que la factura llegó con
+      // otro nombre y otro RUT.
+      claves: string[];
+      reglaHit: string | null;
     }> = [];
 
     for (let i = 0; i < invoices.length; i++) {
@@ -1002,8 +1040,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Precedencia: lo que el usuario elige ahora, después lo que enseñó antes, y
       // recién al final lo que dedujo el sistema.
       const elegida = proveedorFactura ? elegidas[normStr(proveedorFactura)] : undefined;
-      const aprendida = vendorKeys(inv).map((k) => aprendidas[k]).find(Boolean);
-      const destinoFijado = elegida ?? aprendida;
+      const regla = reglaAprendida(inv, aprendidas);
+      const destinoFijado = elegida ?? regla?.pestana;
       if (destinoFijado) {
         tabName = destinoFijado;
         tieneSuPestana = true;
@@ -1026,6 +1064,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rowAttempted: false,
         appendStatus: null,
         appendError: null,
+        claves: vendorKeys(inv),
+        reglaHit: regla ? `${regla.pestana}${regla.exacta ? '' : ' (por parecido)'}` : null,
       };
 
       if (!tabHeaders || tabHeaders.length === 0) {
@@ -1227,7 +1267,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (autErr) memoriaError = memoriaError ?? autErr.message;
         }
 
-        if (elegida) {
+        // Se guarda cuando el usuario eligió la pestaña, y también cuando la regla
+        // enganchó por parecido de nombre: así la próxima factura la encuentra por
+        // clave exacta y la memoria se afirma sola en vez de depender del parecido.
+        if (elegida || (regla && !regla.exacta)) {
           const filas = vendorKeys(inv).map((vendor_key) => ({
             user_id: user.id,
             vendor_key,
@@ -1292,6 +1335,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         geminiCalled: geminiResult.called,
         geminiReason: geminiResult.reason ?? null,
         geminiMappings: useGemini ? geminiMappings : null,
+        reglasGuardadas: Object.keys(aprendidas),
         invoices: invoiceDebug,
       },
     });
