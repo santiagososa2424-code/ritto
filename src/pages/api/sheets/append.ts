@@ -406,10 +406,15 @@ function fechaComparable(v: unknown): number | null {
   return null;
 }
 
-// En qué fila hay que insertar la factura para que la pestaña siga ordenada por fecha.
-// Devuelve null cuando corresponde dejarla al final —que es el camino normal, el de la
-// factura más nueva— y también cuando la columna no viene ordenada: ahí meterla "en su
-// lugar" sería imponerle al usuario un orden que su planilla no tiene.
+// Dónde va la factura según la fecha. `pos` es la fila delante de la cual hay que
+// meterla, o null si es la más nueva y va al final. `ultima` es la última fila con
+// fecha: hace falta incluso cuando `pos` es null, porque "al final" significa después
+// de esa fila y no en el primer hueco que aparezca —la planilla tiene huecos entre
+// medio, y caer en uno dejaba la factura nueva por encima de las viejas—.
+// Devuelve null entero cuando la columna no viene ordenada: ahí meterla "en su lugar"
+// sería imponerle al usuario un orden que su planilla no tiene.
+type OrdenFecha = { pos: number | null; ultima: number };
+
 async function filaPorFecha(
   sheetId: string,
   tabName: string,
@@ -418,7 +423,7 @@ async function filaPorFecha(
   headerRow: number,
   lastTemplate: number,
   accessToken: string,
-): Promise<number | null> {
+): Promise<OrdenFecha | null> {
   const col = colLetter(colIdx);
   const hasta = lastTemplate > headerRow ? String(lastTemplate) : '';
   const res = await fetch(
@@ -441,7 +446,7 @@ async function filaPorFecha(
   }
 
   const posterior = filas.find((f) => f.fecha > fecha);
-  return posterior ? posterior.row : null;
+  return { pos: posterior ? posterior.row : null, ultima: filas[filas.length - 1].row };
 }
 
 // Las celdas de una fila puntual, tal como están escritas: una fórmula vuelve como
@@ -494,18 +499,36 @@ async function appendRow(
   ]);
 
   let used = 1;
-  let free = -1;
+  let checkCells: string[][] = [];
   if (colRes.ok) {
-    const cells = ((await colRes.json()) as { values?: string[][] }).values ?? [];
-    used = cells.length;
-    // Take the FIRST free row, not the one after the last used cell. These templates
-    // usually carry a totals row, a second block or notes well below the data, and
-    // counting to the end drops the invoice underneath all of it.
-    for (let i = 1; i < cells.length; i++) {
-      const cell = cells[i]?.[0];
-      if (cell == null || String(cell).trim() === '') { free = headerRow + i; break; }
-    }
+    checkCells = ((await colRes.json()) as { values?: string[][] }).values ?? [];
+    used = checkCells.length;
   }
+
+  // Take the FIRST free row, not the one after the last used cell. These templates
+  // usually carry a totals row, a second block or notes well below the data, and
+  // counting to the end drops the invoice underneath all of it.
+  const primeraLibre = (desde: number): number => {
+    for (let i = Math.max(1, desde - headerRow); i < checkCells.length; i++) {
+      const cell = checkCells[i]?.[0];
+      if (cell == null || String(cell).trim() === '') return headerRow + i;
+    }
+    return -1;
+  };
+
+  // Si la pestaña viene ordenada por fecha, la factura va en su lugar y no al final.
+  // Subir el lunes una factura de agosto la dejaba debajo de las de setiembre, porque
+  // el orden que mandaba era el de subida de los archivos, no el de los comprobantes.
+  const ordenFecha = orden && tabGid != null
+    ? await filaPorFecha(sheetId, tabName, orden.colIdx, orden.fecha, headerRow, lastTemplate, accessToken)
+    : null;
+
+  // Cuando hay orden por fecha y la factura es la más nueva, "al final" es después de
+  // la última fila con fecha. Buscar el primer hueco desde el encabezado la metía en
+  // cualquier fila vacía intermedia, por encima de facturas más viejas: era el caso de
+  // una del 18/8 quedando arriba de una del 6/8.
+  const desdeFila = ordenFecha && ordenFecha.pos == null ? ordenFecha.ultima + 1 : headerRow + 1;
+  const free = primeraLibre(desdeFila);
 
   // Only a free row that falls *inside* the template is usable. A blank row further
   // down is not free space, it is the empty sheet past where the formulas stop.
@@ -513,18 +536,21 @@ async function appendRow(
   let grewTemplate = false;
   // Trailing blanks are omitted from the response, so a template that is only half
   // filled ends the read early: past the last value, the next row is free too.
-  const firstFree = free > 0 ? free : Math.max(used + headerRow, headerRow + 1);
+  const firstFree = free > 0 ? free : Math.max(used + headerRow, desdeFila);
 
-  // Si la pestaña viene ordenada por fecha, la factura va en su lugar y no al final.
-  // Subir el lunes una factura de agosto la dejaba debajo de las de setiembre, porque
-  // el orden que mandaba era el de subida de los archivos, no el de los comprobantes.
-  const posFecha = orden && tabGid != null
-    ? await filaPorFecha(sheetId, tabName, orden.colIdx, orden.fecha, headerRow, lastTemplate, accessToken)
-    : null;
-
-  if (posFecha != null) {
-    nextRow = posFecha;
-    grewTemplate = true;
+  if (ordenFecha?.pos != null) {
+    // Entra delante de una factura posterior. Si justo encima hay una fila vacía del
+    // template, se usa esa y no hace falta agrandar nada.
+    const hueco = ordenFecha.pos - 1;
+    const celdaHueco = checkCells[hueco - headerRow]?.[0];
+    // Es seguro: `pos` es la primera fila con fecha posterior, así que todo lo de
+    // arriba tiene fecha anterior o igual a la nuestra.
+    if (hueco > headerRow && (celdaHueco == null || String(celdaHueco).trim() === '')) {
+      nextRow = hueco;
+    } else {
+      nextRow = ordenFecha.pos;
+      grewTemplate = true;
+    }
   } else if (lastTemplate === 0 || firstFree <= lastTemplate) {
     nextRow = firstFree;                  // a real gap inside the table
   } else if (lastTemplate > 0 && tabGid != null) {
@@ -654,7 +680,7 @@ async function appendRow(
       return { ok: false, status: r.status, error: r.statusText };
     }
   }
-  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate, writtenIdx, ordenada: posFecha != null };
+  return { ok: true, status: r.status, targetRow: nextRow, grewTemplate, writtenIdx, ordenada: ordenFecha != null };
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
