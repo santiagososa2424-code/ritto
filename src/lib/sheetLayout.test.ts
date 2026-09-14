@@ -45,12 +45,24 @@ test('una pestaña realmente desordenada se deja como está', () => {
 });
 
 test('unas pocas filas fuera de lugar no cancelan el orden', () => {
-  // Es el estado real de la planilla: desordenada por exportaciones viejas de Ritto.
-  // Exigir orden perfecto se mordía la cola y la factura del 1/8 terminaba al final.
-  const celdas = ['6/8/2026', '19/8/2026', '10/8/2026'];
+  // Es el estado real de la planilla: un mes cargado en orden y una sola fila corrida
+  // por una exportación vieja de Ritto. Exigir orden perfecto se mordía la cola y la
+  // factura del 1/8 terminaba al final.
+  const celdas = [
+    '3/8/2026', '6/8/2026', '8/8/2026', '12/8/2026', '19/8/2026',
+    '10/8/2026',                                    // ← la corrida
+    '22/8/2026', '25/8/2026', '28/8/2026',
+  ];
   const orden = ordenPorFecha(celdas, fechaComparable('1/8/2026')!, H);
   assert.notEqual(orden, null);
-  assert.equal(orden!.pos, 2);   // delante de la primera, que es del 6/8
+  assert.equal(orden!.pos, 2);   // delante de la primera, que es del 3/8
+});
+
+test('una planilla al revés también cuenta como ordenada', () => {
+  const celdas = ['25/8/2026', '19/8/2026', '10/8/2026', '6/8/2026'];
+  const orden = ordenPorFecha(celdas, fechaComparable('15/8/2026')!, H);
+  assert.notEqual(orden, null);
+  assert.equal(orden!.pos, 4);   // delante de la del 10/8
 });
 
 // ──────────────────────────── elección de la fila ────────────────────────────

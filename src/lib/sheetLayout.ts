@@ -53,19 +53,37 @@ export function ordenPorFecha(
   // Con una sola fecha cargada no hay orden que respetar todavía.
   if (filas.length < 2) return null;
 
+  // Hay dos formas de tener la planilla ordenada y las dos son normales: la más vieja
+  // arriba, o la más nueva arriba —que es como la llevan muchos contadores, para ver lo
+  // último sin bajar—. Suponer siempre la primera hacía que en una planilla al revés
+  // Ritto la viera como desordenada, no ordenara nada, y la factura fuera al final.
+  let baja = 0;
+  let sube = 0;
+  for (let i = 1; i < filas.length; i++) {
+    if (filas[i].fecha < filas[i - 1].fecha) baja++;
+    else if (filas[i].fecha > filas[i - 1].fecha) sube++;
+  }
+  const descendente = baja > sube;
+
   // Unas pocas filas fuera de lugar no quieren decir que la pestaña no sea cronológica:
   // suelen ser de exportaciones viejas de Ritto, justo las que hay que dejar de
   // producir. Exigir orden perfecto se mordía la cola —una planilla ya desordenada no
   // se podía volver a ordenar nunca— y era la razón por la que una factura del 1/8
   // terminaba abajo de una del 19/8.
-  let inversiones = 0;
-  for (let i = 1; i < filas.length; i++) {
-    if (filas[i].fecha < filas[i - 1].fecha) inversiones++;
-  }
-  if (inversiones > Math.max(1, Math.floor(filas.length * 0.25))) return null;
+  // El umbral se mide sobre los saltos entre filas, no sobre la cantidad de filas: con
+  // cuatro fechas hay tres saltos, y permitir "una fuera de lugar" ahí es permitir un
+  // tercio de desorden, que ya no es una planilla ordenada con ruido sino una revuelta.
+  const saltos = filas.length - 1;
+  const contramano = descendente ? sube : baja;
+  if (contramano * 4 > saltos) return null;
 
-  const posterior = filas.find((f) => f.fecha > fecha);
-  return { pos: posterior ? posterior.row : null, ultima: filas[filas.length - 1].row };
+  // La fila delante de la cual va la factura. En una planilla ascendente es la primera
+  // que tiene fecha posterior; en una descendente, la primera que tiene fecha anterior.
+  // El resto de la decisión no cambia: "pos" es dónde meterla y null es "va al final".
+  const siguiente = descendente
+    ? filas.find((f) => f.fecha < fecha)
+    : filas.find((f) => f.fecha > fecha);
+  return { pos: siguiente ? siguiente.row : null, ultima: filas[filas.length - 1].row };
 }
 
 export type Destino = {
