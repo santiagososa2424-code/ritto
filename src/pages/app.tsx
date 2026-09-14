@@ -78,6 +78,7 @@ export default function AppPage() {
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
+  const [sheetsMemoriaError, setSheetsMemoriaError] = useState<string | null>(null);
   const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: { columna: string; motivo: string }[]; notas?: string[] }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -371,6 +372,7 @@ export default function AppPage() {
         setSheetsSinPestana(data.sinPestana ?? []);
         setPestanaElegida({});
         setSheetsAprendidos(data.aprendidos ?? []);
+        setSheetsMemoriaError(data.memoriaError ?? null);
         setSheetsSinImporte(data.sinImporte ?? []);
         setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
@@ -798,6 +800,15 @@ export default function AppPage() {
                   <div style={{ fontSize: 12, color: '#166534', fontWeight: 500 }}>
                     ✓ Aprendido: las próximas facturas de {sheetsAprendidos.map((p) => `«${p}»`).join(', ')}{' '}
                     van solas a esa pestaña.
+                  </div>
+                )}
+                {/* La exportación salió bien pero la pestaña elegida no quedó guardada.
+                    Sin este aviso Ritto vuelve a preguntar lo mismo en la próxima
+                    factura y parece que no hubiera escuchado. */}
+                {sheetsMemoriaError && (
+                  <div style={{ fontSize: 12, color: '#92400e', fontWeight: 500 }}>
+                    ⚠ La factura se exportó, pero Ritto no pudo recordar la pestaña que elegiste,
+                    así que te la va a volver a preguntar. Escribinos a santiagososa2424@gmail.com.
                   </div>
                 )}
                 {sheetsRowsAdded > 0 && sheetsTabs.length > 0 && (

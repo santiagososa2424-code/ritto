@@ -225,15 +225,15 @@ interface GeminiResult {
 
 async function mapWithGemini(
   invoices: Record<string, unknown>[],
-  tabWritableHeaders: Record<string, string[]>,
+  tabColumnas: Record<string, string[]>,
   tabSampleRows: Record<string, string[][]>,
   forzadas: Record<string, string>,
 ): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { mappings: null, called: false, reason: 'no_api_key' };
-  if (Object.keys(tabWritableHeaders).length === 0) return { mappings: null, called: false, reason: 'no_writable_headers' };
+  if (Object.keys(tabColumnas).length === 0) return { mappings: null, called: false, reason: 'no_writable_headers' };
 
-  const sheetStructure = Object.entries(tabWritableHeaders).map(([nombre, columnas]) => ({
+  const sheetStructure = Object.entries(tabColumnas).map(([nombre, columnas]) => ({
     nombre,
     columnas,
     filas_ejemplo: (tabSampleRows[nombre] ?? []).slice(0, 4),
@@ -243,7 +243,7 @@ async function mapWithGemini(
 Cada usuario tiene su propia planilla con columnas y formatos completamente personalizados.
 Tu tarea es entender la intención de cada columna usando su nombre Y los valores de ejemplo reales que ya existen en esa pestaña.
 
-ESTRUCTURA DE LA PLANILLA DEL USUARIO (nombre + columnas escribibles + filas_ejemplo reales):
+ESTRUCTURA DE LA PLANILLA DEL USUARIO (nombre + columnas + filas_ejemplo reales):
 ${JSON.stringify({ pestañas_disponibles: sheetStructure }, null, 2)}
 
 ${Object.keys(forzadas).length > 0 ? `PESTAÑA YA DECIDIDA POR EL USUARIO (no la discutas, mapeá las columnas de ESA pestaña):
@@ -899,10 +899,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: Array<{ columna: string; motivo: string }>; notas: string[] }> = [];
 
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
-    const { data: reglas } = await supabase
+    const { data: reglas, error: reglasErr } = await supabase
       .from('vendor_mappings')
       .select('vendor_key, sheet_name')
       .eq('user_id', user.id);
+
+    // Si la memoria no funciona hay que decirlo. Antes fallaba en silencio: el usuario
+    // elegía la pestaña, apretaba "enviar y recordar", la exportación salía bien y a la
+    // factura siguiente Ritto se lo volvía a preguntar, sin ninguna señal de por qué.
+    let memoriaError: string | null = reglasErr ? reglasErr.message : null;
 
     // Autorizaciones guardadas de exportaciones anteriores.
     const columnasAutorizadas = new Set<string>();
@@ -941,7 +946,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (destino) forzadasParaPrompt[prov] = destino;
     }
 
-    const geminiResult = await mapWithGemini(invoices, tabWritableHeaders, tabSampleRows, forzadasParaPrompt);
+    // El modelo ve TODAS las columnas, no sólo las que la lectura de columna entera dio
+    // por libres. Ocultarle "Costo" porque la planilla la suma abajo era la razón de
+    // fondo por la que el importe no entraba: no es que Ritto se negara a escribirlo,
+    // es que nunca le había ofrecido esa columna como destino. Lo que no se puede pisar
+    // lo decide la celda concreta, más adelante, con las fórmulas a la vista.
+    const tabColumnasParaPrompt: Record<string, string[]> = {};
+    for (const [tab, headers] of Object.entries(tabHeaderMap)) {
+      const visibles = headers.filter((h) => !isGhost(h));
+      if (visibles.length > 0) tabColumnasParaPrompt[tab] = visibles;
+    }
+
+    const geminiResult = await mapWithGemini(invoices, tabColumnasParaPrompt, tabSampleRows, forzadasParaPrompt);
     const geminiMappings = geminiResult.mappings;
     const useGemini = geminiMappings && geminiMappings.length === invoices.length;
 
@@ -1201,13 +1217,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // queremos dejar una regla apuntando a una pestaña que no funcionó.
         for (const col of tabHeaders) {
           if (!autorizada(col)) continue;
-          await supabase.from('vendor_mappings').upsert({
+          const { error: autErr } = await supabase.from('vendor_mappings').upsert({
             user_id: user.id,
             vendor_key: `columna:${normStr(col)}`,
             vendor_name: col,
             sheet_name: tabName,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id,vendor_key' });
+          if (autErr) memoriaError = memoriaError ?? autErr.message;
         }
 
         if (elegida) {
@@ -1222,8 +1239,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const { error: reglaErr } = await supabase
               .from('vendor_mappings')
               .upsert(filas, { onConflict: 'user_id,vendor_key' });
-            if (reglaErr) console.error('[append] no se pudo guardar la regla:', reglaErr.message);
-            else if (!aprendidos.includes(proveedorFactura)) aprendidos.push(proveedorFactura);
+            if (reglaErr) {
+              console.error('[append] no se pudo guardar la regla:', reglaErr.message);
+              memoriaError = memoriaError ?? reglaErr.message;
+            } else if (!aprendidos.includes(proveedorFactura)) aprendidos.push(proveedorFactura);
           }
         }
       }
@@ -1255,6 +1274,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rowsAdded: totalRows,
       sinPestana,
       aprendidos,
+      memoriaError,
       sinImporte,
       // Las pestañas que realmente tiene la planilla. Van al cliente para que, cuando
       // una factura no encuentre la suya, la pantalla pueda mostrar las que hay: sin
