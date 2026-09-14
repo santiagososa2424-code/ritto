@@ -1418,7 +1418,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             descartadas,
             notas: rechazados,
           });
-        } else if (rechazados.length > 0) {
+        }
+
+        // Una factura en dólares escrita entre importes en pesos no se distingue de
+        // ninguna manera: el número queda plausible y el total del mes da cualquier
+        // cosa. Si la pestaña no tiene dónde anotar la moneda, hay que avisar.
+        const moneda = typeof inv.moneda === 'string' ? inv.moneda.trim().toUpperCase() : '';
+        const monedaEscrita = tabHeaders.some(
+          (h, i) => escritas.has(i) && /\b(moneda|divisa|currency)\b/.test(normStr(h)),
+        );
+        if (moneda && moneda !== 'UYU' && !monedaEscrita) {
+          sinImporte.push({
+            factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
+            motivo: 'moneda',
+            importe: typeof inv.total === 'number' ? inv.total : null,
+            pestana: tabName,
+            descartadas: [],
+            notas: [moneda],
+          });
+        }
+
+        if (importeEscrito && rechazados.length > 0) {
           sinImporte.push({
             factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
             motivo: 'dato_rechazado',

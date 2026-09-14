@@ -758,8 +758,12 @@ export default function AppPage() {
                           <strong>{s.factura}</strong> —{' '}
                           {s.motivo === 'no_se_leyo'
                             ? 'no pudimos leer el importe del comprobante. Revisá la factura en la lista y corregí el total a mano.'
+                            : s.motivo === 'moneda'
+                            ? `está en ${s.notas?.[0] ?? 'otra moneda'} y «${s.pestana}» no tiene columna de moneda, así que el importe quedó al lado de los que están en pesos. Agregá una columna «Moneda» en esa pestaña y Ritto la completa solo.`
                             : `leímos ${s.importe} pero no encontramos en qué columna de «${s.pestana}» escribirlo.`}
-                          {s.notas && s.notas.length > 0 && (
+                          {/* En el aviso de moneda `notas` sólo lleva el código (USD),
+                              que ya va dentro de la frase. */}
+                          {s.motivo !== 'moneda' && s.notas && s.notas.length > 0 && (
                             <ul style={{ margin: '4px 0 0 14px', padding: 0 }}>
                               {s.notas.map((d, j) => <li key={j}>{d}</li>)}
                             </ul>
