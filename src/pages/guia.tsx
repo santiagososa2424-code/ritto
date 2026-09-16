@@ -173,16 +173,12 @@ export default function GuiaPage() {
               <div className="card-text">
                 Exportás desde Ritto y las filas aparecen solas en tu planilla. No hay que descargar ni copiar nada.
               </div>
-              <div className="highlight" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
-                ⚠️ <strong>Google te va a mostrar un cartel que dice que Ritto no está verificado.</strong> Es
-                normal y no significa que haya un problema: Google marca así a toda aplicación chica
-                hasta que termina su proceso de revisión, que lleva varias semanas.
+              <div className="highlight">
+                🔒 <strong>Ritto está verificada por Google.</strong> Cuando conectes vas a ver la pantalla
+                de permisos de siempre, sin advertencias. El único permiso que pide es editar planillas de
+                Google Sheets: no puede ver tu Gmail, tus fotos ni el resto de tu Drive.
                 <br /><br />
-                Para seguir: tocá <strong>«Configuración avanzada»</strong> abajo a la izquierda y después
-                <strong> «Ir a ritto.lat (no seguro)»</strong>. Es el único paso raro de toda la conexión.
-                <br /><br />
-                Ritto pide permiso <strong>solamente</strong> para escribir en planillas de Google Sheets.
-                No puede ver tu Gmail, tus fotos ni tus otros archivos del Drive.
+                Podés cortarle el acceso cuando quieras desde Configuración, o desde tu cuenta de Google.
               </div>
               <div className="steps" style={{ marginTop: 16 }}>
                 <div className="step">
@@ -324,13 +320,13 @@ export default function GuiaPage() {
           <div className={`section${active === 'problemas' ? ' visible' : ''}`}>
             <div className="card">
               <div className="card-icon">🔴</div>
-              <div className="card-title">"Acceso bloqueado: ritto solo se puede usar dentro de su organización"</div>
+              <div className="card-title">No puedo conectar mi cuenta de Google</div>
               <div className="card-text">
-                Si el cartel dice que Ritto <strong>no está verificado</strong>, es normal: tocá «Configuración
-                avanzada» y después «Ir a ritto.lat (no seguro)». Si en cambio dice que tu cuenta
-                <strong> no tiene acceso</strong> o que la app está en modo de prueba, hay que habilitar tu
-                dirección de nuestro lado: <strong>escribinos por WhatsApp al {SOPORTE_TEL}</strong> con tu
-                email de Google y lo resolvemos en minutos.
+                Ritto está verificada por Google, así que no deberías ver ninguna advertencia. Si te
+                aparece un error al conectar, suele ser que la cuenta de Google que elegiste no es la
+                dueña de la planilla: fijate de elegir la misma con la que abrís tu Google Sheets. Si
+                sigue sin andar, <strong>escribinos por WhatsApp al {SOPORTE_TEL}</strong> con tu email de
+                Google y lo vemos.
               </div>
             </div>
 

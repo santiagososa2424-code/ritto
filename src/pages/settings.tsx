@@ -619,19 +619,14 @@ export default function SettingsPage() {
                 <p style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6 }}>
                   Hacé clic en "Conectar con Google" y autorizá el acceso. Solo se pide permiso para escribir en Sheets — Ritto no puede leer ni modificar tus otros archivos.
                 </p>
-                {/* El cartel de Google aparece en el peor momento —justo cuando la persona
-                    está entregando acceso a su planilla— y sin este aviso previo la primera
-                    reacción es cerrar todo. Va antes del botón, no después. */}
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12.5, color: '#78350f', lineHeight: 1.6 }}>
-                  <strong>Antes de tocar el botón:</strong> Google te va a mostrar un cartel que dice que
-                  Ritto <em>no está verificado</em>. Es normal y no significa que haya un problema — Google
-                  marca así a toda aplicación chica hasta que termina su revisión.
-                  <br /><br />
-                  Para seguir: tocá <strong>«Configuración avanzada»</strong> y después{' '}
-                  <strong>«Ir a ritto.lat (no seguro)»</strong>.
-                  <br /><br />
-                  Si en cambio te dice que tu cuenta no tiene acceso, escribinos por WhatsApp al{' '}
-                  <strong>{SOPORTE_TEL}</strong> y te habilitamos en minutos.
+                {/* Ritto ya pasó la verificación de Google, así que la pantalla de permisos
+                    es la normal y no hay ninguna advertencia que explicar. Acá iba un aviso
+                    sobre el cartel de "app no verificada": tenerlo ahora sería sembrar una
+                    duda que no existe justo cuando la persona está por dar acceso. */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12.5, color: '#166534', lineHeight: 1.6 }}>
+                  Ritto está verificada por Google. Vas a ver la pantalla de permisos de siempre, y el
+                  único permiso que pide es <strong>editar planillas de Google Sheets</strong>: no puede
+                  entrar a tu Gmail, tus fotos ni al resto de tu Drive.
                 </div>
                 <button
                   type="button"
