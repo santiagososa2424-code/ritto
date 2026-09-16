@@ -76,6 +76,10 @@ export default function AppPage() {
   const [sheetsTabs, setSheetsTabs] = useState<string[]>([]);
   const [sheetsSinPestana, setSheetsSinPestana] = useState<string[]>([]);
   const [sheetsPestanas, setSheetsPestanas] = useState<string[]>([]);
+  // Con qué claves buscó Ritto la regla del proveedor y cuáles tenía guardadas.
+  const [sheetsSinPestanaDetalle, setSheetsSinPestanaDetalle] = useState<
+    { proveedor: string; claves: string[]; guardadas: string[] }[]
+  >([]);
   // Pestaña que el usuario eligió a mano para cada proveedor que no encontramos.
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
@@ -86,6 +90,9 @@ export default function AppPage() {
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   // Facturas que el usuario quiso mandar y ya estaban en la planilla.
   const [sheetsReenvio, setSheetsReenvio] = useState<ExtractedInvoice[] | null>(null);
+  // El borrado diferido del resultado de la exportación, para poder cancelarlo.
+  const limpiezaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (limpiezaRef.current) clearTimeout(limpiezaRef.current); }, []);
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -373,6 +380,9 @@ export default function AppPage() {
       return;
     }
     setSheetsReenvio(null);
+    // Si quedaba una limpieza pendiente de la exportación anterior, se descarta acá: lo
+    // que viene es un resultado nuevo y tiene que durar sus veinte segundos completos.
+    if (limpiezaRef.current) { clearTimeout(limpiezaRef.current); limpiezaRef.current = null; }
     invoiceList = pendientes;
     setSheetsStatus('loading');
     setSheetsError('');
@@ -392,6 +402,7 @@ export default function AppPage() {
         setSheetsRowsAdded(data.rowsAdded ?? 0);
         setSheetsTabs(data.tabs ?? []);
         setSheetsSinPestana(data.sinPestana ?? []);
+        setSheetsSinPestanaDetalle(data.sinPestanaDetalle ?? []);
         setPestanaElegida({});
         setSheetsAprendidos(data.aprendidos ?? []);
         setSheetsMemoriaError(data.memoriaError ?? null);
@@ -420,7 +431,17 @@ export default function AppPage() {
       setSheetsError('Error de conexión');
       setSheetsStatus('error');
     }
-    setTimeout(() => { setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0); setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({}); setSheetsAprendidos([]); setSheetsSinImporte([]); setSheetsRedirectUrl(''); }, 20000);
+    // El temporizador anterior se cancela. Antes cada exportación dejaba uno suelto: si
+    // exportabas de nuevo a los 18 segundos, el de la primera vez borraba el resultado de
+    // la segunda dos segundos después de que aparecía. El link a la planilla se esfumaba
+    // casi al instante y parecía cualquier otra cosa.
+    if (limpiezaRef.current) clearTimeout(limpiezaRef.current);
+    limpiezaRef.current = setTimeout(() => {
+      setSheetsStatus('idle'); setSheetsError(''); setSheetsRange(''); setSheetsRowsAdded(0);
+      setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({});
+      setSheetsAprendidos([]); setSheetsSinImporte([]); setSheetsRedirectUrl('');
+      setSheetsMarcadoError(null); setSheetsMemoriaError(null); setSheetsReenvio(null);
+    }, 20000);
   }
 
   function downloadCSV(invoiceList: ExtractedInvoice[], filename: string) {
@@ -886,7 +907,28 @@ export default function AppPage() {
                         </div>
                         {sheetsSinPestana.map((prov) => (
                           <div key={prov} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                            <span style={{ minWidth: 130 }}>«{prov}»</span>
+                            <span style={{ minWidth: 130 }}>
+                              «{prov}»
+                              {/* Cuando Ritto repregunta una pestaña que ya elegiste, acá se ve
+                                  si el problema es que no quedó guardada o que la factura llegó
+                                  con otro nombre. Sin esto había que mirar la respuesta en el
+                                  navegador para distinguirlo. */}
+                              {(() => {
+                                const d = sheetsSinPestanaDetalle.find((x) => x.proveedor === prov);
+                                if (!d) return null;
+                                const sinRut = !d.claves.some((k) => k.startsWith('rut:'));
+                                const conReglas = d.guardadas.some((k) => !k.startsWith('columna:'));
+                                return (
+                                  <span style={{ display: 'block', fontSize: 10.5, opacity: 0.8, fontWeight: 400 }}>
+                                    {sinRut
+                                      ? 'no le leímos el RUT, así que sólo pudimos buscar por nombre'
+                                      : conReglas
+                                      ? 'buscamos por RUT y no había regla guardada'
+                                      : 'todavía no hay ninguna regla guardada'}
+                                  </span>
+                                );
+                              })()}
+                            </span>
                             <span>→</span>
                             <select
                               value={pestanaElegida[prov] ?? ''}

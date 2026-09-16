@@ -910,6 +910,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const writtenTabs: string[] = [];
     const exportedIds: string[] = [];
     const sinPestana: string[] = [];
+    const sinPestanaDetalle: Array<{ proveedor: string; claves: string[]; guardadas: string[] }> = [];
     // Proveedores cuya pestaña quedó aprendida en esta exportación.
     const aprendidos: string[] = [];
     const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: Array<{ columna: string; motivo: string }>; notas: string[] }> = [];
@@ -1072,6 +1073,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // factura terminaba en Resumen y el usuario se enteraba después.
       if (proveedorFactura && !tieneSuPestana && existingTabs.length > 1) {
         if (!sinPestana.includes(proveedorFactura)) sinPestana.push(proveedorFactura);
+        // Con qué buscó y qué tenía guardado. Si Ritto vuelve a preguntar una pestaña que
+        // el usuario ya eligió, esto es lo que distingue "no se guardó la regla" de "la
+        // factura llegó con otro nombre o sin RUT" — y hasta ahora había que ir a mirar
+        // la respuesta en el navegador para saberlo.
+        if (!sinPestanaDetalle.some((d) => d.proveedor === proveedorFactura)) {
+          sinPestanaDetalle.push({
+            proveedor: proveedorFactura,
+            claves: vendorKeys(inv),
+            guardadas: Object.keys(aprendidas),
+          });
+        }
         debugEntry.appendError = 'sin_pestana_del_proveedor';
         invoiceDebug.push(debugEntry);
         continue;
@@ -1360,6 +1372,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: totalRows > 0,
       rowsAdded: totalRows,
       sinPestana,
+      sinPestanaDetalle,
       aprendidos,
       memoriaError,
       sinImporte,
