@@ -915,6 +915,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const aprendidos: string[] = [];
     const sinImporte: Array<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas: Array<{ columna: string; motivo: string }>; notas: string[] }> = [];
 
+    // El mismo comprobante, subido dos veces, son dos filas distintas en la base: la
+    // segunda no tiene fecha de exportación, así que el control del navegador la deja
+    // pasar y la planilla del cliente termina con la factura repetida. Acá se compara
+    // contra lo que ya se exportó alguna vez, por número de comprobante y emisor, que es
+    // lo que identifica a una factura sin importar cuántas veces se haya subido el
+    // archivo.
+    const identidad = (nro: unknown, rut: unknown, prov: unknown): string | null => {
+      const n = typeof nro === 'string' ? nro.trim() : '';
+      if (!n) return null;   // sin número no hay con qué identificarla
+      const emisor = typeof rut === 'string' && rut.replace(/\D/g, '').length >= 8
+        ? rut.replace(/\D/g, '')
+        : typeof prov === 'string' ? normStr(prov) : '';
+      return `${emisor}|${normStr(n)}`;
+    };
+
+    const numerosBuscados = invoices
+      .map((i) => (typeof i.nroDocumento === 'string' ? i.nroDocumento.trim() : ''))
+      .filter(Boolean);
+
+    const yaEnLaPlanilla = new Map<string, string>();   // identidad → id de la factura original
+    if (numerosBuscados.length > 0) {
+      const { data: previas } = await supabase
+        .from('invoices')
+        .select('id, nro_documento, rut, proveedor')
+        .eq('user_id', user.id)
+        .not('exported_at', 'is', null)
+        .in('nro_documento', numerosBuscados);
+      for (const prev of previas ?? []) {
+        const clave = identidad(prev.nro_documento, prev.rut, prev.proveedor);
+        if (clave && !yaEnLaPlanilla.has(clave)) yaEnLaPlanilla.set(clave, prev.id as string);
+      }
+    }
+
+    // Las que el usuario decidió mandar igual, sabiendo que ya estaban.
+    const forzarDuplicadas = new Set(
+      ((req.body as { forzarDuplicadas?: string[] }).forzarDuplicadas ?? []).filter((x) => typeof x === 'string'),
+    );
+    const duplicadas: Array<{ id: string; factura: string }> = [];
+
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
     const { data: reglas, error: reglasErr } = await supabase
       .from('vendor_mappings')
@@ -1004,6 +1043,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Se calcula aparte de la elección de pestaña: no cambia dónde se escribe, sirve
       // para poder avisar cuando el proveedor no tiene pestaña propia en la planilla.
       const proveedorFactura = typeof inv.proveedor === 'string' ? inv.proveedor.trim() : '';
+
       let tieneSuPestana = proveedorFactura
         ? matchTabByProvider(existingTabs, proveedorFactura) !== null
         : true;
@@ -1054,6 +1094,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         claves: vendorKeys(inv),
         reglaHit: regla ? `${regla.pestana}${regla.exacta ? '' : ' (por parecido)'}` : null,
       };
+
+      const claveFactura = identidad(inv.nroDocumento, inv.rut, inv.proveedor);
+      const idFactura = typeof inv.id === 'string' ? inv.id : '';
+      const yaEstaba = claveFactura ? yaEnLaPlanilla.get(claveFactura) : undefined;
+      // Se salta cuando el comprobante ya entró desde otra subida del mismo archivo. Si
+      // es la misma fila de siempre, no hay nada que avisar: el control del navegador ya
+      // se ocupa de esa.
+      if (yaEstaba && yaEstaba !== idFactura && !forzarDuplicadas.has(idFactura)) {
+        duplicadas.push({
+          id: idFactura,
+          factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
+        });
+        debugEntry.appendError = 'ya_exportada';
+        invoiceDebug.push(debugEntry);
+        continue;
+      }
 
       if (!tabHeaders || tabHeaders.length === 0) {
         invoiceDebug.push(debugEntry);
@@ -1373,6 +1429,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rowsAdded: totalRows,
       sinPestana,
       sinPestanaDetalle,
+      duplicadas,
       aprendidos,
       memoriaError,
       sinImporte,

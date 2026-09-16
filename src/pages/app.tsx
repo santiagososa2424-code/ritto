@@ -90,6 +90,8 @@ export default function AppPage() {
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   // Facturas que el usuario quiso mandar y ya estaban en la planilla.
   const [sheetsReenvio, setSheetsReenvio] = useState<ExtractedInvoice[] | null>(null);
+  // Comprobantes que ya estaban en la planilla desde otra subida del mismo archivo.
+  const [sheetsDuplicadas, setSheetsDuplicadas] = useState<{ id: string; factura: string }[]>([]);
   // El borrado diferido del resultado de la exportación, para poder cancelarlo.
   const limpiezaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (limpiezaRef.current) clearTimeout(limpiezaRef.current); }, []);
@@ -367,6 +369,7 @@ export default function AppPage() {
     pestanasElegidas?: Record<string, string>,
     forzarColumnas?: string[],
     permitirReenvio = false,
+    forzarDuplicadas?: string[],
   ) {
     if (!user) return;
     // Una factura ya exportada no se vuelve a mandar sola: sería una fila repetida en la
@@ -394,7 +397,7 @@ export default function AppPage() {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping, pestanasElegidas, forzarColumnas }),
+        body: JSON.stringify({ invoices: invoiceList, userId: user.id, mapping: excelMapping, pestanasElegidas, forzarColumnas, forzarDuplicadas }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -403,6 +406,7 @@ export default function AppPage() {
         setSheetsTabs(data.tabs ?? []);
         setSheetsSinPestana(data.sinPestana ?? []);
         setSheetsSinPestanaDetalle(data.sinPestanaDetalle ?? []);
+        setSheetsDuplicadas(data.duplicadas ?? []);
         setPestanaElegida({});
         setSheetsAprendidos(data.aprendidos ?? []);
         setSheetsMemoriaError(data.memoriaError ?? null);
@@ -441,6 +445,7 @@ export default function AppPage() {
       setSheetsTabs([]); setSheetsSinPestana([]); setSheetsPestanas([]); setPestanaElegida({});
       setSheetsAprendidos([]); setSheetsSinImporte([]); setSheetsRedirectUrl('');
       setSheetsMarcadoError(null); setSheetsMemoriaError(null); setSheetsReenvio(null);
+      setSheetsDuplicadas([]); setSheetsSinPestanaDetalle([]);
     }, 20000);
   }
 
@@ -865,6 +870,25 @@ export default function AppPage() {
                 {/* Sin este aviso el usuario ve que la factura sigue en la lista, vuelve
                     a exportarla, y le quedan filas repetidas en la planilla sin ninguna
                     señal de por qué. */}
+                {/* El mismo comprobante subido dos veces son dos filas distintas en la
+                    base, así que el control del navegador —que mira la fecha de
+                    exportación de esa fila— no lo agarra. Este lo agarra por número de
+                    comprobante y emisor, que es lo que de verdad identifica una factura. */}
+                {sheetsDuplicadas.length > 0 && (
+                  <div style={{ fontSize: 12.5, color: '#78350f', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>
+                      {sheetsDuplicadas.length === 1
+                        ? <>El comprobante <strong>{sheetsDuplicadas[0].factura}</strong> ya estaba en tu planilla, así que no lo volvimos a escribir.</>
+                        : <>{sheetsDuplicadas.length} comprobantes ya estaban en tu planilla ({sheetsDuplicadas.map((d) => d.factura).join(', ')}), así que no los volvimos a escribir.</>}
+                    </span>
+                    <button
+                      onClick={() => exportToSheets(filteredDone, undefined, undefined, true, sheetsDuplicadas.map((d) => d.id))}
+                      style={{ background: '#78350f', color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}
+                    >
+                      Escribirlos igual
+                    </button>
+                  </div>
+                )}
                 {sheetsMarcadoError && (
                   <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>
                     ⚠ La factura entró en tu planilla, pero Ritto no pudo marcarla como exportada.
