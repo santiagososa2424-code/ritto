@@ -104,7 +104,7 @@ export default function OnboardingPage() {
             </div>
             <div className="step">
               <div className="step-num">3</div>
-              <div className="step-text"><strong>Exportá</strong> — descargá un Excel o enviá los datos directo a tu Google Sheets con un clic.</div>
+              <div className="step-text"><strong>Exportá</strong> — con un clic los datos se escriben en tu Google Sheets, en la pestaña del proveedor y sin romperte las fórmulas.</div>
             </div>
           </div>
           <div className="tip">

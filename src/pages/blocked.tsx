@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 
 const PLAN_PRICES: Record<string, string> = {
   pro: '$1.500',
@@ -48,7 +49,7 @@ export default function BlockedPage() {
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        setError(data.error ?? 'No se pudo iniciar el pago. Escribínos a santiagososa2424@gmail.com');
+        setError(data.error ?? `No se pudo iniciar el pago. Escribinos por WhatsApp al ${SOPORTE_TEL}`);
       }
     } catch {
       setError('Error de conexión. Intentá de nuevo.');
@@ -90,7 +91,7 @@ export default function BlockedPage() {
         {error && <div className="err">{error}</div>}
         <div className="note">Pago seguro con MercadoPago · Cancelá cuando quieras</div>
         <div className="support">
-          ¿Preguntas? <a href="mailto:santiagososa2424@gmail.com">santiagososa2424@gmail.com</a>
+          ¿Preguntas? <a href={SOPORTE_WHATSAPP} target="_blank" rel="noreferrer">WhatsApp {SOPORTE_TEL}</a>
         </div>
       </div>
     </>

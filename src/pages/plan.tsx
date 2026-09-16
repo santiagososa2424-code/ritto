@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 
 const PLANS = {
   pro: {
@@ -110,7 +111,7 @@ export default function PlanPage() {
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        setPayError(data.error || 'No se pudo iniciar el pago. Escribínos a santiagososa2424@gmail.com');
+        setPayError(data.error || `No se pudo iniciar el pago. Escribinos por WhatsApp al ${SOPORTE_TEL}`);
         setPaying(false);
       }
     } catch {
@@ -283,7 +284,7 @@ export default function PlanPage() {
                 Pago seguro con MercadoPago · Cancelá cuando quieras
               </div>
               <hr className="cta-divider" />
-              <a href="mailto:santiagososa2424@gmail.com" className="support-link">¿Tenés preguntas? Contactá a soporte</a>
+              <a href={SOPORTE_WHATSAPP} target="_blank" rel="noreferrer" className="support-link">¿Tenés preguntas? Escribinos por WhatsApp al {SOPORTE_TEL}</a>
             </div>
           )}
 
@@ -324,7 +325,7 @@ export default function PlanPage() {
               ))}
               <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', marginTop: 10 }}>
                 Para cambiar de plan contactá a{' '}
-                <a href="mailto:santiagososa2424@gmail.com" style={{ color: 'var(--green)' }}>santiagososa2424@gmail.com</a>
+                <a href={SOPORTE_WHATSAPP} target="_blank" rel="noreferrer" style={{ color: 'var(--green)' }}>WhatsApp {SOPORTE_TEL}</a>
               </div>
             </>
           )}

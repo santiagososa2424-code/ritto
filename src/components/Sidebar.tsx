@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 
 type ActivePage = 'facturas' | 'plan' | 'settings' | 'guia' | 'dashboard' | 'beneficios' | 'org';
 
@@ -246,12 +247,12 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
 
           <button
             className="sb-item"
-            onClick={() => window.open('mailto:santiagososa2424@gmail.com', '_blank')}
+            onClick={() => window.open(SOPORTE_WHATSAPP, '_blank')}
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
             </svg>
-            <span>Soporte</span>
+            <span>Soporte · {SOPORTE_TEL}</span>
           </button>
         </nav>
 
@@ -274,7 +275,7 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
           <button
             key={item.id}
             className={`bn-item${active === item.id ? ' bn-active' : ''}`}
-            onClick={() => item.id === 'logout' ? signOut() : item.id === 'soporte' ? window.open('mailto:santiagososa2424@gmail.com', '_blank') : router.push(item.path)}
+            onClick={() => item.id === 'logout' ? signOut() : item.id === 'soporte' ? window.open(SOPORTE_WHATSAPP, '_blank') : router.push(item.path)}
           >
             {item.icon}
             <span>{item.label}</span>

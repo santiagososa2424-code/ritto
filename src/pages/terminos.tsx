@@ -1,3 +1,5 @@
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
+
 export default function TerminosPage() {
   return (
     <>
@@ -66,7 +68,7 @@ export default function TerminosPage() {
         <p>Podemos actualizar estos términos. Te notificaremos por email con al menos 15 días de anticipación ante cambios materiales.</p>
 
         <h2>10. Contacto</h2>
-        <p>Para consultas: <a href="mailto:santiagososa2424@gmail.com">santiagososa2424@gmail.com</a></p>
+        <p>Para consultas: <a href={SOPORTE_WHATSAPP} target="_blank" rel="noreferrer">WhatsApp {SOPORTE_TEL}</a></p>
       </div>
     </>
   );

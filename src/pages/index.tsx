@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import HeroBackground from '../components/HeroBackground';
 import TypedDomain from '../components/TypedDomain';
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -269,8 +270,8 @@ export default function LandingPage() {
             </div>
             <div className="how-step">
               <div className="how-num">3</div>
-              <div className="how-title">Exportá a tu sistema</div>
-              <div className="how-desc">Descargá el Excel con las columnas exactas de GNS Contable e importalo directamente.</div>
+              <div className="how-title">Aparece en tu planilla</div>
+              <div className="how-desc">Se escribe sola en tu Google Sheets: en la pestaña del proveedor, en la fila que va por fecha, sin tocarte las fórmulas.</div>
             </div>
           </div>
         </div>
@@ -283,7 +284,7 @@ export default function LandingPage() {
           <div className="features">
             {[
               { icon: '⚡', title: 'Listo en segundos', desc: 'Subí la factura y en segundos tenés todos los datos extraídos: proveedor, RUT, fecha, IVA y totales. Sin tipear nada.' },
-              { icon: '📊', title: 'Excel y CSV listos para importar', desc: 'Descargá el archivo con un clic e importalo directo a GNS, ZetaSoftware o Siigo. Columnas exactas, sin retoques.' },
+              { icon: '📊', title: 'Escribe en la planilla que ya tenés', desc: 'Ritto lee tus columnas, entiende cuál es cuál y escribe adentro de tu Google Sheets. Tus fórmulas, totales y deudas quedan intactas. Si preferís un archivo, también lo podés descargar.' },
               { icon: '👥', title: 'Trabajo en equipo', desc: 'En los planes Pyme y Empresa, todo el equipo comparte el mismo historial de facturas. Invitás usuarios desde Configuración.' },
               { icon: '📁', title: 'Foto, PDF o XML', desc: 'Sacá una foto con el celular, subí el PDF o el XML digital de DGI — los tres funcionan. Hasta 10 facturas a la vez.' },
               { icon: '🔒', title: 'Tus datos seguros', desc: 'Los archivos se eliminan del servidor después de procesarse. Los datos quedan guardados solo en tu cuenta, protegidos con cifrado.' },
@@ -387,7 +388,7 @@ export default function LandingPage() {
           <p>© 2025 ritto.lat · Uruguay</p>
           <a href="/terminos" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Términos</a>
           <a href="/privacidad" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Privacidad</a>
-          <a href="mailto:santiagososa2424@gmail.com" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Soporte</a>
+          <a href={SOPORTE_WHATSAPP} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: 'var(--gray)', textDecoration: 'none' }}>Soporte · WhatsApp {SOPORTE_TEL}</a>
         </div>
       </footer>
     </>

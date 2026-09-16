@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
 import type { ExcelColumn } from '../lib/types';
 import { RITTO_FIELDS, DEFAULT_COLUMNS } from '../lib/types';
+import { SOPORTE_TEL } from '../lib/soporte';
 
 const PLAN_LIMITS: Record<string, number> = { pro: 1, pyme: 5, empresa: 20 };
 
@@ -132,10 +133,10 @@ export default function SettingsPage() {
     }
     if (router.query.error === 'google_token') {
       const detail = router.query.detail ? ` (${router.query.detail})` : '';
-      setError(`No se pudo conectar con Google${detail}. Intentá de nuevo o escribinos a santiagososa2424@gmail.com si el problema persiste.`);
+      setError(`No se pudo conectar con Google${detail}. Intentá de nuevo o escribinos por WhatsApp al ${SOPORTE_TEL} si el problema persiste.`);
     }
     if (router.query.error === 'google_not_configured') {
-      setError('Hubo un problema del lado del servidor al conectar con Google. Escribinos a santiagososa2424@gmail.com y lo resolvemos en minutos.');
+      setError(`Hubo un problema del lado del servidor al conectar con Google. Escribinos por WhatsApp al ${SOPORTE_TEL} y lo resolvemos en minutos.`);
     }
   }, [router.query]);
 
@@ -566,9 +567,15 @@ export default function SettingsPage() {
           </form>
 
           <div className="card">
-            <div className="card-title">Plantilla de Excel</div>
+            {/* Esta sección es de antes de que Ritto leyera la planilla solo. Para el
+                camino principal —Google Sheets— no hace falta tocarla, y presentarla como
+                si hubiera que configurarla hacía que la gente se trabara acá pensando que
+                era un paso obligatorio. */}
+            <div className="card-title">Columnas del archivo Excel (opcional)</div>
             <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
-              Definí las columnas del archivo que descargás. Podés usar exactamente los mismos nombres que tiene tu planilla — así los datos caen en el lugar correcto.
+              Esto es sólo para el archivo que descargás con el botón <strong>XLS</strong>. Si exportás a
+              Google Sheets, no hace falta que toques nada acá: Ritto lee los nombres de las columnas
+              directamente de tu planilla.
             </p>
 
             <div className="col-header">
@@ -627,6 +634,20 @@ export default function SettingsPage() {
                 <p style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6 }}>
                   Hacé clic en "Conectar con Google" y autorizá el acceso. Solo se pide permiso para escribir en Sheets — Ritto no puede leer ni modificar tus otros archivos.
                 </p>
+                {/* El cartel de Google aparece en el peor momento —justo cuando la persona
+                    está entregando acceso a su planilla— y sin este aviso previo la primera
+                    reacción es cerrar todo. Va antes del botón, no después. */}
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12.5, color: '#78350f', lineHeight: 1.6 }}>
+                  <strong>Antes de tocar el botón:</strong> Google te va a mostrar un cartel que dice que
+                  Ritto <em>no está verificado</em>. Es normal y no significa que haya un problema — Google
+                  marca así a toda aplicación chica hasta que termina su revisión.
+                  <br /><br />
+                  Para seguir: tocá <strong>«Configuración avanzada»</strong> y después{' '}
+                  <strong>«Ir a ritto.lat (no seguro)»</strong>.
+                  <br /><br />
+                  Si en cambio te dice que tu cuenta no tiene acceso, escribinos por WhatsApp al{' '}
+                  <strong>{SOPORTE_TEL}</strong> y te habilitamos en minutos.
+                </div>
                 <button
                   type="button"
                   className="btn-save"

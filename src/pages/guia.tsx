@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '../components/Sidebar';
+import { SOPORTE_TEL } from '../lib/soporte';
 
+// Google Sheets es el camino, no una opción entre dos. La guía trataba Excel y Sheets
+// como equivalentes y toda la configuración estaba escrita alrededor de plantillas de
+// Excel, que es de la época anterior: hoy Ritto lee las columnas de tu planilla solo.
+// La primera usuaria de verdad se trabó justo acá.
 const sections = [
   { id: 'empezar', label: 'Cómo empezar' },
-  { id: 'excel', label: 'Exportar a Excel' },
-  { id: 'sheets', label: 'Conectar Google Sheets' },
-  { id: 'columnas', label: 'Configurar columnas' },
+  { id: 'sheets', label: 'Conectar tu planilla' },
+  { id: 'columnas', label: 'Cómo lee tus columnas' },
   { id: 'tips', label: 'Sacarle el jugo' },
   { id: 'problemas', label: 'Problemas frecuentes' },
 ];
@@ -123,7 +127,7 @@ export default function GuiaPage() {
               <div className="card-icon">📄</div>
               <div className="card-title">¿Qué hace Ritto?</div>
               <div className="card-text">
-                Subís tus facturas (foto, PDF o XML) y Ritto lee automáticamente los datos — proveedor, fecha, monto, IVA — y te los entrega ordenados en un archivo Excel o directamente en tu Google Sheets.
+                Subís tus facturas (foto, PDF o XML) y Ritto lee automáticamente los datos — proveedor, fecha, monto, IVA — y los escribe en tu Google Sheets: en la pestaña del proveedor, en la fila que va por fecha, sin romper las fórmulas que ya tenías.
                 <br /><br />
                 Sin tipear a mano. Sin errores. En segundos.
               </div>
@@ -149,56 +153,15 @@ export default function GuiaPage() {
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
-                    <div className="step-title">Exportá</div>
-                    <div className="step-desc">Cuando tenés las facturas que querés, tocá "Exportar a Excel" o "Exportar a Google Sheets" arriba a la derecha.</div>
+                    <div className="step-title">Exportá a tu planilla</div>
+                    <div className="step-desc">Cuando tenés las facturas que querés, tocá "Exportar a Google Sheets" arriba a la derecha. Las filas aparecen solas en tu planilla, en la pestaña del proveedor y en el lugar que les toca por fecha.</div>
                   </div>
                 </div>
               </div>
               <div className="highlight">
                 💡 <strong>El mejor tipo de archivo:</strong> los XML del DGI son instantáneos y 100% exactos. Si tu proveedor te los manda, usá esos primero.
-              </div>
-            </div>
-          </div>
-
-          <div className={`section${active === 'excel' ? ' visible' : ''}`}>
-            <div className="card">
-              <div className="card-icon">📊</div>
-              <div className="card-title">Exportar a Excel</div>
-              <div className="card-text">
-                Ritto te descarga un archivo Excel nuevo con todas tus facturas. Para que los datos caigan en el lugar correcto de tu planilla existente, tenés que pegar las filas.
-              </div>
-              <div className="steps" style={{ marginTop: 16 }}>
-                <div className="step">
-                  <div className="step-num">1</div>
-                  <div className="step-content">
-                    <div className="step-title">Selecioná las facturas</div>
-                    <div className="step-desc">Podés filtrar por mes si querés exportar solo un período.</div>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-num">2</div>
-                  <div className="step-content">
-                    <div className="step-title">Tocá "Exportar a Excel"</div>
-                    <div className="step-desc">Se descarga un archivo .xlsx en tu dispositivo.</div>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-num">3</div>
-                  <div className="step-content">
-                    <div className="step-title">Abrí los dos archivos</div>
-                    <div className="step-desc">El que descargaste de Ritto y tu planilla existente de Excel.</div>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-num">4</div>
-                  <div className="step-content">
-                    <div className="step-title">Copiá las filas de Ritto</div>
-                    <div className="step-desc">Selecioná todas las filas con datos (sin el encabezado), copiá y pegá al final de tu planilla existente.</div>
-                  </div>
-                </div>
-              </div>
-              <div className="highlight">
-                ✅ Si configuraste bien las columnas (ver sección "Configurar columnas"), los datos van a caer exactamente en las columnas correctas de tu planilla.
+                <br /><br />
+                También podés bajarte un archivo Excel con el botón <strong>XLS</strong>, por si necesitás mandarle los datos a alguien. Pero el camino de Ritto es Google Sheets: es el único que escribe adentro de tu planilla sin que tengas que copiar y pegar nada.
               </div>
             </div>
           </div>
@@ -208,7 +171,18 @@ export default function GuiaPage() {
               <div className="card-icon">🟢</div>
               <div className="card-title">Conectar Google Sheets</div>
               <div className="card-text">
-                Con Google Sheets conectado, no tenés que descargar ni copiar nada. Exportás desde Ritto y las filas aparecen solas en tu planilla automáticamente.
+                Exportás desde Ritto y las filas aparecen solas en tu planilla. No hay que descargar ni copiar nada.
+              </div>
+              <div className="highlight" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
+                ⚠️ <strong>Google te va a mostrar un cartel que dice que Ritto no está verificado.</strong> Es
+                normal y no significa que haya un problema: Google marca así a toda aplicación chica
+                hasta que termina su proceso de revisión, que lleva varias semanas.
+                <br /><br />
+                Para seguir: tocá <strong>«Configuración avanzada»</strong> abajo a la izquierda y después
+                <strong> «Ir a ritto.lat (no seguro)»</strong>. Es el único paso raro de toda la conexión.
+                <br /><br />
+                Ritto pide permiso <strong>solamente</strong> para escribir en planillas de Google Sheets.
+                No puede ver tu Gmail, tus fotos ni tus otros archivos del Drive.
               </div>
               <div className="steps" style={{ marginTop: 16 }}>
                 <div className="step">
@@ -254,79 +228,62 @@ export default function GuiaPage() {
               <div className="card-icon">🗂️</div>
               <div className="card-title">¿Para qué sirve configurar las columnas?</div>
               <div className="card-text">
-                Tu planilla de Excel probablemente tiene columnas con nombres específicos — "Razón Social", "Importe Total", "Fecha de compra", etc. Si Ritto exporta con nombres distintos, tenés que mover todo a mano.<br /><br />
-                Configurando las columnas, Ritto exporta con exactamente los mismos nombres que tiene tu planilla. Así pegás los datos y caen solos en el lugar correcto.
+                No hace falta que configures nada. Ritto abre tu planilla, lee los nombres de tus columnas y
+                mira lo que ya tenés cargado para deducir qué va en cada una: si una columna viene llena de
+                fechas es la de fechas, aunque le hayas puesto "Día" o "Emisión".<br /><br />
+                Lo que <strong>nunca</strong> toca: las columnas que calcula tu planilla. Si una celda tiene una
+                fórmula, Ritto la deja como está. Los totales, las deudas y los acumulados siguen siendo
+                tuyos.<br /><br />
+                Esta sección es para cuando Ritto se equivoca y querés corregirlo a mano.
               </div>
             </div>
 
             <div className="card">
-              <div className="card-title">Ejemplo paso a paso</div>
-              <div className="card-text">Supongamos que tu planilla de Excel tiene estas columnas:</div>
-              <div className="example-box" style={{ marginTop: 12 }}>
-                <div className="example-label">Tu planilla de Excel</div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="example-table">
-                    <thead>
-                      <tr>
-                        <th>Razón Social</th>
-                        <th>RUT</th>
-                        <th>Fecha de compra</th>
-                        <th>Importe neto</th>
-                        <th>IVA</th>
-                        <th>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>Supermercado SA</td>
-                        <td>21.234.567-8</td>
-                        <td>15/07/2025</td>
-                        <td>$1.200</td>
-                        <td>$264</td>
-                        <td>$1.464</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+              <div className="card-title">Cuando Ritto no encuentra dónde escribir</div>
+              <div className="card-text">
+                A veces te va a avisar que leyó el importe pero no supo en qué columna ponerlo, o que no
+                encontró la pestaña de un proveedor. Cuando eso pasa te lo dice en pantalla y te deja
+                arreglarlo ahí mismo, sin tocar nada de la planilla:
               </div>
-
-              <div className="steps" style={{ marginTop: 20 }}>
+              <div className="steps" style={{ marginTop: 16 }}>
                 <div className="step">
                   <div className="step-num">1</div>
                   <div className="step-content">
-                    <div className="step-title">Andá a Configuración → Plantilla de Excel</div>
-                    <div className="step-desc">Ahí ves una lista de columnas con dos campos cada una.</div>
+                    <div className="step-title">«No encontramos la pestaña de este proveedor»</div>
+                    <div className="step-desc">
+                      Elegís de la lista a cuál mandarla y tocás «Enviar y recordar». Ritto se lo guarda por
+                      el RUT del proveedor, así que la próxima factura va sola —aunque el nombre venga
+                      escrito distinto—.
+                    </div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">2</div>
                   <div className="step-content">
-                    <div className="step-title">En "Nombre en tu planilla" escribís el nombre exacto</div>
-                    <div className="step-desc">Tal cual aparece en tu Excel. Respetando mayúsculas y acentos.</div>
+                    <div className="step-title">«Esta columna tiene fórmulas»</div>
+                    <div className="step-desc">
+                      Ritto no pisa una celda calculada. Si igual querés que escriba ahí, tocás «Escribir
+                      igual acá» y lo recuerda para las próximas.
+                    </div>
                   </div>
                 </div>
                 <div className="step">
                   <div className="step-num">3</div>
                   <div className="step-content">
-                    <div className="step-title">En "Dato de Ritto" elegís qué información va ahí</div>
-                    <div className="step-desc">Por ejemplo: "Razón Social" → Proveedor · "Importe neto" → Neto (sin IVA) · "Total" → Total</div>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-num">4</div>
-                  <div className="step-content">
-                    <div className="step-title">Guardás y listo</div>
-                    <div className="step-desc">Todos los exportes siguientes van a tener tus columnas exactas.</div>
+                    <div className="step-title">Un dato quedó mal leído</div>
+                    <div className="step-desc">
+                      En la lista de facturas tocás el lápiz ✏ y lo corregís antes de exportar.
+                    </div>
                   </div>
                 </div>
               </div>
-
               <div className="highlight">
-                💡 <strong>Si usás Google Sheets no hace falta escribir nada a mano.</strong> En Configuración tocás "Leer mi planilla y ver columnas" y Ritto abre tu planilla, detecta las pestañas y los nombres de todas las columnas. Vos solo elegís qué dato va en cada una, de una lista.
+                💡 <strong>Si tu planilla tiene una columna «Moneda»</strong>, Ritto escribe ahí si la factura
+                está en pesos o en dólares. Si no la tiene y la factura viene en dólares, te avisa —para que
+                el importe no quede mezclado con los que están en pesos sin que nadie se dé cuenta—.
               </div>
-
               <button className="btn-go" onClick={() => window.location.href = '/settings'}>
-                Ir a configurar columnas →
+                Ver cómo Ritto entiende mi planilla →
               </button>
             </div>
           </div>
@@ -369,7 +326,11 @@ export default function GuiaPage() {
               <div className="card-icon">🔴</div>
               <div className="card-title">"Acceso bloqueado: ritto solo se puede usar dentro de su organización"</div>
               <div className="card-text">
-                Este error aparece al intentar conectar Google Sheets con una cuenta de Gmail externa (ej: @gmail.com). Es un ajuste del lado del desarrollador, no tuyo. <strong>Escribínos a santiagososa2424@gmail.com</strong> indicando tu email y lo resolvemos en minutos.
+                Si el cartel dice que Ritto <strong>no está verificado</strong>, es normal: tocá «Configuración
+                avanzada» y después «Ir a ritto.lat (no seguro)». Si en cambio dice que tu cuenta
+                <strong> no tiene acceso</strong> o que la app está en modo de prueba, hay que habilitar tu
+                dirección de nuestro lado: <strong>escribinos por WhatsApp al {SOPORTE_TEL}</strong> con tu
+                email de Google y lo resolvemos en minutos.
               </div>
             </div>
 
@@ -405,9 +366,11 @@ export default function GuiaPage() {
 
             <div className="card">
               <div className="card-icon">📋</div>
-              <div className="card-title">El Excel exportado tiene columnas distintas a mi planilla</div>
+              <div className="card-title">Los datos no caen en las columnas que esperaba</div>
               <div className="card-text">
-                Configurá la plantilla de columnas en Configuración → Plantilla de Excel. Podés poner exactamente los mismos nombres que tiene tu planilla. Ver sección "Configurar columnas" para el paso a paso.
+                En Configuración tocá «Leer mi planilla y ver columnas»: Ritto te muestra pestaña por pestaña
+                cómo entendió cada una de tus columnas. Si alguna la interpretó mal, ahí mismo le decís qué
+                dato va en cada una.
               </div>
               <button className="btn-go" onClick={() => window.location.href = '/settings'}>
                 Ir a configurar columnas →
@@ -418,7 +381,8 @@ export default function GuiaPage() {
               <div className="card-icon">📧</div>
               <div className="card-title">¿Otro problema?</div>
               <div className="card-text">
-                Escribínos a <strong>santiagososa2424@gmail.com</strong> con una descripción del problema y, si podés, una captura de pantalla. Respondemos rápido.
+                Escribinos por WhatsApp al <strong>{SOPORTE_TEL}</strong> con una descripción del problema y,
+                si podés, una captura de pantalla. Respondemos rápido.
               </div>
             </div>
           </div>

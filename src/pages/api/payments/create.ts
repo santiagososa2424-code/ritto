@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!item || !email) return res.status(400).json({ error: 'Parámetros inválidos' });
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
-  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Contactá santiagososa2424@gmail.com' });
+  if (!accessToken) return res.status(503).json({ error: 'Pagos no configurados en el servidor. Escribinos por WhatsApp al 093403706' });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ritto.lat';
 

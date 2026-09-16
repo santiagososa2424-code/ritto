@@ -4,6 +4,16 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
 import type { ExtractedInvoice, InvoiceSource } from '../lib/types';
+import { isCreditNote } from '../lib/types';
+
+// Una nota de crédito anula o devuelve parte de una compra: en el gasto tiene que
+// restar. El dashboard las venía sumando, así que todos los totales —el del mes, el de
+// cada proveedor y el acumulado— daban de más. La lista de facturas ya lo hacía bien,
+// y que los dos números no coincidieran era peor todavía que el número equivocado.
+function conSigno(valor: number | undefined, tipoDocumento?: string): number {
+  const n = valor ?? 0;
+  return isCreditNote(tipoDocumento) ? -Math.abs(n) : n;
+}
 
 function fmt(n?: number) {
   if (n == null) return '—';
@@ -79,7 +89,7 @@ export default function DashboardPage() {
         : key;
       byMonth[key] = { label, total: 0, count: 0 };
     }
-    byMonth[key].total += inv.total ?? 0;
+    byMonth[key].total += conSigno(inv.total, inv.tipoDocumento);
     byMonth[key].count += 1;
   }
   const monthData: MonthData[] = Object.entries(byMonth)
@@ -93,18 +103,20 @@ export default function DashboardPage() {
   for (const inv of done) {
     const key = inv.proveedor ?? 'Sin proveedor';
     if (!bySupplier[key]) bySupplier[key] = { proveedor: key, total: 0, count: 0 };
-    bySupplier[key].total += inv.total ?? 0;
+    bySupplier[key].total += conSigno(inv.total, inv.tipoDocumento);
     bySupplier[key].count += 1;
   }
   const topSuppliers = Object.values(bySupplier).sort((a, b) => b.total - a.total).slice(0, 5);
 
-  const totalAmount = done.reduce((s, i) => s + (i.total ?? 0), 0);
-  const totalIva10 = done.reduce((s, i) => s + (i.iva10 ?? 0), 0);
-  const totalIva22 = done.reduce((s, i) => s + (i.iva22 ?? 0), 0);
-  const totalIva = done.reduce((s, i) => s + (i.ivaTotal ?? 0), 0);
-  const totalNeto = done.reduce((s, i) => s + (i.neto ?? 0), 0);
+  const totalAmount = done.reduce((s, i) => s + conSigno(i.total, i.tipoDocumento), 0);
+  const totalIva10 = done.reduce((s, i) => s + conSigno(i.iva10, i.tipoDocumento), 0);
+  const totalIva22 = done.reduce((s, i) => s + conSigno(i.iva22, i.tipoDocumento), 0);
+  const totalIva = done.reduce((s, i) => s + conSigno(i.ivaTotal, i.tipoDocumento), 0);
+  const totalNeto = done.reduce((s, i) => s + conSigno(i.neto, i.tipoDocumento), 0);
 
-  const maxMonthTotal = Math.max(...monthData.map((m) => m.total), 1);
+  // Con notas de crédito un mes puede quedar en negativo: la escala se mide en valor
+  // absoluto para que la barra siga siendo legible.
+  const maxMonthTotal = Math.max(...monthData.map((m) => Math.abs(m.total)), 1);
 
   if (!user) return null;
 
@@ -170,6 +182,13 @@ export default function DashboardPage() {
                   <div className="stat-label">Monto total (UYU)</div>
                   <div className="stat-value" style={{ fontSize: totalAmount > 9999999 ? 18 : 24 }}>{fmt(totalAmount)}</div>
                   <div className="stat-sub">Neto: {fmt(totalNeto)}</div>
+                  {/* Decirlo cuando corresponde: si no, el usuario ve un total más bajo
+                      del que esperaba y no sabe si está mal o si le restaron algo. */}
+                  {done.some((i) => isCreditNote(i.tipoDocumento)) && (
+                    <div className="stat-sub">
+                      Incluye {done.filter((i) => isCreditNote(i.tipoDocumento)).length} nota(s) de crédito, que restan
+                    </div>
+                  )}
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">IVA 22%</div>
@@ -199,7 +218,7 @@ export default function DashboardPage() {
                       {monthData.map((m) => (
                         <div key={m.label} className="bar-col">
                           <div className="bar-val">{m.total > 999 ? `${Math.round(m.total / 1000)}k` : fmt(m.total)}</div>
-                          <div className="bar-rect" style={{ height: `${Math.max(4, (m.total / maxMonthTotal) * 100)}px` }} />
+                          <div className="bar-rect" style={{ height: `${Math.max(4, (Math.abs(m.total) / maxMonthTotal) * 100)}px` }} />
                           <div className="bar-label">{m.label}</div>
                         </div>
                       ))}
@@ -222,7 +241,7 @@ export default function DashboardPage() {
                       <div key={s.proveedor} className="sup-row">
                         <div className="sup-name" title={s.proveedor}>{s.proveedor}</div>
                         <div className="sup-bar-wrap">
-                          <div className="sup-bar-fill" style={{ width: `${(s.total / topSuppliers[0].total) * 100}%` }} />
+                          <div className="sup-bar-fill" style={{ width: `${Math.min(100, Math.abs(s.total) / Math.abs(topSuppliers[0].total || 1) * 100)}%` }} />
                         </div>
                         <div className="sup-amount">{fmt(s.total)}</div>
                       </div>

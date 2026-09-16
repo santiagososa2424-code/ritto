@@ -18,7 +18,7 @@ FORMATO DE RESPUESTA (devolvé exactamente esta estructura):
   "proveedor": "nombre fantasía o razón social del EMISOR — nunca su dirección",
   "rut": "RUT del EMISOR tal cual figura impreso: 12 dígitos seguidos, sin puntos ni guion",
   "fecha": "fecha de emisión en formato YYYY-MM-DD",
-  "nroDocumento": "número de serie y número del documento (ej: A-0001234 o E-0001234)",
+  "nroDocumento": "serie y número del comprobante, unidos con guion (ej: A-0001234, E-0001234, B-45)",
   "tipoDocumento": "e-Factura | e-Ticket | Factura | Ticket | e-Remito | Remito | e-Nota de Crédito | Nota de Crédito",
   "moneda": "UYU o USD",
   "items": [
@@ -89,13 +89,26 @@ REGLAS CRÍTICAS PARA URUGUAY:
 14. totalItem debe ser CON IVA incluido
 15. NO incluir símbolo de moneda ($, U$S) en valores numéricos
 16. Usar punto (.) como separador decimal, NO coma
+17. NÚMERO DE COMPROBANTE — buscalo siempre, es el dato que identifica la factura:
+   - Está compuesto por una SERIE (una o dos letras: A, B, E, AA…) y un NÚMERO.
+   - Aparece rotulado de muchas formas: "Serie A Nro 1234", "A 0001234", "Nº 1234",
+     "Comprobante: A1234", "FACTURA A-1234", o sólo "0001234" al lado de la serie.
+   - En tickets térmicos y facturas impresas suele estar arriba a la derecha, o abajo
+     junto al código QR y al CAE. Miralo en los dos lugares antes de rendirte.
+   - Devolvelo como SERIE-NÚMERO: "A-0001234". Si la serie no aparece por ningún lado,
+     devolvé sólo el número: "0001234".
+   - NO confundas con: el RUT, el número de CAE o autorización DGI, el número de cliente,
+     el número de remito, ni la fecha.
+   - Sólo si de verdad no está impreso en ninguna parte, devolvé "".
+
 
 VERIFICACIÓN FINAL antes de responder:
 - ¿neto + ivaTotal ≈ total? (tolerancia: diferencia menor a 1 unidad monetaria)
 - ¿items array tiene al menos 1 elemento?
 - ¿El RUT son los 12 dígitos del EMISOR, sin puntos ni guion, y no el del comprador?
 - ¿El proveedor es un nombre de empresa y no una dirección?
-- ¿fecha está en formato YYYY-MM-DD?`;
+- ¿fecha está en formato YYYY-MM-DD?
+- ¿Buscaste el número de comprobante arriba a la derecha Y abajo cerca del QR?`;
 
 interface ValidationResult {
   valid: boolean;

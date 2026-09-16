@@ -1338,7 +1338,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       exportedAt,
       tabs: writtenTabs,
       updatedRange: writtenTabs.join(', '),
-      redirectUrl: totalRows > 0 ? redirectUrl : undefined,
+      // Siempre, no sólo cuando se escribió algo. El link es útil igual —el usuario
+      // quiere ir a mirar— y hacerlo depender de rowsAdded era la razón por la que,
+      // después de elegir la pestaña a mano, había que exportar dos veces para que
+      // apareciera el acceso a la planilla.
+      redirectUrl,
       engine: useGemini ? 'gemini' : 'fallback',
       _debug: {
         existingTabs,
@@ -1355,6 +1359,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     void logError('sheets/append', err, {
       contexto: { facturas: Array.isArray(req.body?.invoices) ? req.body.invoices.length : null },
     });
-    return res.status(500).json({ error: 'Error interno al exportar. Intentá de nuevo o escribinos a santiagososa2424@gmail.com' });
+    return res.status(500).json({ error: 'Error interno al exportar. Intentá de nuevo o escribinos por WhatsApp al 093403706' });
   }
 }

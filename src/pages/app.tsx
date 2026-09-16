@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '../lib/types';
 import { DEFAULT_COLUMNS, isCreditNote } from '../lib/types';
 import Sidebar from '../components/Sidebar';
+import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 
 function sourceLabel(s: InvoiceSource) {
   if (s === 'cfe_xml') return 'CFE';
@@ -352,6 +353,21 @@ export default function AppPage() {
 
   async function exportToSheets(invoiceList: ExtractedInvoice[], pestanasElegidas?: Record<string, string>, forzarColumnas?: string[]) {
     if (!user) return;
+    // Una factura ya exportada no se vuelve a mandar. Reenviarla no corrige nada: agrega
+    // una fila repetida en la contabilidad del cliente, y desde la vista de archivadas
+    // el botón mandaba de nuevo todo lo que estuviera a la vista.
+    const yaExportadas = invoiceList.filter((i) => i.exportedAt).length;
+    const pendientes = invoiceList.filter((i) => !i.exportedAt);
+    if (pendientes.length === 0) {
+      setSheetsStatus('error');
+      setSheetsError(
+        yaExportadas === 1
+          ? 'Esa factura ya está en tu planilla. Para no duplicar la fila, no la volvemos a mandar.'
+          : 'Esas facturas ya están en tu planilla. Para no duplicar filas, no las volvemos a mandar.',
+      );
+      return;
+    }
+    invoiceList = pendientes;
     setSheetsStatus('loading');
     setSheetsError('');
     try {
@@ -530,6 +546,12 @@ export default function AppPage() {
         .spinner { width: 14px; height: 14px; border: 2px solid rgba(10,124,89,0.3); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        .caret { color: var(--green); font-size: 10px; margin-right: 5px; }
+        .items-hint {
+          font-size: 10.5px; color: var(--green); background: var(--green-light);
+          border-radius: 4px; padding: 1px 6px; display: inline-block; margin-top: 3px;
+          white-space: nowrap;
+        }
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
         .section-title { font-size: 14px; font-weight: 600; }
         .count-badge { background: var(--green-light); color: var(--green); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
@@ -736,9 +758,13 @@ export default function AppPage() {
             </div>
             {sheetsStatus === 'ok' && (
               <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: sheetsRowsAdded > 0 ? '#f0fdf4' : '#fffbeb', color: sheetsRowsAdded > 0 ? '#166534' : '#78350f', fontSize: 13, fontWeight: 500, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {sheetsRowsAdded > 0 && (
+                {/* El link va siempre, no sólo cuando se escribió una fila: el usuario
+                    quiere ir a mirar igual, y atarlo a rowsAdded era lo que obligaba a
+                    exportar dos veces para que apareciera el acceso a la planilla. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  ✓ {`${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'}`} a tu planilla.{' '}
+                  {sheetsRowsAdded > 0
+                    ? `✓ ${sheetsRowsAdded} ${sheetsRowsAdded === 1 ? 'factura agregada' : 'facturas agregadas'} a tu planilla.`
+                    : 'No se agregó ninguna fila en este intento.'}{' '}
                   <a
                     href={sheetsRedirectUrl || (() => { const m = googleSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); const id = m ? m[1] : googleSheetId; const base = `https://docs.google.com/spreadsheets/d/${id}/edit`; return googleEmail ? `${base}?authuser=${encodeURIComponent(googleEmail)}` : base; })()}
                     target="_blank"
@@ -748,7 +774,6 @@ export default function AppPage() {
                     {sheetsRedirectUrl ? 'Abrir en la pestaña correcta →' : 'Abrir planilla →'}
                   </a>
                 </div>
-                )}
                 {sheetsSinImporte.length > 0 && (
                   <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', color: '#78350f', fontSize: 12, lineHeight: 1.55 }}>
                     <strong>Se exportaron sin importe:</strong>
@@ -812,7 +837,7 @@ export default function AppPage() {
                 {sheetsMemoriaError && (
                   <div style={{ fontSize: 12, color: '#92400e', fontWeight: 500 }}>
                     ⚠ La factura se exportó, pero Ritto no pudo recordar la pestaña que elegiste,
-                    así que te la va a volver a preguntar. Escribinos a santiagososa2424@gmail.com.
+                    así que te la va a volver a preguntar. Escribinos por WhatsApp al {SOPORTE_TEL}.
                   </div>
                 )}
                 {sheetsRowsAdded > 0 && sheetsTabs.length > 0 && (
@@ -889,7 +914,7 @@ export default function AppPage() {
                   ? <>Conectá tu cuenta de Google en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> antes de exportar.</>
                   : sheetsError.toLowerCase().includes('url') || sheetsError.toLowerCase().includes('sheet')
                   ? <>Revisá la URL de tu planilla en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
-                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos a santiagososa2424@gmail.com</>
+                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos por WhatsApp al {SOPORTE_TEL}</>
                 }
               </div>
             )}
@@ -1096,7 +1121,24 @@ export default function AppPage() {
                         style={{ cursor: inv.items && inv.items.length > 0 ? 'pointer' : 'default' }}
                         title={inv.items && inv.items.length > 0 ? 'Clic para ver ítems' : undefined}
                       >
-                        <td><div className="file-name" title={inv.fileName}>{inv.fileName}</div></td>
+                        <td>
+                          <div className="file-name" title={inv.fileName}>
+                            {/* Sin esto la fila se abría al clickearla y nadie se enteraba:
+                                el único indicio era el cursor y un title que hay que
+                                descubrir parándose encima. */}
+                            {inv.items && inv.items.length > 0 && (
+                              <span className="caret">{expandedRows.has(inv.id) ? '▾' : '▸'}</span>
+                            )}
+                            {inv.fileName}
+                          </div>
+                          {inv.items && inv.items.length > 0 && (
+                            <span className="items-hint">
+                              {expandedRows.has(inv.id)
+                                ? 'ocultar artículos'
+                                : `ver ${inv.items.length} ${inv.items.length === 1 ? 'artículo' : 'artículos'}`}
+                            </span>
+                          )}
+                        </td>
                         <td>
                           <span className={`source-tag source-${inv.source === 'cfe_xml' ? 'cfe' : inv.source}`}>
                             {sourceLabel(inv.source)}
@@ -1158,9 +1200,10 @@ export default function AppPage() {
                                   e.stopPropagation();
                                   exportToSheets([inv]);
                                 }}
-                                title={!googleConnected ? 'Conectá Google en Configuración' : !googleSheetId ? 'Configurá tu planilla en Configuración' : 'Enviar a Google Sheets'}
+                                title={!googleConnected ? 'Conectá Google en Configuración' : !googleSheetId ? 'Configurá tu planilla en Configuración' : 'Enviar esta factura a tu Google Sheets'}
                               >
-                                GS
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg>
+                                Sheets
                               </button>
                             </>
                           )}

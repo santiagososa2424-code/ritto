@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { error: authErr } = await supabase.auth.admin.deleteUser(user.id);
   if (authErr) {
     console.error('[delete-account] no se pudo borrar el usuario:', authErr.message);
-    return res.status(500).json({ error: 'No se pudo completar la baja. Escribinos a santiagososa2424@gmail.com', steps });
+    return res.status(500).json({ error: 'No se pudo completar la baja. Escribinos por WhatsApp al 093403706', steps });
   }
   steps.cuenta = 'borrada';
 

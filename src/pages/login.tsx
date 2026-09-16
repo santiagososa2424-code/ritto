@@ -83,7 +83,7 @@ export default function LoginPage() {
         body: JSON.stringify({ nombre, empresa, rut, telefono, plan: selectedPlan }),
       });
       if (!bootstrap.ok) {
-        setError('No pudimos completar tu registro. Escribinos a santiagososa2424@gmail.com');
+        setError('No pudimos completar tu registro. Escribinos por WhatsApp al 093403706');
         setLoading(false);
         return;
       }
