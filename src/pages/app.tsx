@@ -80,6 +80,8 @@ export default function AppPage() {
   const [pestanaElegida, setPestanaElegida] = useState<Record<string, string>>({});
   const [sheetsAprendidos, setSheetsAprendidos] = useState<string[]>([]);
   const [sheetsMemoriaError, setSheetsMemoriaError] = useState<string | null>(null);
+  // La factura entró en la planilla pero no quedó marcada como exportada.
+  const [sheetsMarcadoError, setSheetsMarcadoError] = useState<string | null>(null);
   const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: { columna: string; motivo: string }[]; notas?: string[] }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
   // Facturas que el usuario quiso mandar y ya estaban en la planilla.
@@ -393,6 +395,7 @@ export default function AppPage() {
         setPestanaElegida({});
         setSheetsAprendidos(data.aprendidos ?? []);
         setSheetsMemoriaError(data.memoriaError ?? null);
+        setSheetsMarcadoError(data.marcadoError ?? null);
         setSheetsSinImporte(data.sinImporte ?? []);
         setSheetsPestanas(data.pestanasDisponibles ?? []);
         setSheetsRedirectUrl(data.redirectUrl ?? '');
@@ -838,6 +841,16 @@ export default function AppPage() {
                 {/* La exportación salió bien pero la pestaña elegida no quedó guardada.
                     Sin este aviso Ritto vuelve a preguntar lo mismo en la próxima
                     factura y parece que no hubiera escuchado. */}
+                {/* Sin este aviso el usuario ve que la factura sigue en la lista, vuelve
+                    a exportarla, y le quedan filas repetidas en la planilla sin ninguna
+                    señal de por qué. */}
+                {sheetsMarcadoError && (
+                  <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+                    ⚠ La factura entró en tu planilla, pero Ritto no pudo marcarla como exportada.
+                    Va a seguir apareciendo en la lista: <strong>no la vuelvas a mandar</strong> o te va a
+                    quedar la fila repetida. Escribinos por WhatsApp al {SOPORTE_TEL}.
+                  </div>
+                )}
                 {sheetsMemoriaError && (
                   <div style={{ fontSize: 12, color: '#92400e', fontWeight: 500 }}>
                     ⚠ La factura se exportó, pero Ritto no pudo recordar la pestaña que elegiste,

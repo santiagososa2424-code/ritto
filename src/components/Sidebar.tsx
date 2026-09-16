@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
@@ -15,6 +16,41 @@ interface SidebarProps {
 
 export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, planName, showOrg }: SidebarProps) {
   const router = useRouter();
+
+  // El menú se arma solo en vez de depender de que cada pantalla le pase los datos.
+  // "Mi Organización" aparecía únicamente en Facturas, que era la única que mandaba
+  // showOrg: al pasar a Dashboard, Planes o Configuración la entrada desaparecía y
+  // parecía que se hubiera perdido la organización. Lo mismo con el nombre de la
+  // empresa y el plan, que cada pantalla cargaba por su cuenta o no cargaba.
+  const [perfil, setPerfil] = useState<{ empresa?: string; plan?: string; conOrg: boolean } | null>(null);
+
+  useEffect(() => {
+    let vigente = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      supabase
+        .from('profiles')
+        .select('empresa, plan, organization_id, role')
+        .eq('id', data.user.id)
+        .single()
+        .then(({ data: p }) => {
+          if (!vigente || !p) return;
+          setPerfil({
+            empresa: p.empresa ?? undefined,
+            plan: p.plan ?? undefined,
+            // Los planes con equipo son los que tienen organización. El plan Pro es de
+            // una sola persona y ahí la entrada no tiene sentido.
+            conOrg: !!p.organization_id && p.plan !== 'pro',
+          });
+        });
+    });
+    return () => { vigente = false; };
+  }, []);
+
+  // Lo que manda la pantalla gana: ya lo tiene cargado y evita el parpadeo.
+  const empresaFinal = empresa ?? perfil?.empresa;
+  const planFinal = planName ?? (perfil?.plan ? perfil.plan.charAt(0).toUpperCase() + perfil.plan.slice(1) : undefined);
+  const mostrarOrg = showOrg ?? perfil?.conOrg ?? false;
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -69,7 +105,7 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
         </svg>
       ),
     },
-    ...(showOrg ? [{
+    ...(mostrarOrg ? [{
       id: 'org' as const,
       label: 'Mi Organización',
       path: '/org',
@@ -263,8 +299,8 @@ export default function Sidebar({ active, userEmail, empresa, trialDaysLeft, pla
               Trial · {trialDaysLeft} día{trialDaysLeft !== 1 ? 's' : ''} restante{trialDaysLeft !== 1 ? 's' : ''}
             </div>
           )}
-          {empresa && <div className="sb-empresa">{empresa}</div>}
-          {planName && <div className="sb-plan-tag">Plan {planName}</div>}
+          {empresaFinal && <div className="sb-empresa">{empresaFinal}</div>}
+          {planFinal && <div className="sb-plan-tag">Plan {planFinal}</div>}
           {userEmail && <div className="sb-email">{userEmail}</div>}
           <button className="sb-logout" onClick={signOut}>Cerrar sesión</button>
         </div>

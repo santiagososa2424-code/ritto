@@ -136,7 +136,11 @@ async function fetchSheetStructure(sheetId: string, accessToken: string): Promis
     layout.push({ tab: tabs50[i], headers, headerRow });
     tabHeaderMap[tabs50[i]] = headers;
     tabHeaderRow[tabs50[i]] = headerRow;
-    tabSampleRows[tabs50[i]] = rows.slice(headerRow, headerRow + 4);
+    // Todas las que entraron en la lectura, no cuatro. Con cuatro, una pestaña cuyas
+    // primeras filas están vacías —un mes que recién arranca, o un template con espacio
+    // arriba— quedaba perfilada como "sin datos" y ahí Ritto deja de reconocer cuál es
+    // la columna de fechas, que es lo que necesita para ordenar.
+    tabSampleRows[tabs50[i]] = rows.slice(headerRow);
   }
   if (layout.length === 0) return base;
 
@@ -985,6 +989,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // otro nombre y otro RUT.
       claves: string[];
       reglaHit: string | null;
+      // Por qué columna se ordenó la pestaña, y si la pestaña resultó estar ordenada.
+      ordenPor?: string | null;
+      ordenada?: boolean;
     }> = [];
 
     for (let i = 0; i < invoices.length; i++) {
@@ -1184,16 +1191,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // tiene cargado, no según cómo se llame— y en la que Ritto está escribiendo una.
       // Se compara el valor que va a escribir contra los que ya están, que es la única
       // forma de que el orden sea el de los comprobantes y no el de subida.
+      // Primero la columna que la pestaña viene usando para fechas. Si el perfil no la
+      // reconoció —pasa cuando las filas de ejemplo están vacías— vale cualquier columna
+      // donde Ritto esté escribiendo algo que sea una fecha: para llegar hasta acá ese
+      // valor ya pasó por fitsColumn, así que no va a ser una fecha metida en una
+      // columna de importes. Sin este segundo intento, la pestaña no se ordenaba y no
+      // había forma de notarlo desde afuera.
       let orden: { colIdx: number; fecha: number } | null = null;
-      for (let i = 0; i < tabHeaders.length; i++) {
+      for (let i = 0; i < tabHeaders.length && !orden; i++) {
         if (perfil[tabHeaders[i]] !== 'fecha') continue;
         const f = fechaComparable(row[i]);
-        if (f != null) { orden = { colIdx: i, fecha: f }; break; }
+        if (f != null) orden = { colIdx: i, fecha: f };
       }
+      for (let i = 0; i < tabHeaders.length && !orden; i++) {
+        if (isProtectedHeader(tabHeaders[i])) continue;
+        const f = fechaComparable(row[i]);
+        if (f != null) orden = { colIdx: i, fecha: f };
+      }
+      debugEntry.ordenPor = orden ? tabHeaders[orden.colIdx] : null;
 
       const result = await appendRow(sheetId, tabName, row, accessToken, tabGidMap[tabName], formulaIdx, tabHeaderRow[tabName] ?? 1, tentativo, orden);
       debugEntry.appendStatus = result.status;
       debugEntry.appendError = result.error ?? null;
+      debugEntry.ordenada = result.ordenada ?? false;
 
       // El aviso se arma después de escribir, no antes: hasta que no se mira la celda
       // de destino no se sabe si el importe entró. Calcularlo antes avisaba "sin
@@ -1307,6 +1327,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // sesión del usuario y, si la política de la tabla rechazaba el update, fallaba en
     // silencio. La factura se veía archivada hasta que refrescabas y volvía a aparecer.
     let exportedAt: string | null = null;
+    let marcadoError: string | null = null;
     if (exportedIds.length > 0) {
       const stamp = new Date().toISOString();
       const { error: markError } = await supabase
@@ -1314,8 +1335,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .update({ exported_at: stamp })
         .eq('user_id', user.id)
         .in('id', exportedIds);
-      if (markError) console.error('[append] no se pudieron marcar como exportadas:', markError.message);
-      else exportedAt = stamp;
+      if (markError) {
+        // Esto tiene que verse. Mientras fallaba callado, la factura no salía nunca de
+        // la lista y cada clic en exportar escribía otra fila igual en la planilla del
+        // cliente: ocho clics, ocho filas repetidas, y nadie con motivo para sospechar
+        // que el problema era una marca que no se guardaba.
+        console.error('[append] no se pudieron marcar como exportadas:', markError.message);
+        marcadoError = markError.message;
+        void logError('sheets/append:marcar', markError, {
+          userId: user.id,
+          contexto: { facturas: exportedIds.length },
+        });
+      } else {
+        exportedAt = stamp;
+      }
     }
 
     const primaryTab = writtenTabs[0];
@@ -1336,6 +1369,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pestanasDisponibles: existingTabs,
       exportedIds,
       exportedAt,
+      marcadoError,
       tabs: writtenTabs,
       updatedRange: writtenTabs.join(', '),
       // Siempre, no sólo cuando se escribió algo. El link es útil igual —el usuario

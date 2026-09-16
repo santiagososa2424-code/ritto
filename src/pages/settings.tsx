@@ -68,6 +68,8 @@ export default function SettingsPage() {
   const [savingSheetMapping, setSavingSheetMapping] = useState(false);
   const [mappingMsg, setMappingMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [structureLoaded, setStructureLoaded] = useState(false);
+  // A qué destino corresponde lo que se está configurando.
+  const [destino, setDestino] = useState<'sheets' | 'excel'>('sheets');
   // Cómo interpreta Ritto cada columna, deducido de los datos ya cargados.
   const [tabProfiles, setTabProfiles] = useState<Record<string, Record<string, string>>>({});
   const [tabWritable, setTabWritable] = useState<Record<string, Record<string, string>>>({});
@@ -467,6 +469,15 @@ export default function SettingsPage() {
         .page-wrap { padding: 28px 28px 80px; max-width: 640px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 24px; }
         .card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+        .dest-tabs { display: flex; gap: 8px; margin: 26px 0 14px; }
+        .dest-tab {
+          flex: 1; background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+          padding: '12px 14px'; padding: 12px 14px; font-family: inherit; font-size: 14px;
+          font-weight: 600; color: var(--gray); cursor: pointer; text-align: left;
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .dest-tab.dest-active { border-color: var(--green); background: var(--green-light); color: var(--green); }
+        .dest-sub { font-size: 11px; font-weight: 500; opacity: 0.75; }
         .sec-label {
           font-size: 11px; font-weight: 700; color: var(--gray); text-transform: uppercase;
           letter-spacing: 0.6px; margin: 26px 0 10px;
@@ -570,10 +581,30 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Google Sheets primero y Excel después: es el orden en el que se usan, y
-              tenerlo al revés hacía que lo primero que viera alguien configurando su
-              cuenta fuera una plantilla de un formato que ni siquiera recomendamos. */}
-          <div className="sec-label">Tu planilla de Google Sheets</div>
+          {/* Dos destinos distintos, dos pestañas. Uno debajo del otro se seguía leyendo
+              como un formulario largo y no quedaba claro qué parte correspondía a qué:
+              alguien configurando Google Sheets terminaba llenando la plantilla del
+              archivo Excel sin darse cuenta de que no tenía nada que ver. */}
+          <div className="dest-tabs">
+            <button
+              type="button"
+              className={`dest-tab${destino === 'sheets' ? ' dest-active' : ''}`}
+              onClick={() => setDestino('sheets')}
+            >
+              Google Sheets
+              <span className="dest-sub">recomendado</span>
+            </button>
+            <button
+              type="button"
+              className={`dest-tab${destino === 'excel' ? ' dest-active' : ''}`}
+              onClick={() => setDestino('excel')}
+            >
+              Archivo Excel
+              <span className="dest-sub">opcional</span>
+            </button>
+          </div>
+
+          <div style={{ display: destino === 'sheets' ? 'block' : 'none' }}>
           <div className="card">
             <div className="card-title">
               <span>Google Sheets</span>
@@ -767,8 +798,9 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <form onSubmit={changePassword}>
-          <div className="sec-label">Descargar un archivo (opcional)</div>
+          </div>
+
+          <div style={{ display: destino === 'excel' ? 'block' : 'none' }}>
           <div className="card">
             {/* Esta sección es de antes de que Ritto leyera la planilla solo. Para el
                 camino principal —Google Sheets— no hace falta tocarla, y presentarla como
@@ -822,7 +854,9 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+          </div>
 
+          <form onSubmit={changePassword}>
             <div className="card">
               <div className="card-title">Cambiar contraseña</div>
               <div className="field-row">
