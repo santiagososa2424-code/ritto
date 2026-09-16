@@ -82,6 +82,8 @@ export default function AppPage() {
   const [sheetsMemoriaError, setSheetsMemoriaError] = useState<string | null>(null);
   const [sheetsSinImporte, setSheetsSinImporte] = useState<{ factura: string; motivo: string; importe: number | null; pestana: string; descartadas?: { columna: string; motivo: string }[]; notas?: string[] }[]>([]);
   const [sheetsRedirectUrl, setSheetsRedirectUrl] = useState('');
+  // Facturas que el usuario quiso mandar y ya estaban en la planilla.
+  const [sheetsReenvio, setSheetsReenvio] = useState<ExtractedInvoice[] | null>(null);
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [planKey, setPlanKey] = useState<string>('pyme');
@@ -351,22 +353,24 @@ export default function AppPage() {
     setDownloading(null);
   }
 
-  async function exportToSheets(invoiceList: ExtractedInvoice[], pestanasElegidas?: Record<string, string>, forzarColumnas?: string[]) {
+  async function exportToSheets(
+    invoiceList: ExtractedInvoice[],
+    pestanasElegidas?: Record<string, string>,
+    forzarColumnas?: string[],
+    permitirReenvio = false,
+  ) {
     if (!user) return;
-    // Una factura ya exportada no se vuelve a mandar. Reenviarla no corrige nada: agrega
-    // una fila repetida en la contabilidad del cliente, y desde la vista de archivadas
-    // el botón mandaba de nuevo todo lo que estuviera a la vista.
-    const yaExportadas = invoiceList.filter((i) => i.exportedAt).length;
-    const pendientes = invoiceList.filter((i) => !i.exportedAt);
+    // Una factura ya exportada no se vuelve a mandar sola: sería una fila repetida en la
+    // contabilidad del cliente. Pero tampoco es un error —a veces querés reenviarla a
+    // propósito—, así que se avisa y se deja decidir en vez de cortar con un cartel rojo.
+    const pendientes = permitirReenvio ? invoiceList : invoiceList.filter((i) => !i.exportedAt);
     if (pendientes.length === 0) {
-      setSheetsStatus('error');
-      setSheetsError(
-        yaExportadas === 1
-          ? 'Esa factura ya está en tu planilla. Para no duplicar la fila, no la volvemos a mandar.'
-          : 'Esas facturas ya están en tu planilla. Para no duplicar filas, no las volvemos a mandar.',
-      );
+      setSheetsStatus('idle');
+      setSheetsError('');
+      setSheetsReenvio(invoiceList);
       return;
     }
+    setSheetsReenvio(null);
     invoiceList = pendientes;
     setSheetsStatus('loading');
     setSheetsError('');
@@ -908,13 +912,36 @@ export default function AppPage() {
                 )}
               </div>
             )}
+            {sheetsReenvio && (
+              <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#78350f', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {sheetsReenvio.length === 1
+                  ? 'Esa factura ya está en tu planilla.'
+                  : `Esas ${sheetsReenvio.length} facturas ya están en tu planilla.`}{' '}
+                Si la mandás de nuevo te va a quedar la fila repetida.
+                <button
+                  onClick={() => { const l = sheetsReenvio; setSheetsReenvio(null); exportToSheets(l, undefined, undefined, true); }}
+                  style={{ background: '#78350f', color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}
+                >
+                  Mandarla igual
+                </button>
+                <button
+                  onClick={() => setSheetsReenvio(null)}
+                  style={{ background: 'none', border: 'none', color: '#78350f', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+            {/* El mensaje real, siempre. Antes se descartaba y se mostraba uno de tres
+                textos fijos: cualquier error que no encajara en esos tres —o sea, casi
+                todos— se leía como "Error al exportar" y no había forma de saber qué pasó. */}
             {sheetsError && (
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
-                {sheetsError.toLowerCase().includes('not connected') || sheetsError.toLowerCase().includes('no configurad') || sheetsError.toLowerCase().includes('google account')
-                  ? <>Conectá tu cuenta de Google en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> antes de exportar.</>
-                  : sheetsError.toLowerCase().includes('url') || sheetsError.toLowerCase().includes('sheet')
-                  ? <>Revisá la URL de tu planilla en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
-                  : <>Error al exportar. Revisá <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a> o escribinos por WhatsApp al {SOPORTE_TEL}</>
+                {sheetsError}
+                {' '}
+                {sheetsError.toLowerCase().includes('not connected') || sheetsError.toLowerCase().includes('no configurad') || sheetsError.toLowerCase().includes('google account') || sheetsError.toLowerCase().includes('url')
+                  ? <>Revisalo en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
+                  : <>Si sigue pasando, escribinos por WhatsApp al {SOPORTE_TEL}.</>
                 }
               </div>
             )}

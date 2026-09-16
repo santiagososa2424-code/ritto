@@ -467,6 +467,10 @@ export default function SettingsPage() {
         .page-wrap { padding: 28px 28px 80px; max-width: 640px; }
         .page-title { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 24px; }
         .card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+        .sec-label {
+          font-size: 11px; font-weight: 700; color: var(--gray); text-transform: uppercase;
+          letter-spacing: 0.6px; margin: 26px 0 10px;
+        }
         .card-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--dark); display: flex; align-items: center; gap: 8px; }
         .field { margin-bottom: 14px; }
         .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
@@ -566,60 +570,10 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          <div className="card">
-            {/* Esta sección es de antes de que Ritto leyera la planilla solo. Para el
-                camino principal —Google Sheets— no hace falta tocarla, y presentarla como
-                si hubiera que configurarla hacía que la gente se trabara acá pensando que
-                era un paso obligatorio. */}
-            <div className="card-title">Columnas del archivo Excel (opcional)</div>
-            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
-              Esto es sólo para el archivo que descargás con el botón <strong>XLS</strong>. Si exportás a
-              Google Sheets, no hace falta que toques nada acá: Ritto lee los nombres de las columnas
-              directamente de tu planilla.
-            </p>
-
-            <div className="col-header">
-              <span />
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Nombre en tu planilla</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dato de Ritto</span>
-              <span />
-            </div>
-
-            {excelColumns.map((col, i) => (
-              <div key={col.id} className="col-row">
-                <span className="col-num">{i + 1}</span>
-                <input
-                  className="col-label-input"
-                  type="text"
-                  value={col.label}
-                  placeholder="Nombre de columna"
-                  onChange={(e) => updateColumn(col.id, 'label', e.target.value)}
-                />
-                <select
-                  className="col-field-select"
-                  value={col.field}
-                  onChange={(e) => updateColumn(col.id, 'field', e.target.value)}
-                >
-                  {RITTO_FIELDS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
-                <button className="col-remove" type="button" onClick={() => removeColumn(col.id)}>&times;</button>
-              </div>
-            ))}
-
-            <div className="col-actions">
-              <button type="button" className="btn-add-col" onClick={addColumn}>+ Agregar columna</button>
-              <button type="button" className="btn-reset-col" onClick={() => setExcelColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })))}>Restaurar por defecto</button>
-            </div>
-
-            <div className="form-footer" style={{ marginTop: 16 }}>
-              <button type="button" className="btn-save" onClick={saveMapping} disabled={savingMapping}>
-                {savingMapping ? 'Guardando…' : 'Guardar plantilla'}
-              </button>
-            </div>
-          </div>
-
+          {/* Google Sheets primero y Excel después: es el orden en el que se usan, y
+              tenerlo al revés hacía que lo primero que viera alguien configurando su
+              cuenta fuera una plantilla de un formato que ni siquiera recomendamos. */}
+          <div className="sec-label">Tu planilla de Google Sheets</div>
           <div className="card">
             <div className="card-title">
               <span>Google Sheets</span>
@@ -713,11 +667,56 @@ export default function SettingsPage() {
                   </button>
                 ) : (
                   <>
-                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1d4ed8', marginBottom: 12, lineHeight: 1.5 }}>
-                      <strong>Cómo funciona:</strong> A la izquierda están los datos que Ritto puede escribir. A la derecha, las columnas de TU planilla. Si tu planilla tiene una columna para ese dato, seleccionála. Si no tenés esa columna, dejá "— no escribir —" y Ritto la saltea. No tenés que llenar todo — solo los que aplican a tu planilla.
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534', marginBottom: 16, lineHeight: 1.5 }}>
+                      ✓ Leímos tu planilla. <strong>No tenés que configurar nada</strong> — así es como Ritto
+                      entendió cada pestaña. Revisalo y, si algo está mal, corregilo abajo.
                     </div>
-                    <p style={{ fontSize: 13, color: 'var(--dark)', fontWeight: 600, marginBottom: 12 }}>
-                      Encontramos {sheetHeaders.length} columna{sheetHeaders.length !== 1 ? 's' : ''} en total entre todas las pestañas de tu planilla.
+                    {Object.keys(tabProfiles).length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Cómo entiende Ritto tu planilla</div>
+                        <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                          Esto no lo deduce del nombre de la columna sino de los datos que ya tenés cargados.
+                          Un dato que no coincida con el tipo de su columna no se escribe: Ritto prefiere avisarte
+                          antes que ensuciarte la planilla.
+                        </p>
+                        {Object.entries(tabProfiles).map(([tab, cols]) => (
+                          <div key={tab} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 5 }}>{tab}</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {Object.entries(cols).map(([col, tipo]) => {
+                                const estado = tabWritable[tab]?.[col] ?? 'escribible';
+                                const puedeEscribir = estado === 'escribible';
+                                return (
+                                  <span key={col} style={{
+                                    fontSize: 11, padding: '3px 9px', borderRadius: 20,
+                                    border: `1px solid ${puedeEscribir ? 'var(--border)' : '#fde68a'}`,
+                                    background: puedeEscribir ? 'var(--bg)' : '#fffbeb',
+                                  }}>
+                                    {col}
+                                    <span style={{ color: 'var(--gray)' }}>
+                                      {' · '}
+                                      {tipo === 'fecha' ? 'fechas' : tipo === 'dinero' ? 'importes'
+                                        : tipo === 'numero' ? 'números' : tipo === 'vacia' ? 'sin datos aún' : 'texto'}
+                                      {estado === 'formula' ? ' · tiene fórmulas, no la tocamos' : ''}
+                                      {estado === 'protegida' ? ' · la calcula tu planilla' : ''}
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <details style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      Corregir a mano en qué columna va cada dato
+                    </summary>
+                    <p style={{ fontSize: 12, color: 'var(--gray)', margin: '10px 0 14px', lineHeight: 1.5 }}>
+                      Sólo hace falta si arriba ves que Ritto entendió mal alguna columna. Ojo: esta lista
+                      junta las columnas de todas tus pestañas, así que si dos pestañas tienen columnas con
+                      nombres distintos para lo mismo, conviene dejarlo como está y avisarnos.
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '0 8px', marginBottom: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: 6, borderBottom: '2px solid var(--border)' }}>Ritto escribe este dato…</span>
@@ -745,47 +744,11 @@ export default function SettingsPage() {
                     <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
                       Las columnas que dejás en "— no escribir —" y las que no aparecen en este listado (como "Mes", "Pendiente", fórmulas, etc.) Ritto las ignora completamente — quedan tal como están.
                     </p>
+                    </details>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                       <button type="button" className="btn-save" onClick={saveSheetMapping} disabled={savingSheetMapping}>
                         {savingSheetMapping ? 'Guardando…' : 'Guardar configuración'}
                       </button>
-                      {Object.keys(tabProfiles).length > 0 && (
-                        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Cómo entiende Ritto tu planilla</div>
-                          <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
-                            Esto no lo deduce del nombre de la columna sino de los datos que ya tenés cargados.
-                            Un dato que no coincida con el tipo de su columna no se escribe: Ritto prefiere avisarte
-                            antes que ensuciarte la planilla.
-                          </p>
-                          {Object.entries(tabProfiles).map(([tab, cols]) => (
-                            <div key={tab} style={{ marginBottom: 12 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 5 }}>{tab}</div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {Object.entries(cols).map(([col, tipo]) => {
-                                  const estado = tabWritable[tab]?.[col] ?? 'escribible';
-                                  const puedeEscribir = estado === 'escribible';
-                                  return (
-                                    <span key={col} style={{
-                                      fontSize: 11, padding: '3px 9px', borderRadius: 20,
-                                      border: `1px solid ${puedeEscribir ? 'var(--border)' : '#fde68a'}`,
-                                      background: puedeEscribir ? 'var(--bg)' : '#fffbeb',
-                                    }}>
-                                      {col}
-                                      <span style={{ color: 'var(--gray)' }}>
-                                        {' · '}
-                                        {tipo === 'fecha' ? 'fechas' : tipo === 'dinero' ? 'importes'
-                                          : tipo === 'numero' ? 'números' : tipo === 'vacia' ? 'sin datos aún' : 'texto'}
-                                        {estado === 'formula' ? ' · tiene fórmulas, no la tocamos' : ''}
-                                        {estado === 'protegida' ? ' · la calcula tu planilla' : ''}
-                                      </span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                       <button type="button" onClick={detectColumns} disabled={loadingStructure} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
                         {loadingStructure ? 'Leyendo…' : 'Volver a leer la planilla'}
                       </button>
@@ -805,6 +768,61 @@ export default function SettingsPage() {
           </div>
 
           <form onSubmit={changePassword}>
+          <div className="sec-label">Descargar un archivo (opcional)</div>
+          <div className="card">
+            {/* Esta sección es de antes de que Ritto leyera la planilla solo. Para el
+                camino principal —Google Sheets— no hace falta tocarla, y presentarla como
+                si hubiera que configurarla hacía que la gente se trabara acá pensando que
+                era un paso obligatorio. */}
+            <div className="card-title">Columnas del archivo Excel (opcional)</div>
+            <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16, lineHeight: 1.6 }}>
+              Esto es sólo para el archivo que descargás con el botón <strong>XLS</strong>. Si exportás a
+              Google Sheets, no hace falta que toques nada acá: Ritto lee los nombres de las columnas
+              directamente de tu planilla.
+            </p>
+
+            <div className="col-header">
+              <span />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Nombre en tu planilla</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dato de Ritto</span>
+              <span />
+            </div>
+
+            {excelColumns.map((col, i) => (
+              <div key={col.id} className="col-row">
+                <span className="col-num">{i + 1}</span>
+                <input
+                  className="col-label-input"
+                  type="text"
+                  value={col.label}
+                  placeholder="Nombre de columna"
+                  onChange={(e) => updateColumn(col.id, 'label', e.target.value)}
+                />
+                <select
+                  className="col-field-select"
+                  value={col.field}
+                  onChange={(e) => updateColumn(col.id, 'field', e.target.value)}
+                >
+                  {RITTO_FIELDS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+                <button className="col-remove" type="button" onClick={() => removeColumn(col.id)}>&times;</button>
+              </div>
+            ))}
+
+            <div className="col-actions">
+              <button type="button" className="btn-add-col" onClick={addColumn}>+ Agregar columna</button>
+              <button type="button" className="btn-reset-col" onClick={() => setExcelColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })))}>Restaurar por defecto</button>
+            </div>
+
+            <div className="form-footer" style={{ marginTop: 16 }}>
+              <button type="button" className="btn-save" onClick={saveMapping} disabled={savingMapping}>
+                {savingMapping ? 'Guardando…' : 'Guardar plantilla'}
+              </button>
+            </div>
+          </div>
+
             <div className="card">
               <div className="card-title">Cambiar contraseña</div>
               <div className="field-row">
