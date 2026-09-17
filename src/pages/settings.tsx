@@ -166,14 +166,43 @@ export default function SettingsPage() {
     // update y no upsert: un upsert necesita permiso de INSERT sobre la tabla, y ese
     // permiso es justamente el que le sacamos al cliente para que no pueda crearse una
     // fila con el plan o el estado de suscripción que quiera. El perfil ya existe acá.
-    const { error: err } = await supabase.from('profiles').update({
+    const datos = {
       nombre: profile.nombre,
       empresa: profile.empresa,
       rut: profile.rut || null,
       telefono: profile.telefono || null,
-    }).eq('id', user.id);
-    if (err) setError('Error al guardar. Intentá de nuevo.');
-    else { setSuccess('Cambios guardados'); setTimeout(() => setSuccess(''), 3000); }
+    };
+    // Con `.select()` para saber si de verdad se escribió una fila. Un update sobre una
+    // fila que no existe no devuelve error: devuelve cero filas. Si el perfil nunca se
+    // creó, Ritto decía "Cambios guardados", no guardaba nada, y al volver a entrar los
+    // campos aparecían vacíos como si se hubieran borrado solos.
+    const { data: filas, error: err } = await supabase
+      .from('profiles')
+      .update(datos)
+      .eq('id', user.id)
+      .select('id');
+
+    if (!err && (filas?.length ?? 0) === 0) {
+      // No había perfil. Lo crea el servidor, que es el único que puede: el cliente no
+      // tiene permiso de INSERT sobre profiles a propósito.
+      const alta = await fetch('/api/profile/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(datos),
+      });
+      if (!alta.ok) {
+        setError(`No se pudo guardar tu perfil. Escribinos por WhatsApp al ${SOPORTE_TEL}.`);
+        setSaving(false);
+        return;
+      }
+    } else if (err) {
+      setError('Error al guardar. Intentá de nuevo.');
+      setSaving(false);
+      return;
+    }
+
+    setSuccess('Cambios guardados');
+    setTimeout(() => setSuccess(''), 3000);
     setSaving(false);
   }
 
@@ -694,13 +723,16 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534', marginBottom: 16, lineHeight: 1.5 }}>
-                      ✓ Leímos tu planilla. <strong>No tenés que configurar nada</strong> — así es como Ritto
-                      entendió cada pestaña. Revisalo y, si algo está mal, corregilo abajo.
+                      ✓ <strong>Planilla leída.</strong> Ritto ya sabe cuáles son tus pestañas y tus
+                      columnas. No tenés que configurar nada más.
                     </div>
+                    {/* El detalle de cómo entendió cada columna sirve para buscar un problema,
+                        no para alguien que acaba de conectar su planilla y sólo quiere saber si
+                        quedó. Desplegado ocupaba media pantalla de texto que nadie pidió. */}
                     {Object.keys(tabProfiles).length > 0 && (
-                      <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Cómo entiende Ritto tu planilla</div>
-                        <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.5 }}>
+                      <details style={{ marginBottom: 20 }}>
+                        <summary style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Ver cómo entendió cada columna</summary>
+                        <p style={{ fontSize: 12, color: 'var(--gray)', margin: '10px 0 12px', lineHeight: 1.5 }}>
                           Esto no lo deduce del nombre de la columna sino de los datos que ya tenés cargados.
                           Un dato que no coincida con el tipo de su columna no se escribe: Ritto prefiere avisarte
                           antes que ensuciarte la planilla.
@@ -732,7 +764,7 @@ export default function SettingsPage() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </details>
                     )}
 
                     <details style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>

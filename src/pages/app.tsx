@@ -333,8 +333,12 @@ export default function AppPage() {
       await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
     }
 
+    // Los XML también van con límite. Iban todos de una porque son rápidos, pero soltar
+    // veinte peticiones juntas satura la conexión, hace esperar a las que sí necesitan
+    // la IA y deja la pantalla trabada mientras tanto. Cuatro alcanza para que se sienta
+    // instantáneo sin ahogar nada.
     await Promise.all([
-      Promise.all(xmlEntries.map(runEntry)),
+      runWithConcurrency(xmlEntries, 4),
       runWithConcurrency(aiEntries, 2),
     ]);
   }
