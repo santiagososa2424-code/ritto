@@ -6,6 +6,7 @@ import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '
 import { DEFAULT_COLUMNS, isCreditNote } from '../lib/types';
 import Sidebar from '../components/Sidebar';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
+import { segundosAhorradosTotal, formatearTiempo } from '../lib/tiempoAhorrado';
 
 function sourceLabel(s: InvoiceSource) {
   if (s === 'cfe_xml') return 'CFE';
@@ -483,6 +484,12 @@ export default function AppPage() {
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const thisMonth = done.filter((inv) => inv.fecha?.startsWith(thisMonthKey));
   const totalAmount = done.reduce((sum, inv) => sum + (inv.total ?? 0) * (isCreditNote(inv.tipoDocumento) ? -1 : 1), 0);
+
+  // Lo del mes corriente, que es el número que se muestra al costado.
+  const mesActual = new Date().toISOString().slice(0, 7);
+  const delMes = done.filter((i) => (i.fecha ?? '').startsWith(mesActual));
+  const facturasMes = delMes.length;
+  const segundosMes = segundosAhorradosTotal(delMes);
 
   const monthOptions = getMonthOptions(done);
   const monthLimit = PLAN_LIMITS[planKey];
@@ -1474,33 +1481,37 @@ export default function AppPage() {
               </div>
             )}
 
+            {/* Acá había un listado de novedades de abril del año pasado y un
+                "próximamente". Ese espacio es de lo más visible de la pantalla y estaba
+                gastado en algo que nadie vuelve a leer. Ahora muestra lo único que al
+                usuario le importa de verdad: cuánto trabajo se ahorró, con sus propios
+                números y no con una estimación. */}
             <div className="rp-card">
               <div className="rp-title">
                 <div className="rp-title-icon" style={{ background: '#dcfce7' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                   </svg>
                 </div>
-                Novedades
+                Tiempo ahorrado
               </div>
-              <div className="news-item">
-                <span className="news-badge badge-new">Nuevo</span>
-                <div className="news-text">Descarga individual por factura en formato Excel</div>
-                <div className="news-date">Abr 2025</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: '#166534', lineHeight: 1.1 }}>
+                {formatearTiempo(segundosMes)}
               </div>
-              <div className="news-item">
-                <span className="news-badge badge-new">Nuevo</span>
-                <div className="news-text">Filtro por mes en el historial de facturas</div>
-                <div className="news-date">Abr 2025</div>
+              <div style={{ fontSize: 11.5, color: 'var(--gray)', marginTop: 2 }}>
+                este mes, con {facturasMes} {facturasMes === 1 ? 'factura' : 'facturas'}
               </div>
-              <div className="news-item">
-                <span className="news-badge badge-new">Nuevo</span>
-                <div className="news-text">Plantilla de columnas personalizable — exportá con los nombres exactos de tu planilla</div>
-                <div className="news-date">Ago 2025</div>
-              </div>
-              <div className="news-item">
-                <span className="news-badge badge-soon">Próximamente</span>
-                <div className="news-text">Integración directa con portal DGI Uruguay</div>
+              {facturasMes > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>≈ {Math.round((segundosMes * 12) / 3600)} h al año</div>
+                  <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 2, lineHeight: 1.45 }}>
+                    si seguís a este ritmo
+                  </div>
+                </div>
+              )}
+              <div style={{ fontSize: 10.5, color: 'var(--gray)', marginTop: 10, lineHeight: 1.45 }}>
+                Contamos los campos que Ritto llenó de verdad, a 4 segundos cada uno —lo que
+                lleva leerlo del papel, tipearlo y verificarlo—.
               </div>
             </div>
 

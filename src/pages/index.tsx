@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import HeroBackground from '../components/HeroBackground';
 import TypedDomain from '../components/TypedDomain';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
+import { horasPorAnio, DIAS_LABORALES_POR_ANIO } from '../lib/tiempoAhorrado';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -10,6 +11,9 @@ export default function LandingPage() {
   // Until the file lands in public/videos/, the <video> 404s and we keep showing
   // the static mockup — the landing never renders a broken player.
   const [videoFailed, setVideoFailed] = useState(false);
+  // Diez por día es lo que carga un comercio chico: alto para que el número impresione,
+  // bajo para que nadie sienta que está inflado.
+  const [porDia, setPorDia] = useState(10);
   const [playing, setPlaying] = useState(true);
   const [phrase, setPhrase] = useState(0);
 
@@ -277,7 +281,41 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* La cuenta está a la vista a propósito: un contador va a querer verificarla, y
+          si le cierra confía en el resto. El número por factura no es un invento —son
+          los campos que hay que tipear, a cuatro segundos cada uno— y está dicho abajo. */}
       <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div className="section-inner" style={{ textAlign: 'center' }}>
+          <div className="section-label">Cuánto tiempo es</div>
+          <div className="section-title" style={{ marginBottom: 28 }}>
+            ¿Cuántas facturas cargás por día?
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 22 }}>
+            <input
+              type="range" min={1} max={60} value={porDia}
+              onChange={(e) => setPorDia(Number(e.target.value))}
+              style={{ width: 280, maxWidth: '100%', accentColor: 'var(--green)' }}
+              aria-label="Facturas por día"
+            />
+            <span style={{ fontSize: 22, fontWeight: 700, minWidth: 48 }}>{porDia}</span>
+          </div>
+
+          <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--green)', lineHeight: 1 }}>
+            {Math.round(horasPorAnio(porDia))} horas
+          </div>
+          <div style={{ fontSize: 15, marginTop: 6 }}>al año que dejás de tipear</div>
+
+          <div style={{ fontSize: 12.5, color: 'var(--gray)', marginTop: 18, lineHeight: 1.6, maxWidth: 560, margin: '18px auto 0' }}>
+            {porDia} {porDia === 1 ? 'factura' : 'facturas'} por día × 5 días × 50 semanas ={' '}
+            <strong>{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} facturas al año</strong>.
+            Cada una tiene unos 24 campos entre cabecera e ítems, y pasar un campo de un papel a
+            una planilla —leerlo, tipearlo y verificarlo— lleva unos 4 segundos.
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
         <div className="section-inner">
           <div className="section-label">Funcionalidades</div>
           <div className="section-title">Todo lo que necesitás,<br />sin complicaciones</div>
