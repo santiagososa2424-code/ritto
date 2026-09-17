@@ -491,6 +491,9 @@ export default function AppPage() {
   const facturasMes = delMes.length;
   const segundosMes = segundosAhorradosTotal(delMes);
 
+  // Cuántos de los tres primeros pasos faltan. En cero, el instructivo desaparece.
+  const pasosPendientes = (googleConnected ? 0 : 1) + (googleSheetId ? 0 : 1) + (done.length > 0 ? 0 : 1);
+
   const monthOptions = getMonthOptions(done);
   const monthLimit = PLAN_LIMITS[planKey];
   const monthPct = monthLimit ? Math.min(100, (monthlyUsed / monthLimit) * 100) : 0;
@@ -574,6 +577,32 @@ export default function AppPage() {
           margin-bottom: 24px; -webkit-tap-highlight-color: transparent;
         }
         .upload-zone.dragging { border-color: var(--green); background: var(--green-light); }
+        .setup-card {
+          background: var(--white); border: 1px solid var(--border); border-left: 3px solid var(--green);
+          border-radius: 12px; padding: 16px 18px; margin-bottom: 18px;
+        }
+        .setup-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; font-size: 14px; }
+        .setup-head span { font-size: 12px; color: var(--gray); }
+        .setup-step { display: flex; gap: 11px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--bg); }
+        .setup-step:first-of-type { border-top: none; }
+        .setup-num {
+          width: 21px; height: 21px; border-radius: 50%; background: var(--green-light); color: var(--green);
+          font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .setup-ok .setup-num { background: #dcfce7; color: #166534; }
+        .setup-ok .setup-title { color: var(--gray); }
+        .setup-title { font-size: 13.5px; font-weight: 600; }
+        .setup-desc { font-size: 12px; color: var(--gray); line-height: 1.5; margin-top: 3px; }
+        .setup-step > div:first-of-type { flex: 1; }
+        .setup-btn {
+          background: var(--green); color: #fff; border-radius: 7px; padding: 5px 11px; font-size: 12px;
+          font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; align-self: center;
+        }
+        .upload-ayuda {
+          margin-top: 14px; font-size: 11.5px; color: var(--gray); line-height: 1.6;
+          text-align: left; max-width: 480px; margin-left: auto; margin-right: auto;
+          display: flex; flex-direction: column; gap: 4px;
+        }
         .upload-icon { width: 48px; height: 48px; background: var(--green-light); border-radius: 12px; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; }
         .upload-zone h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
         .upload-zone p { font-size: 13px; color: var(--gray); }
@@ -1029,7 +1058,9 @@ export default function AppPage() {
               <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 500 }}>
                 {sheetsError}
                 {' '}
-                {sheetsError.toLowerCase().includes('not connected') || sheetsError.toLowerCase().includes('no configurad') || sheetsError.toLowerCase().includes('google account') || sheetsError.toLowerCase().includes('url')
+                {/* Cuando el problema es de configuración, el link a Configuración es la
+                    mitad de la respuesta. */}
+                {/cuenta de google|link de tu planilla|configurad/i.test(sheetsError)
                   ? <>Revisalo en <a href="/settings" style={{ color: '#dc2626', fontWeight: 700 }}>Configuración</a>.</>
                   : <>Si sigue pasando, escribinos por WhatsApp al {SOPORTE_TEL}.</>
                 }
@@ -1064,6 +1095,57 @@ export default function AppPage() {
             </div>
           </div>
 
+          {/* La pantalla no explicaba nada: asumía que ya sabías qué es un XML, que había
+              que conectar Google en otra pantalla y que después había que pegar el link
+              de la planilla. Todo eso había que descubrirlo. Esto se muestra mientras
+              falte algo y desaparece solo cuando está todo hecho. */}
+          {pasosPendientes > 0 && (
+            <div className="setup-card">
+              <div className="setup-head">
+                <strong>Para que Ritto escriba en tu planilla</strong>
+                <span>{3 - pasosPendientes} de 3</span>
+              </div>
+
+              <div className={`setup-step${googleConnected ? ' setup-ok' : ''}`}>
+                <span className="setup-num">{googleConnected ? '✓' : '1'}</span>
+                <div>
+                  <div className="setup-title">Conectá tu cuenta de Google</div>
+                  {!googleConnected && (
+                    <div className="setup-desc">
+                      Es la cuenta con la que abrís tu Google Sheets. Ritto sólo pide permiso para
+                      editar planillas — no puede ver tu Gmail ni el resto de tu Drive.
+                    </div>
+                  )}
+                </div>
+                {!googleConnected && <a href="/settings" className="setup-btn">Conectar →</a>}
+              </div>
+
+              <div className={`setup-step${googleSheetId ? ' setup-ok' : ''}`}>
+                <span className="setup-num">{googleSheetId ? '✓' : '2'}</span>
+                <div>
+                  <div className="setup-title">Decile cuál es tu planilla</div>
+                  {!googleSheetId && (
+                    <div className="setup-desc">
+                      Abrí tu planilla en Google Sheets, copiá la dirección de la barra del navegador
+                      —la que empieza con docs.google.com— y pegala en Configuración.
+                    </div>
+                  )}
+                </div>
+                {!googleSheetId && <a href="/settings" className="setup-btn">Pegar el link →</a>}
+              </div>
+
+              <div className={`setup-step${done.length > 0 ? ' setup-ok' : ''}`}>
+                <span className="setup-num">{done.length > 0 ? '✓' : '3'}</span>
+                <div>
+                  <div className="setup-title">Subí tu primera factura</div>
+                  {done.length === 0 && (
+                    <div className="setup-desc">Acá abajo. Foto, PDF o el archivo XML — los tres sirven.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             className={`upload-zone${dragging ? ' dragging' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -1079,11 +1161,19 @@ export default function AppPage() {
               </svg>
             </div>
             <h2>Subí tus facturas</h2>
-            <p>Tocá para seleccionar o arrastrá — procesamos varios a la vez</p>
+            <p>Tocá para seleccionar o arrastrá — podés soltar varias juntas</p>
+            {/* "XML · CFE Digital" no le dice nada a quien nunca lo escuchó, y es
+                justamente el formato que conviene usar. Cada tipo dice qué es y de
+                dónde sale. */}
             <div className="upload-types">
-              <span className="type-pill xml">XML · CFE Digital</span>
+              <span className="type-pill xml">XML</span>
               <span className="type-pill">PDF</span>
-              <span className="type-pill">JPG / PNG</span>
+              <span className="type-pill">Foto</span>
+            </div>
+            <div className="upload-ayuda">
+              <div><strong>XML</strong> — el archivo que llega adjunto en el mail de la factura, junto al PDF. Es el más exacto y el más rápido: Ritto lo lee entero sin usar IA.</div>
+              <div><strong>PDF</strong> — la factura tal como te la mandaron.</div>
+              <div><strong>Foto</strong> — sacale una foto al ticket con el celular. Que se lea el número y los importes.</div>
             </div>
             <input
               ref={inputRef}
@@ -1186,7 +1276,7 @@ export default function AppPage() {
                         <div className="gs-num">2</div>
                         <div className="gs-content">
                           <div className="gs-step-title">Subí tu primera factura</div>
-                          <div className="gs-step-desc">Arrastrá o seleccióná un XML de CFE, PDF o foto. Los XMLs del portal DGI son instantáneos y 100% exactos.</div>
+                          <div className="gs-step-desc">Arrastrá o elegí una foto, un PDF o el archivo XML que viene adjunto en el mail de la factura. El XML es el más rápido y el más exacto.</div>
                           <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
                         </div>
                       </div>
@@ -1530,7 +1620,7 @@ export default function AppPage() {
                 <div className="tip-dot">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0a7c59" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div className="tip-text"><strong>Usá XMLs de CFE</strong> para extracción instantánea sin consumir créditos de IA</div>
+                <div className="tip-text"><strong>Pedile el XML a tu proveedor.</strong> Viene adjunto en el mail de la factura, se lee al instante y no consume créditos de IA</div>
               </div>
               <div className="tip-item">
                 <div className="tip-dot">

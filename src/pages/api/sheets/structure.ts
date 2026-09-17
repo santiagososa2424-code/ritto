@@ -41,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .eq('id', user.id)
       .single();
 
-    if (!profile?.google_access_token) return res.status(403).json({ error: 'Google account not connected' });
-    if (!profile.google_sheet_id) return res.status(400).json({ error: 'No Google Sheet URL configured' });
+    if (!profile?.google_access_token) return res.status(403).json({ error: 'Todavía no conectaste tu cuenta de Google.' });
+    if (!profile.google_sheet_id) return res.status(400).json({ error: 'Falta el link de tu planilla de Google Sheets.' });
 
     let accessToken = profile.google_access_token as string;
     const expiresAt = profile.google_token_expires_at ? new Date(profile.google_token_expires_at as string) : null;
