@@ -61,6 +61,8 @@ export default function AppPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
+  // Espejo de `invoices` para poder consultarlo desde funciones que arrancaron antes.
+  const invoicesRef = useRef<ExtractedInvoice[]>([]);
   const [dragging, setDragging] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
@@ -174,10 +176,22 @@ export default function AppPage() {
       .order('created_at', { ascending: false })
       .limit(500)
       .then(({ data }) => {
-        if (data) setInvoices(data.map(fromDB));
+        if (data) {
+          const deLaBase = data.map(fromDB);
+          const idsEnLaBase = new Set(deLaBase.map((i) => i.id));
+          // Se mezcla, no se reemplaza. Esta consulta vuelve a correr cada vez que cambia
+          // `user`, y con un reemplazo se llevaba puesto todo lo que estuviera en curso:
+          // las facturas recién soltadas, las que estaban procesándose y las que ya
+          // habían terminado pero todavía no se habían guardado. Por eso había que
+          // refrescar la página para verlas, justo cuando subías varias juntas, que es
+          // cuando la ventana entre leer y guardar es más larga.
+          setInvoices((prev) => [...prev.filter((i) => !idsEnLaBase.has(i.id)), ...deLaBase]);
+        }
         setLoadingHistory(false);
       });
   }, [user]);
+
+  useEffect(() => { invoicesRef.current = invoices; }, [invoices]);
 
   // Los endpoints de extracción y exportación ahora exigen sesión, así que toda
   // llamada tiene que llevar el token.
@@ -298,7 +312,10 @@ export default function AppPage() {
         const merged = { ...data, id };
         setInvoices((prev) => prev.map((inv) => (inv.id === id ? merged : inv)));
         if (merged.status === 'done') {
-          const isDup = invoices.some(
+          // Contra el estado de ahora y no contra el que había cuando arrancó la subida:
+          // al soltar varias juntas, `invoices` quedaba congelado en el valor de antes y
+          // dos copias de la misma factura en el mismo lote no se detectaban.
+          const isDup = invoicesRef.current.some(
             (inv) => inv.status === 'done' && inv.nroDocumento && merged.nroDocumento &&
               inv.nroDocumento === merged.nroDocumento && inv.proveedor === merged.proveedor && inv.id !== id
           );
@@ -1261,35 +1278,16 @@ export default function AppPage() {
                     <div>Probá seleccionando otro mes o "Todas las fechas".</div>
                   </>
                 ) : (
-                  <div className="getting-started">
-                    <div className="gs-title">Primeros pasos</div>
-                    <div className="gs-steps">
-                      <div className="gs-step">
-                        <div className="gs-num">1</div>
-                        <div className="gs-content">
-                          <div className="gs-step-title">Configurá tus columnas de exportación</div>
-                          <div className="gs-step-desc">Definí cómo querés que se llamen las columnas en tu Excel o Google Sheets para que coincidan con tu planilla.</div>
-                          <a href="/settings" className="gs-btn">Ir a Configuración →</a>
-                        </div>
-                      </div>
-                      <div className="gs-step">
-                        <div className="gs-num">2</div>
-                        <div className="gs-content">
-                          <div className="gs-step-title">Subí tu primera factura</div>
-                          <div className="gs-step-desc">Arrastrá o elegí una foto, un PDF o el archivo XML que viene adjunto en el mail de la factura. El XML es el más rápido y el más exacto.</div>
-                          <button className="gs-btn" onClick={() => inputRef.current?.click()}>Seleccionar archivo →</button>
-                        </div>
-                      </div>
-                      <div className="gs-step">
-                        <div className="gs-num">3</div>
-                        <div className="gs-content">
-                          <div className="gs-step-title">Exportá a Excel o Google Sheets</div>
-                          <div className="gs-step-desc">Una vez procesadas, descargá un Excel o envíá los datos directo a tu planilla con un clic. Para Google Sheets, primero conectá tu cuenta en Configuración.</div>
-                          <a href="/settings" className="gs-btn" style={{ marginTop: 8 }}>Conectar Google Sheets →</a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  /* Acá vivía un "Primeros pasos" que repetía —peor— lo que ahora dice la
+                     lista de arriba, y que además seguía arrancando por configurar las
+                     columnas del Excel, de cuando ese era el camino principal. Con la
+                     lista arriba y los tipos de archivo explicados en el recuadro de
+                     subir, esto sólo agregaba ruido. */
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
+                    <div>Subí la primera desde el recuadro de arriba y en unos segundos la vas a ver acá.</div>
+                  </>
                 )}
               </div>
             ) : (

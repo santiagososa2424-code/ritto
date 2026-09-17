@@ -954,6 +954,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const duplicadas: Array<{ id: string; factura: string }> = [];
 
+    // Guardar a qué pestaña va un proveedor. Es una decisión del usuario y vale por sí
+    // misma: no depende de que esta factura puntual se haya escrito. Antes vivía pegada
+    // al final de la escritura, así que cuando la fila se salteaba —por ejemplo porque
+    // el comprobante ya estaba en la planilla— la elección se perdía y Ritto volvía a
+    // preguntar lo mismo la próxima vez.
+    const guardarRegla = async (inv: Record<string, unknown>, nombre: string, pestana: string) => {
+      const filas = vendorKeys(inv).map((vendor_key) => ({
+        user_id: user.id,
+        vendor_key,
+        vendor_name: nombre || null,
+        sheet_name: pestana,
+        updated_at: new Date().toISOString(),
+      }));
+      if (filas.length === 0) return;
+      const { error: reglaErr } = await supabase
+        .from('vendor_mappings')
+        .upsert(filas, { onConflict: 'user_id,vendor_key' });
+      if (reglaErr) {
+        console.error('[append] no se pudo guardar la regla:', reglaErr.message);
+        memoriaError = memoriaError ?? reglaErr.message;
+      } else if (nombre && !aprendidos.includes(nombre)) {
+        aprendidos.push(nombre);
+      }
+    };
+
     // Reglas que el usuario ya enseñó en exportaciones anteriores.
     const { data: reglas, error: reglasErr } = await supabase
       .from('vendor_mappings')
@@ -1102,6 +1127,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // es la misma fila de siempre, no hay nada que avisar: el control del navegador ya
       // se ocupa de esa.
       if (yaEstaba && yaEstaba !== idFactura && !forzarDuplicadas.has(idFactura)) {
+        // La fila no se escribe, pero si el usuario acaba de elegir la pestaña, esa
+        // elección se guarda igual.
+        const eligióAhora = proveedorFactura ? elegidas[normStr(proveedorFactura)] : undefined;
+        if (eligióAhora) await guardarRegla(inv, proveedorFactura, eligióAhora);
         duplicadas.push({
           id: idFactura,
           factura: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : '—',
@@ -1370,22 +1399,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // enganchó por parecido de nombre: así la próxima factura la encuentra por
         // clave exacta y la memoria se afirma sola en vez de depender del parecido.
         if (elegida || (regla && !regla.exacta)) {
-          const filas = vendorKeys(inv).map((vendor_key) => ({
-            user_id: user.id,
-            vendor_key,
-            vendor_name: proveedorFactura || null,
-            sheet_name: tabName,
-            updated_at: new Date().toISOString(),
-          }));
-          if (filas.length > 0) {
-            const { error: reglaErr } = await supabase
-              .from('vendor_mappings')
-              .upsert(filas, { onConflict: 'user_id,vendor_key' });
-            if (reglaErr) {
-              console.error('[append] no se pudo guardar la regla:', reglaErr.message);
-              memoriaError = memoriaError ?? reglaErr.message;
-            } else if (!aprendidos.includes(proveedorFactura)) aprendidos.push(proveedorFactura);
-          }
+          await guardarRegla(inv, proveedorFactura, tabName);
         }
       }
       invoiceDebug.push(debugEntry);
