@@ -173,12 +173,17 @@ export default function GuiaPage() {
               <div className="card-text">
                 Exportás desde Ritto y las filas aparecen solas en tu planilla. No hay que descargar ni copiar nada.
               </div>
-              <div className="highlight">
-                🔒 <strong>Ritto está verificada por Google.</strong> Cuando conectes vas a ver la pantalla
-                de permisos de siempre, sin advertencias. El único permiso que pide es editar planillas de
-                Google Sheets: no puede ver tu Gmail, tus fotos ni el resto de tu Drive.
+              <div className="highlight" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
+                ⚠️ <strong>Google te va a mostrar un cartel que dice que todavía no verificó esta app.</strong>{' '}
+                Es el trámite que hace Google con toda aplicación nueva y está en curso. No significa que
+                haya un problema con tus datos.
                 <br /><br />
-                Podés cortarle el acceso cuando quieras desde Configuración, o desde tu cuenta de Google.
+                Para seguir: tocá <strong>«Configuración avanzada»</strong> abajo a la izquierda y después{' '}
+                <strong>«Ir a ritto.lat (no seguro)»</strong>. Es el único paso raro de toda la conexión.
+                <br /><br />
+                El único permiso que pide Ritto es editar planillas de Google Sheets. No puede ver tu
+                Gmail, tus fotos ni el resto de tu Drive, y podés cortarle el acceso cuando quieras desde
+                Configuración o desde tu cuenta de Google.
               </div>
               <div className="steps" style={{ marginTop: 16 }}>
                 <div className="step">
@@ -322,11 +327,12 @@ export default function GuiaPage() {
               <div className="card-icon">🔴</div>
               <div className="card-title">No puedo conectar mi cuenta de Google</div>
               <div className="card-text">
-                Ritto está verificada por Google, así que no deberías ver ninguna advertencia. Si te
-                aparece un error al conectar, suele ser que la cuenta de Google que elegiste no es la
-                dueña de la planilla: fijate de elegir la misma con la que abrís tu Google Sheets. Si
-                sigue sin andar, <strong>escribinos por WhatsApp al {SOPORTE_TEL}</strong> con tu email de
-                Google y lo vemos.
+                Si el cartel dice que Google <strong>todavía no verificó esta app</strong>, es normal
+                mientras el trámite esté en curso: tocá «Configuración avanzada» y después «Ir a ritto.lat
+                (no seguro)». Si en cambio te da un error, suele ser que la cuenta de Google que elegiste
+                no es la dueña de la planilla — fijate de usar la misma con la que abrís tu Google Sheets.
+                Si sigue sin andar, <strong>escribinos por WhatsApp al {SOPORTE_TEL}</strong> con tu email
+                de Google y lo vemos.
               </div>
             </div>
 

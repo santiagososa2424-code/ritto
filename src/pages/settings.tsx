@@ -648,14 +648,22 @@ export default function SettingsPage() {
                 <p style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6 }}>
                   Hacé clic en "Conectar con Google" y autorizá el acceso. Solo se pide permiso para escribir en Sheets — Ritto no puede leer ni modificar tus otros archivos.
                 </p>
-                {/* Ritto ya pasó la verificación de Google, así que la pantalla de permisos
-                    es la normal y no hay ninguna advertencia que explicar. Acá iba un aviso
-                    sobre el cartel de "app no verificada": tenerlo ahora sería sembrar una
-                    duda que no existe justo cuando la persona está por dar acceso. */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12.5, color: '#166534', lineHeight: 1.6 }}>
-                  Ritto está verificada por Google. Vas a ver la pantalla de permisos de siempre, y el
-                  único permiso que pide es <strong>editar planillas de Google Sheets</strong>: no puede
-                  entrar a tu Gmail, tus fotos ni al resto de tu Drive.
+                {/* Publicar la app y que Google la verifique son dos cosas distintas, y acá
+                    nos confundimos: la app está publicada —entra cualquiera, sin lista de
+                    usuarios de prueba— pero la verificación del permiso de Sheets sigue en
+                    trámite, así que el cartel aparece igual. Va antes del botón: si sale sin
+                    aviso, justo cuando la persona está por dar acceso a su planilla, la
+                    primera reacción es cerrar todo. */}
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12.5, color: '#78350f', lineHeight: 1.6 }}>
+                  <strong>Google te va a mostrar un cartel de advertencia.</strong> Dice que todavía no
+                  verificó la app. Es el trámite que hace Google con toda aplicación nueva y está en curso.
+                  <br /><br />
+                  Para seguir: tocá <strong>«Configuración avanzada»</strong> abajo a la izquierda y después{' '}
+                  <strong>«Ir a ritto.lat (no seguro)»</strong>.
+                  <br /><br />
+                  El único permiso que pide Ritto es <strong>editar planillas de Google Sheets</strong>. No
+                  puede entrar a tu Gmail, tus fotos ni al resto de tu Drive, y podés cortarle el acceso
+                  cuando quieras.
                 </div>
                 <button
                   type="button"
