@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 import HeroBackground from '../components/HeroBackground';
+import { SOPORTE_TEL } from '../lib/soporte';
 
 type Mode = 'login' | 'signup';
 type Plan = 'pro' | 'pyme' | 'empresa';
@@ -61,6 +62,21 @@ export default function LoginPage() {
       setLoading(false);
     } else {
       setStep(2);
+    }
+  }
+
+  async function entrarConGoogle() {
+    setLoading(true);
+    setError('');
+    // Sale hacia /app. Si es la primera vez, /app rebota a /onboarding, que es donde se
+    // crea el perfil: no hace falta nada especial para las cuentas nuevas.
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/app` },
+    });
+    if (err) {
+      setError(`No se pudo abrir el acceso con Google. Probá con tu email o escribinos al ${SOPORTE_TEL}.`);
+      setLoading(false);
     }
   }
 
@@ -139,6 +155,17 @@ export default function LoginPage() {
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
         .error { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); border-radius: 8px; padding: 10px 13px; font-size: 13px; margin-bottom: 14px; }
         .success-msg { background: var(--green-light); border: 1px solid rgba(10,124,89,0.25); color: var(--green); border-radius: 8px; padding: 10px 13px; font-size: 13px; margin-bottom: 14px; }
+        .btn-google {
+          width: 100%; background: var(--white); color: var(--dark); border: 1px solid var(--border);
+          padding: 12px; border-radius: 9px; font-family: 'Figtree', sans-serif; font-size: 15px;
+          font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center;
+          gap: 9px;
+        }
+        .btn-google:hover { background: var(--bg); }
+        .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
+        .separador { display: flex; align-items: center; gap: 10px; margin: 18px 0 16px; }
+        .separador::before, .separador::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .separador span { font-size: 12px; color: var(--gray); }
         .toggle { text-align: center; margin-top: 18px; font-size: 13px; color: var(--gray); }
         .toggle button { background: none; border: none; color: var(--green); font-weight: 600; cursor: pointer; font-family: 'Figtree', sans-serif; font-size: 13px; }
         .section-label { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
@@ -211,6 +238,24 @@ export default function LoginPage() {
             <p className="card-sub">{mode === 'login' ? 'Bienvenido de vuelta' : '14 días gratis, sin tarjeta de crédito'}</p>
             {error && <div className="error">{error}</div>}
             {success && <div className="success-msg">{success}</div>}
+
+            {/* Entrar con Google ahorra el paso de inventar una contraseña y el de
+                confirmar el mail. Pide sólo la identidad: el permiso para escribir en
+                Sheets se pide después, cuando la persona ya vio para qué sirve. Juntar
+                las dos cosas acá pondría la pantalla roja de "app no verificada" en la
+                puerta de entrada, antes de que nadie haya visto nada. */}
+            <button type="button" className="btn-google" onClick={entrarConGoogle} disabled={loading}>
+              <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden>
+                <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.7-.4-3.9H24v7.1h12.1c-.2 1.8-1.6 4.6-4.5 6.4l6.9 5.3c4.1-3.8 6.6-9.3 6.6-14.9z"/>
+                <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.3c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.1l-7.1 5.5C8.1 41.1 15.5 46 24 46z"/>
+                <path fill="#FBBC05" d="M11.5 28.5c-.5-1.4-.7-2.9-.7-4.5s.3-3.1.7-4.5l-7.1-5.5C2.9 17 2 20.4 2 24s.9 7 2.4 10z"/>
+                <path fill="#EA4335" d="M24 10.6c4.1 0 6.9 1.8 8.5 3.3l6.2-6C34.9 4.5 29.9 2 24 2 15.5 2 8.1 6.9 4.4 14l7.1 5.5c1.8-5.3 6.7-8.9 12.5-8.9z"/>
+              </svg>
+              {mode === 'login' ? 'Entrar con Google' : 'Registrarme con Google'}
+            </button>
+
+            <div className="separador"><span>o con tu email</span></div>
+
             <form onSubmit={handleStep1}>
               {mode === 'signup' && (
                 <>
