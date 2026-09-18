@@ -10,12 +10,37 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  // El link no trajo sesión: venció, ya se usó, o el rebote no llegó hasta acá.
+  const [sinSesion, setSinSesion] = useState(false);
 
   useEffect(() => {
-    // Supabase sets the session from the URL hash automatically
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true);
+    let vivo = true;
+
+    // El cliente de Supabase procesa la URL al cargarse, que es antes de que esta
+    // pantalla se monte. Si el evento PASSWORD_RECOVERY salió en ese momento, este
+    // listener llega tarde y nunca lo escucha: la pantalla se quedaba para siempre en
+    // "Verificando link…". Por eso primero se pregunta si ya hay sesión.
+    supabase.auth.getSession().then(({ data }) => {
+      if (vivo && data.session) setReady(true);
     });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!vivo) return;
+      if (event === 'PASSWORD_RECOVERY' || session) setReady(true);
+    });
+
+    // Supabase devuelve el motivo en el hash cuando el link no sirve más.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const motivo = hash.get('error_description') ?? hash.get('error');
+    if (motivo) setError(decodeURIComponent(motivo.replace(/\+/g, ' ')));
+
+    // Si en unos segundos no hubo sesión ni error, el link ya se usó o venció. Decirlo
+    // es mejor que dejar a alguien mirando un "Verificando…" que no termina nunca.
+    const aviso = setTimeout(() => {
+      if (vivo) setSinSesion(true);
+    }, 5000);
+
+    return () => { vivo = false; clearTimeout(aviso); sub.subscription.unsubscribe(); };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -68,8 +93,18 @@ export default function ResetPasswordPage() {
             </>
           ) : !ready ? (
             <>
-              <div className="card-title">Verificando link…</div>
-              <div className="card-sub">Esperá un momento mientras validamos tu sesión.</div>
+              <div className="card-title">{sinSesion ? 'Este link ya no sirve' : 'Verificando link…'}</div>
+              <div className="card-sub">
+                {sinSesion
+                  ? 'Los links para cambiar la contraseña duran una hora y se usan una sola vez. Pedí uno nuevo y abrilo desde el mismo navegador.'
+                  : 'Esperá un momento mientras validamos tu sesión.'}
+              </div>
+              {error && <div className="error">{error}</div>}
+              {sinSesion && (
+                <button className="btn" onClick={() => router.push('/forgot-password')}>
+                  Pedir un link nuevo
+                </button>
+              )}
             </>
           ) : (
             <>
