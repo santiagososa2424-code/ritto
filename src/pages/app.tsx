@@ -514,11 +514,37 @@ export default function AppPage() {
   const segundosMes = segundosAhorrados(facturasMes);
   const segundosTotal = segundosAhorrados(exportadas.length);
 
-  // Cuántas leyó Ritto sin que hiciera falta corregir nada. Es el número que mejor
-  // dice si el producto funciona, y sale de los datos, no de una promesa.
-  const conAviso = done.filter((i) => i.warning).length;
-  const precision = done.length > 0 ? Math.round(((done.length - conAviso) / done.length) * 100) : null;
-  const proveedores = new Set(done.map((i) => (i.proveedor ?? '').trim().toLowerCase()).filter(Boolean)).size;
+  // Números que impresionan sin inventar nada: todos salen de las facturas que ya
+  // están cargadas. Un contador "facturas procesadas" es correcto y no le mueve el
+  // ánimo a nadie; cuánta plata leyó Ritto o cuántas teclas no tocaste, sí.
+
+  // Sólo los pesos: sumar dólares en el mismo total daría un número sin sentido.
+  const montoLeido = done
+    .filter((i) => (i.moneda ?? 'UYU') === 'UYU')
+    .reduce((n, i) => n + Math.abs(i.total ?? 0), 0);
+
+  // Lo que habría que haber tipeado a mano, carácter por carácter. Los ítems cuentan:
+  // son la parte más pesada de cargar y la que nadie quiere hacer.
+  const largo = (v: unknown) => (v == null ? 0 : String(v).trim().length);
+  const teclas = done.reduce((n, i) => {
+    const cabecera = largo(i.proveedor) + largo(i.rut) + largo(i.fecha) + largo(i.nroDocumento)
+      + largo(i.tipoDocumento) + largo(i.neto) + largo(i.ivaTotal) + largo(i.total);
+    const items = (i.items ?? []).reduce(
+      (m, it) => m + largo(it.codigo) + largo(it.descripcion) + largo(it.cantidad) + largo(it.precioUnitario) + largo(it.subtotal),
+      0,
+    );
+    return n + cabecera + items;
+  }, 0);
+
+  const porProveedor = new Map<string, number>();
+  for (const i of done) {
+    const nombre = (i.proveedor ?? '').trim();
+    if (nombre) porProveedor.set(nombre, (porProveedor.get(nombre) ?? 0) + 1);
+  }
+  const top = Array.from(porProveedor.entries()).sort((a, b) => b[1] - a[1])[0];
+  const proveedores = porProveedor.size;
+
+  const itemsLeidos = done.reduce((n, i) => n + (i.items?.length ?? 0), 0);
 
   // Cuántos de los tres primeros pasos faltan. En cero, el instructivo desaparece.
   const pasosPendientes = (googleConnected ? 0 : 1) + (googleSheetId ? 0 : 1) + (done.length > 0 ? 0 : 1);
@@ -1623,31 +1649,38 @@ export default function AppPage() {
                   Lo que hizo Ritto
                 </div>
 
-                <div className="logro">
-                  <strong>{done.length}</strong>
-                  <span>{done.length === 1 ? 'factura leída sin tipear una sola' : 'facturas leídas sin tipear una sola'}</span>
-                </div>
-
-                {exportadas.length > 0 && (
+                {teclas > 0 && (
                   <div className="logro">
-                    <strong>{exportadas.length}</strong>
-                    <span>{exportadas.length === 1 ? 'escrita en tu planilla' : 'escritas en tu planilla'}, sin tocarte una fórmula</span>
+                    <strong>{teclas.toLocaleString('es-UY')}</strong>
+                    <span>teclas que no tocaste</span>
                   </div>
                 )}
 
-                {proveedores > 0 && (
+                {montoLeido > 0 && (
+                  <div className="logro">
+                    <strong>${Math.round(montoLeido).toLocaleString('es-UY')}</strong>
+                    <span>leídos y ordenados, sin tipear un número</span>
+                  </div>
+                )}
+
+                {itemsLeidos > 0 && (
+                  <div className="logro">
+                    <strong>{itemsLeidos.toLocaleString('es-UY')}</strong>
+                    <span>{itemsLeidos === 1 ? 'artículo leído renglón por renglón' : 'artículos leídos renglón por renglón'}</span>
+                  </div>
+                )}
+
+                {top && top[1] > 1 && (
+                  <div className="logro">
+                    <strong>{top[1]}</strong>
+                    <span>facturas de <strong style={{ fontSize: 'inherit', color: 'inherit' }}>{top[0]}</strong>, tu proveedor más cargado</span>
+                  </div>
+                )}
+
+                {proveedores > 1 && (
                   <div className="logro">
                     <strong>{proveedores}</strong>
-                    <span>{proveedores === 1 ? 'proveedor reconocido' : 'proveedores reconocidos'} por su RUT</span>
-                  </div>
-                )}
-
-                {/* Con menos de cinco el porcentaje no dice nada: una sola con aviso lo
-                    manda al 80% y asusta sin motivo. */}
-                {precision != null && done.length >= 5 && (
-                  <div className="logro">
-                    <strong>{precision}%</strong>
-                    <span>salieron sin ninguna observación para revisar</span>
+                    <span>proveedores que Ritto ya reconoce solo</span>
                   </div>
                 )}
               </div>
