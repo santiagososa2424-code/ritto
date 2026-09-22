@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import HeroBackground from '../components/HeroBackground';
 import TypedDomain from '../components/TypedDomain';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
-import { horasPorAnio, DIAS_LABORALES_POR_ANIO } from '../lib/tiempoAhorrado';
+import { horasPorAnio, DIAS_LABORALES_POR_ANIO, SEGUNDOS_POR_FACTURA } from '../lib/tiempoAhorrado';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -309,8 +309,8 @@ export default function LandingPage() {
           <div style={{ fontSize: 12.5, color: 'var(--gray)', marginTop: 18, lineHeight: 1.6, maxWidth: 560, margin: '18px auto 0' }}>
             {porDia} {porDia === 1 ? 'factura' : 'facturas'} por día × 5 días × 50 semanas ={' '}
             <strong>{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} facturas al año</strong>.
-            Cada una tiene unos 24 campos entre cabecera e ítems, y pasar un campo de un papel a
-            una planilla —leerlo, tipearlo y verificarlo— lleva unos 4 segundos.
+            Contamos {SEGUNDOS_POR_FACTURA} segundos por factura: lo que lleva leerla, tipear fecha,
+            número e importe, y revisar que haya quedado bien. Es una cuenta corta a propósito.
           </div>
         </div>
       </section>

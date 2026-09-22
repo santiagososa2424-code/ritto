@@ -6,7 +6,7 @@ import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '
 import { DEFAULT_COLUMNS, isCreditNote } from '../lib/types';
 import Sidebar from '../components/Sidebar';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
-import { segundosAhorradosTotal, formatearTiempo } from '../lib/tiempoAhorrado';
+import { segundosAhorrados, formatearTiempo, SEGUNDOS_POR_FACTURA } from '../lib/tiempoAhorrado';
 
 function sourceLabel(s: InvoiceSource) {
   if (s === 'cfe_xml') return 'CFE';
@@ -502,11 +502,23 @@ export default function AppPage() {
   const thisMonth = done.filter((inv) => inv.fecha?.startsWith(thisMonthKey));
   const totalAmount = done.reduce((sum, inv) => sum + (inv.total ?? 0) * (isCreditNote(inv.tipoDocumento) ? -1 : 1), 0);
 
-  // Lo del mes corriente, que es el número que se muestra al costado.
+  // El tiempo se cuenta cuando la factura entra en la planilla, que es cuando el
+  // trabajo quedó hecho de verdad. Y se cuenta por el mes en que se exportó, no por la
+  // fecha del comprobante: filtrando por la fecha de la factura, exportar en setiembre
+  // un comprobante de agosto no sumaba nada, y como casi todo lo que se carga es de
+  // meses anteriores, el contador vivía en cero.
   const mesActual = new Date().toISOString().slice(0, 7);
-  const delMes = done.filter((i) => (i.fecha ?? '').startsWith(mesActual));
+  const exportadas = invoices.filter((i) => i.exportedAt);
+  const delMes = exportadas.filter((i) => (i.exportedAt ?? '').startsWith(mesActual));
   const facturasMes = delMes.length;
-  const segundosMes = segundosAhorradosTotal(delMes);
+  const segundosMes = segundosAhorrados(facturasMes);
+  const segundosTotal = segundosAhorrados(exportadas.length);
+
+  // Cuántas leyó Ritto sin que hiciera falta corregir nada. Es el número que mejor
+  // dice si el producto funciona, y sale de los datos, no de una promesa.
+  const conAviso = done.filter((i) => i.warning).length;
+  const precision = done.length > 0 ? Math.round(((done.length - conAviso) / done.length) * 100) : null;
+  const proveedores = new Set(done.map((i) => (i.proveedor ?? '').trim().toLowerCase()).filter(Boolean)).size;
 
   // Cuántos de los tres primeros pasos faltan. En cero, el instructivo desaparece.
   const pasosPendientes = (googleConnected ? 0 : 1) + (googleSheetId ? 0 : 1) + (done.length > 0 ? 0 : 1);
@@ -702,23 +714,10 @@ export default function AppPage() {
         .empty-state { padding: 44px 20px; text-align: center; color: var(--gray); font-size: 14px; line-height: 1.7; }
 
         /* Getting started guide */
-        .getting-started { padding: 28px 28px 32px; }
-        .gs-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--dark); margin-bottom: 20px; }
-        .gs-steps { display: flex; flex-direction: column; gap: 0; }
-        .gs-step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--bg); }
-        .gs-step:last-child { border-bottom: none; }
-        .gs-num { width: 32px; height: 32px; background: var(--green-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--green); flex-shrink: 0; margin-top: 2px; }
-        .gs-content { flex: 1; }
-        .gs-step-title { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 4px; }
-        .gs-step-desc { font-size: 13px; color: var(--gray); line-height: 1.5; margin-bottom: 10px; }
-        .gs-btn { display: inline-block; background: var(--green); color: #fff; border: none; padding: 8px 14px; border-radius: 7px; font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
-        .gs-btn:hover { opacity: 0.9; }
-        @media (max-width: 560px) {
-          .getting-started { padding: 20px 16px 24px; }
-          .gs-title { font-size: 17px; margin-bottom: 14px; }
-          .gs-num { width: 28px; height: 28px; font-size: 12px; }
-          .gs-step-title { font-size: 13px; }
-          .gs-step-desc { font-size: 12px; }
+        .logro { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-top: 1px solid var(--bg); }
+        .logro:first-of-type { border-top: none; padding-top: 2px; }
+        .logro strong { font-size: 19px; font-weight: 700; color: #166534; line-height: 1; flex-shrink: 0; }
+        .logro span { font-size: 11.5px; color: var(--gray); line-height: 1.4; }
         }
 
         /* Right panel */
@@ -1587,8 +1586,13 @@ export default function AppPage() {
                 {formatearTiempo(segundosMes)}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--gray)', marginTop: 2 }}>
-                este mes, con {facturasMes} {facturasMes === 1 ? 'factura' : 'facturas'}
+                este mes, con {facturasMes} {facturasMes === 1 ? 'factura exportada' : 'facturas exportadas'}
               </div>
+              {segundosTotal > segundosMes && (
+                <div style={{ fontSize: 11.5, color: 'var(--gray)', marginTop: 4 }}>
+                  {formatearTiempo(segundosTotal)} desde que empezaste
+                </div>
+              )}
               {facturasMes > 0 && (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>≈ {Math.round((segundosMes * 12) / 3600)} h al año</div>
@@ -1598,10 +1602,56 @@ export default function AppPage() {
                 </div>
               )}
               <div style={{ fontSize: 10.5, color: 'var(--gray)', marginTop: 10, lineHeight: 1.45 }}>
-                Contamos los campos que Ritto llenó de verdad, a 4 segundos cada uno —lo que
-                lleva leerlo del papel, tipearlo y verificarlo—.
+                {SEGUNDOS_POR_FACTURA} segundos por cada factura que entra sola en tu planilla: lo que
+                lleva leerla, tipear fecha, número e importe, y revisar que haya quedado bien.
               </div>
             </div>
+
+            {/* Números de verdad, sacados de la cuenta del usuario. Se evaluó poner frases
+                del tipo "un 35% más rápido" o "precisión DGI garantizada": no van. La
+                primera es un porcentaje que nadie midió, y la segunda es una garantía
+                sobre algo que decide la DGI y no nosotros —en un producto contable, una
+                promesa que no se puede sostener cuesta más de lo que suma—. */}
+            {done.length > 0 && (
+              <div className="rp-card">
+                <div className="rp-title">
+                  <div className="rp-title-icon" style={{ background: '#dcfce7' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                  </div>
+                  Lo que hizo Ritto
+                </div>
+
+                <div className="logro">
+                  <strong>{done.length}</strong>
+                  <span>{done.length === 1 ? 'factura leída sin tipear una sola' : 'facturas leídas sin tipear una sola'}</span>
+                </div>
+
+                {exportadas.length > 0 && (
+                  <div className="logro">
+                    <strong>{exportadas.length}</strong>
+                    <span>{exportadas.length === 1 ? 'escrita en tu planilla' : 'escritas en tu planilla'}, sin tocarte una fórmula</span>
+                  </div>
+                )}
+
+                {proveedores > 0 && (
+                  <div className="logro">
+                    <strong>{proveedores}</strong>
+                    <span>{proveedores === 1 ? 'proveedor reconocido' : 'proveedores reconocidos'} por su RUT</span>
+                  </div>
+                )}
+
+                {/* Con menos de cinco el porcentaje no dice nada: una sola con aviso lo
+                    manda al 80% y asusta sin motivo. */}
+                {precision != null && done.length >= 5 && (
+                  <div className="logro">
+                    <strong>{precision}%</strong>
+                    <span>salieron sin ninguna observación para revisar</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="rp-card">
               <div className="rp-title">
