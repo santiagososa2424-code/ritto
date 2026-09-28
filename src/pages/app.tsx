@@ -6,7 +6,7 @@ import type { ExtractedInvoice, InvoiceItem, InvoiceSource, ExcelColumn } from '
 import { DEFAULT_COLUMNS, isCreditNote } from '../lib/types';
 import Sidebar from '../components/Sidebar';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
-import { segundosAhorrados, formatearTiempo, SEGUNDOS_POR_FACTURA } from '../lib/tiempoAhorrado';
+import { segundosAhorrados, formatearTiempo } from '../lib/tiempoAhorrado';
 
 function sourceLabel(s: InvoiceSource) {
   if (s === 'cfe_xml') return 'CFE';
@@ -1670,8 +1670,8 @@ export default function AppPage() {
                 </div>
               )}
               <div style={{ fontSize: 10.5, color: 'var(--gray)', marginTop: 10, lineHeight: 1.45 }}>
-                {SEGUNDOS_POR_FACTURA} segundos por cada factura que entra sola en tu planilla: lo que
-                lleva leerla, tipear fecha, número e importe, y revisar que haya quedado bien.
+Un minuto por cada factura que entra sola en tu planilla: lo que lleva leerla,
+                tipear fecha, número e importe, y revisar que haya quedado bien.
               </div>
             </div>
 

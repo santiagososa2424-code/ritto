@@ -5,10 +5,14 @@
 // números que sí son reales —el IVA, los totales—, y esos son los que sostienen el
 // producto. Por eso es deliberadamente conservador: es mejor que quede corto.
 
-// Lo que se ahorra por cada factura que entra sola en la planilla. Quince segundos es
-// una cuenta corta: leer el comprobante, tipear fecha, número e importe, y mirar que
-// haya quedado bien. Nadie va a discutir que tarda menos que eso.
-export const SEGUNDOS_POR_FACTURA = 15;
+// Lo que se ahorra por cada factura que entra sola en la planilla.
+//
+// Un minuto. Se defiende con una pregunta —"¿vos cargás una factura en menos de un
+// minuto?"— y la cuenta se puede hacer de memoria: 60 facturas por día es una hora por
+// día. Estuvo en 15 segundos y daba un resultado ridículo: 60 facturas diarias salían
+// 15 minutos de trabajo. Un número que se nota falso para abajo hace el mismo daño que
+// uno inflado, porque el que lo lee deja de creerle al resto.
+export const SEGUNDOS_POR_FACTURA = 60;
 
 // El tiempo se cuenta cuando la factura entra en la planilla, no cuando se lee. Leerla
 // sin exportarla no le ahorró el trabajo a nadie todavía.
