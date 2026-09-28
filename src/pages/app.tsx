@@ -740,6 +740,22 @@ export default function AppPage() {
         .empty-state { padding: 44px 20px; text-align: center; color: var(--gray); font-size: 14px; line-height: 1.7; }
 
         /* Getting started guide */
+        .muestra {
+          position: relative; background: var(--white); border: 1px solid var(--border);
+          border-radius: 12px; padding: 18px 18px 14px; max-width: 520px; margin: 0 auto;
+        }
+        .muestra-tag {
+          position: absolute; top: -9px; left: 16px; background: var(--green-light); color: var(--green);
+          font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; padding: 2px 8px; border-radius: 20px;
+        }
+        .muestra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 20px; }
+        .muestra-grid label {
+          display: block; font-size: 9.5px; font-weight: 600; color: var(--gray);
+          text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 1px;
+        }
+        .muestra-grid span { font-size: 13px; color: var(--dark); font-weight: 500; }
+        .muestra-total { color: var(--green); font-weight: 700; }
+        @media (max-width: 520px) { .muestra-grid { grid-template-columns: 1fr; } }
         .logro { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-top: 1px solid var(--bg); }
         .logro:first-of-type { border-top: none; padding-top: 2px; }
         .logro strong { font-size: 19px; font-weight: 700; color: #166534; line-height: 1; flex-shrink: 0; }
@@ -1308,11 +1324,37 @@ export default function AppPage() {
                      columnas del Excel, de cuando ese era el camino principal. Con la
                      lista arriba y los tipos de archivo explicados en el recuadro de
                      subir, esto sólo agregaba ruido. */
-                  <>
-                    <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
-                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 4 }}>Todavía no subiste ninguna factura</div>
-                    <div>Subí la primera desde el recuadro de arriba y en unos segundos la vas a ver acá.</div>
-                  </>
+                  /* Una tabla vacía con un cartel que dice "está vacía" no le sirve a
+                     nadie. Esto muestra una factura de ejemplo, con los datos ya
+                     separados: se entiende de una qué hace Ritto y qué va a aparecer acá,
+                     sin ningún instructivo que leer. */
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--dark)', fontSize: 15, marginBottom: 3, textAlign: 'center' }}>
+                      Así se va a ver cada factura
+                    </div>
+                    <div style={{ fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                      Vos subís la foto. Esto lo completa Ritto.
+                    </div>
+
+                    <div className="muestra">
+                      <span className="muestra-tag">EJEMPLO</span>
+                      <div className="muestra-grid">
+                        <div><label>Proveedor</label><span>DISTRIBUIDORA DEL SOL S.A.</span></div>
+                        <div><label>RUT</label><span>210001230015</span></div>
+                        <div><label>Fecha</label><span>19/8/2026</span></div>
+                        <div><label>Comprobante</label><span>A-74687</span></div>
+                        <div><label>Neto</label><span>UYU 14.724</span></div>
+                        <div><label>IVA</label><span>UYU 3.239</span></div>
+                        <div><label>Total</label><span className="muestra-total">UYU 17.964</span></div>
+                        <div><label>Artículos</label><span>12 renglones</span></div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 12.5, marginTop: 14, textAlign: 'center', lineHeight: 1.6 }}>
+                      Después la mandás a tu Google Sheets con un clic: entra en la pestaña de
+                      ese proveedor, en la fila que le toca por fecha, sin tocarte las fórmulas.
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
