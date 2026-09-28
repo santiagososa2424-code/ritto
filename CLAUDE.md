@@ -27,8 +27,9 @@ genuinamente difícil. Es lo que hay que defender y vender.
 - **Next.js 14**, Pages Router, TypeScript. Desplegado en Vercel.
 - **Supabase**: Postgres + Auth + RLS. La service role key sólo se usa del lado del servidor.
 - **Google Sheets API v4** para escribir en la planilla del cliente.
-- **Gemini**: `gemini-3.6-flash` para extraer datos del comprobante, `gemini-2.0-flash`
-  para mapear columnas.
+- **Gemini**: `gemini-3.6-flash`, definido una sola vez en `MODELO_GEMINI`
+  (`lib/geminiExtractor.ts`). Estaba escrito a mano en dos archivos y se
+  desincronizaron: cuando Google retiró `gemini-2.0-flash` se actualizó en uno solo.
 - **Mercado Pago** para las suscripciones.
 - **Resend** para el mail de bienvenida.
 
@@ -178,10 +179,14 @@ de diagnóstico.
   columna, no cifrados.
 - **La sesión vive en localStorage**, no en una cookie httpOnly.
 - **Sin CSP ni headers de seguridad.**
-- **`main` está en septiembre.** Todo el trabajo posterior vive en
-  `claude/create-ritto-LVdxf`. Si Vercel despliega desde `main`, el sitio sirve una
-  versión vieja. **Verificar en Vercel → Settings → Git → Production Branch antes de
-  diagnosticar cualquier bug reportado.**
+- **`main` y la rama de trabajo se separaron el 17/4/2026 y las dos siguieron.** No es
+  que `main` esté simplemente vieja: tiene **68 commits propios** que la rama no tiene,
+  algunos con arreglos reales (el cambio de modelo de Gemini salió de ahí). Y la rama
+  tiene 141 que `main` no tiene. El PR #4 (`ritto-local` → `main`) **tiene 28 archivos en
+  conflicto**: hay que resolverlos a mano, decidiendo caso por caso, no aceptando un lado
+  entero. Si Vercel despliega desde `main`, el sitio sirve la versión vieja:
+  **verificar en Vercel → Settings → Git → Production Branch antes de diagnosticar
+  cualquier bug reportado.**
 - **Migraciones 008, 009 y 010 hay que correrlas a mano** en el SQL Editor de Supabase si
   se levanta una base nueva. Sin la 010 (`exported_at`) las facturas no quedan marcadas
   como exportadas y cada clic en exportar escribe una fila repetida.

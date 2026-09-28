@@ -3,10 +3,15 @@ import fs from 'fs';
 import type { ExtractedInvoice } from './types';
 import { toNumber } from './money';
 
+// El modelo, escrito una sola vez. Estaba a mano en dos archivos y se desincronizaron:
+// cuando Google retiró gemini-2.0-flash se actualizó acá y el mapeo de columnas quedó
+// pidiendo un modelo que ya no existe, fallando en silencio en cada exportación.
+export const MODELO_GEMINI = 'gemini-3.6-flash';
+
 function getModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY no configurada en el servidor');
-  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-3.6-flash' });
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: MODELO_GEMINI });
 }
 
 const PROMPT = `Sos un sistema experto en extracción de datos de comprobantes fiscales uruguayos (CFE - Comprobantes Fiscales Electrónicos).

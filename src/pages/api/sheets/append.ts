@@ -7,6 +7,7 @@ import { fechaComparable, ordenPorFecha, elegirFilaDestino, type OrdenFecha } fr
 import { GHOST_COLUMN, isGhost, findHeaderRow, namedHeaders, formulaColumns } from '../../../lib/sheetHeaders';
 import { vendorKeys, reglaAprendida } from '../../../lib/vendorRules';
 import { logError } from '../../../lib/errorLog';
+import { MODELO_GEMINI } from '../../../lib/geminiExtractor';
 
 function extractSheetId(urlOrId: string): string {
   const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -256,7 +257,7 @@ Respondé ÚNICAMENTE con un array JSON válido, un objeto por factura:
 
   try {
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
