@@ -7,12 +7,14 @@
 
 // Lo que se ahorra por cada factura que entra sola en la planilla.
 //
-// Un minuto. Se defiende con una pregunta —"¿vos cargás una factura en menos de un
-// minuto?"— y la cuenta se puede hacer de memoria: 60 facturas por día es una hora por
-// día. Estuvo en 15 segundos y daba un resultado ridículo: 60 facturas diarias salían
-// 15 minutos de trabajo. Un número que se nota falso para abajo hace el mismo daño que
-// uno inflado, porque el que lo lee deja de creerle al resto.
-export const SEGUNDOS_POR_FACTURA = 60;
+// Un minuto y medio: los 24 campos de una factura —cabecera más renglones— a cuatro
+// segundos cada uno, que es lo que lleva leer un dato del papel, tipearlo y verificarlo.
+// Con esto, 60 facturas por día dan 96 minutos diarios y 400 horas al año.
+//
+// Estuvo en 15 segundos y daba un resultado ridículo al revés: 60 facturas diarias
+// salían 15 minutos de trabajo. Un número que se nota falso para abajo hace el mismo
+// daño que uno inflado, porque el que lo lee deja de creerle al resto.
+export const SEGUNDOS_POR_FACTURA = 96;
 
 // El tiempo se cuenta cuando la factura entra en la planilla, no cuando se lee. Leerla
 // sin exportarla no le ahorró el trabajo a nadie todavía.

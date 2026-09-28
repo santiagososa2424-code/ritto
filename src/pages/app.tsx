@@ -1670,8 +1670,8 @@ export default function AppPage() {
                 </div>
               )}
               <div style={{ fontSize: 10.5, color: 'var(--gray)', marginTop: 10, lineHeight: 1.45 }}>
-Un minuto por cada factura que entra sola en tu planilla: lo que lleva leerla,
-                tipear fecha, número e importe, y revisar que haya quedado bien.
+Un minuto y medio por cada factura que entra sola en tu planilla: sus 24 campos
+                entre cabecera y renglones, a 4 segundos cada uno.
               </div>
             </div>
 

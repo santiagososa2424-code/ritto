@@ -309,8 +309,8 @@ export default function LandingPage() {
           <div style={{ fontSize: 12.5, color: 'var(--gray)', marginTop: 18, lineHeight: 1.6, maxWidth: 560, margin: '18px auto 0' }}>
             {porDia} {porDia === 1 ? 'factura' : 'facturas'} por día × 5 días × 50 semanas ={' '}
             <strong>{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} facturas al año</strong>.
-            Contamos un minuto por factura: lo que lleva leerla, tipear fecha, número e importe, y
-            revisar que haya quedado bien.
+            Contamos un minuto y medio por factura: sus 24 campos entre cabecera y renglones, a 4
+            segundos cada uno —lo que lleva leer un dato del papel, tipearlo y verificarlo—.
           </div>
         </div>
       </section>
