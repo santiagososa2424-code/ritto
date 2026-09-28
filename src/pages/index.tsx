@@ -123,6 +123,16 @@ export default function LandingPage() {
 
         .section { padding: 80px 2rem; }
         .section-inner { max-width: 880px; margin: 0 auto; }
+        .cuenta { max-width: 520px; margin: 26px auto 0; text-align: left; }
+        .cuenta-fila {
+          display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
+          padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13.5px;
+        }
+        .cuenta-res { font-weight: 700; color: var(--dark); white-space: nowrap; }
+        .cuenta-pie { font-size: 12px; color: var(--gray); line-height: 1.6; margin-top: 12px; }
+        @media (max-width: 520px) {
+          .cuenta-fila { flex-direction: column; gap: 2px; padding: 8px 0; }
+        }
         .section-label { font-size: 12px; font-weight: 600; color: var(--green); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
         .section-title { font-family: 'DM Serif Display', serif; font-size: clamp(28px,4vw,42px); line-height: 1.12; margin-bottom: 48px; color: var(--dark); letter-spacing: -0.5px; }
 
@@ -306,11 +316,21 @@ export default function LandingPage() {
           </div>
           <div style={{ fontSize: 15, marginTop: 6 }}>al año que dejás de tipear</div>
 
-          <div style={{ fontSize: 12.5, color: 'var(--gray)', marginTop: 18, lineHeight: 1.6, maxWidth: 560, margin: '18px auto 0' }}>
-            {porDia} {porDia === 1 ? 'factura' : 'facturas'} por día × 5 días × 50 semanas ={' '}
-            <strong>{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} facturas al año</strong>.
-            Contamos un minuto y medio por factura: sus 24 campos entre cabecera y renglones, a 4
-            segundos cada uno —lo que lleva leer un dato del papel, tipearlo y verificarlo—.
+          {/* La cuenta entera a la vista, renglón por renglón. Un contador la va a querer
+              verificar antes de creerla, y si le cierra confía en todo lo demás. */}
+          <div className="cuenta">
+            <div className="cuenta-fila">
+              <span>{porDia} {porDia === 1 ? 'factura' : 'facturas'} por día × 5 días × 50 semanas</span>
+              <span className="cuenta-res">{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} facturas al año</span>
+            </div>
+            <div className="cuenta-fila">
+              <span>{(porDia * DIAS_LABORALES_POR_ANIO).toLocaleString('es-UY')} × 1 min 36 s cada una</span>
+              <span className="cuenta-res">{Math.round(horasPorAnio(porDia)).toLocaleString('es-UY')} horas al año</span>
+            </div>
+            <div className="cuenta-pie">
+              Un minuto y medio por factura son sus 24 campos —cabecera y renglones— a 4 segundos cada
+              uno: lo que lleva leer un dato del papel, tipearlo y mirar que haya quedado bien.
+            </div>
           </div>
         </div>
       </section>
