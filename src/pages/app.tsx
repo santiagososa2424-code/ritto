@@ -8,6 +8,9 @@ import Sidebar from '../components/Sidebar';
 import { SOPORTE_WHATSAPP, SOPORTE_TEL } from '../lib/soporte';
 import { segundosAhorrados, formatearTiempo } from '../lib/tiempoAhorrado';
 
+// Dónde quedó escrita una factura en la planilla del usuario.
+type Registro = { pestana: string; fila: number; escrito: Record<string, string | number> };
+
 function sourceLabel(s: InvoiceSource) {
   if (s === 'cfe_xml') return 'CFE';
   if (s === 'pdf') return 'PDF';
@@ -63,6 +66,8 @@ export default function AppPage() {
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
   // Espejo de `invoices` para poder consultarlo desde funciones que arrancaron antes.
   const invoicesRef = useRef<ExtractedInvoice[]>([]);
+  const [registros, setRegistros] = useState<Record<string, Registro>>({});
+  const registroDe = (id: string) => registros[id];
   const [dragging, setDragging] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
@@ -192,6 +197,35 @@ export default function AppPage() {
   }, [user]);
 
   useEffect(() => { invoicesRef.current = invoices; }, [invoices]);
+
+  // Dónde terminó cada factura dentro de la planilla. Sirve para lo que antes no se
+  // podía contestar: "este número de la fila 47, ¿de qué comprobante salió?".
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('export_log')
+      .select('invoice_id, pestana, fila, escrito')
+      .eq('user_id', user.id)
+      .order('creado', { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        if (!data) return;
+        const porFactura: Record<string, Registro> = {};
+        for (const r of data) {
+          const id = r.invoice_id as string | null;
+          // El más reciente gana: si una factura se exportó dos veces, la fila que vale
+          // es la última.
+          if (id && !porFactura[id]) {
+            porFactura[id] = {
+              pestana: r.pestana as string,
+              fila: r.fila as number,
+              escrito: (r.escrito ?? {}) as Record<string, string | number>,
+            };
+          }
+        }
+        setRegistros(porFactura);
+      });
+  }, [user, invoices.length]);
 
   // Los endpoints de extracción y exportación ahora exigen sesión, así que toda
   // llamada tiene que llevar el token.
@@ -1386,28 +1420,30 @@ export default function AppPage() {
                       <React.Fragment key={inv.id}>
                       <tr
                         onClick={() => {
-                          if (inv.items && inv.items.length > 0) {
+                          if ((inv.items && inv.items.length > 0) || registroDe(inv.id)) {
                             setExpandedRows((prev) => { const s = new Set(prev); s.has(inv.id) ? s.delete(inv.id) : s.add(inv.id); return s; });
                           }
                         }}
-                        style={{ cursor: inv.items && inv.items.length > 0 ? 'pointer' : 'default' }}
-                        title={inv.items && inv.items.length > 0 ? 'Clic para ver ítems' : undefined}
+                        style={{ cursor: (inv.items && inv.items.length > 0) || registroDe(inv.id) ? 'pointer' : 'default' }}
+                        title={(inv.items && inv.items.length > 0) || registroDe(inv.id) ? 'Clic para ver el detalle' : undefined}
                       >
                         <td>
                           <div className="file-name" title={inv.fileName}>
                             {/* Sin esto la fila se abría al clickearla y nadie se enteraba:
                                 el único indicio era el cursor y un title que hay que
                                 descubrir parándose encima. */}
-                            {inv.items && inv.items.length > 0 && (
+                            {((inv.items && inv.items.length > 0) || registroDe(inv.id)) && (
                               <span className="caret">{expandedRows.has(inv.id) ? '▾' : '▸'}</span>
                             )}
                             {inv.fileName}
                           </div>
-                          {inv.items && inv.items.length > 0 && (
+                          {((inv.items && inv.items.length > 0) || registroDe(inv.id)) && (
                             <span className="items-hint">
                               {expandedRows.has(inv.id)
-                                ? 'ocultar artículos'
-                                : `ver ${inv.items.length} ${inv.items.length === 1 ? 'artículo' : 'artículos'}`}
+                                ? 'ocultar detalle'
+                                : inv.items && inv.items.length > 0
+                                ? `ver ${inv.items.length} ${inv.items.length === 1 ? 'artículo' : 'artículos'}`
+                                : 'ver dónde se escribió'}
                             </span>
                           )}
                         </td>
@@ -1540,6 +1576,18 @@ export default function AppPage() {
                                 <button className="btn-cancel-edit" onClick={() => { setEditingId(null); setEditFields({}); }}>Cancelar</button>
                               </div>
                             </div>
+                          </td>
+                        </tr>
+                      )}
+                      {expandedRows.has(inv.id) && registroDe(inv.id) && (
+                        <tr style={{ background: '#f0fdf4' }}>
+                          <td colSpan={10} style={{ padding: '8px 13px', fontSize: 11.5, color: '#166534' }}>
+                            ✓ Escrita en <strong>{registroDe(inv.id)!.pestana}</strong>, fila{' '}
+                            <strong>{registroDe(inv.id)!.fila}</strong>
+                            {' · '}
+                            {Object.entries(registroDe(inv.id)!.escrito)
+                              .map(([col, val]) => `${col}: ${val}`)
+                              .join(' · ')}
                           </td>
                         </tr>
                       )}

@@ -78,7 +78,7 @@ src/
     Sidebar.tsx        resuelve solo su contexto (empresa, plan, organización)
     HeroBackground.tsx fondo animado del home
     TypedDomain.tsx    "ritto.lat" tipeándose
-supabase/migrations/   001 a 010 (no hay 005: falló y se reemplazó por la 007)
+supabase/migrations/   001 a 011 (no hay 005: falló y se reemplazó por la 007)
 ```
 
 ## Decisiones de arquitectura, y por qué
@@ -140,6 +140,8 @@ de diagnóstico.
 - Pagos con Mercado Pago, trial de 14 días.
 - Login con email o con Google.
 - Panel de errores en vivo en `/admin/errores`.
+- Registro de exportaciones: cada factura guarda en qué pestaña y fila quedó, y con qué
+  valores. Se ve abriendo la factura en la lista.
 - 50 tests sobre la lógica de exportación (`npm test`).
 
 ## Qué falta, por orden
@@ -149,11 +151,10 @@ de diagnóstico.
    son dos estados distintos en la consola. Hace falta dominio verificado, logo, links a
    privacidad y términos, un video de YouTube mostrando el flujo, y justificar el
    permiso. Tarda semanas. Es lo que más frena la venta.
-2. **Registro de exportaciones.** Guardar qué escribió Ritto: planilla, pestaña, fila,
-   valores, cuándo. Da auditoría y permite deshacer. Hoy, si Ritto escribe algo mal en la
-   contabilidad de un cliente, no hay registro ni vuelta atrás. Es el riesgo comercial
-   más grande que tiene el producto. La mitad ya existe: `append.ts` calcula `targetRow`
-   y `writtenIdx` y los tira al terminar.
+2. **Deshacer una exportación.** El registro ya está (`export_log`, migración 011):
+   queda guardado qué escribió Ritto, en qué pestaña, en qué fila y con qué valores, y
+   el usuario lo ve al abrir la factura. Falta el botón que use ese registro para
+   revertir: limpiar las celdas que Ritto escribió —sólo esas— y desmarcar la factura.
 3. **Probar el flujo de equipo de punta a punta.** Pagar Pyme → invitar → aceptar → ver
    el panel → quitar un miembro → cancelar. Nunca se hizo ni una vez.
 4. **Reemplazar "uso mensual" por IVA compras del mes** en el dashboard. Es el número que
@@ -187,7 +188,7 @@ de diagnóstico.
   entero. Si Vercel despliega desde `main`, el sitio sirve la versión vieja:
   **verificar en Vercel → Settings → Git → Production Branch antes de diagnosticar
   cualquier bug reportado.**
-- **Migraciones 008, 009 y 010 hay que correrlas a mano** en el SQL Editor de Supabase si
+- **Migraciones 008 a 011 hay que correrlas a mano** en el SQL Editor de Supabase si
   se levanta una base nueva. Sin la 010 (`exported_at`) las facturas no quedan marcadas
   como exportadas y cada clic en exportar escribe una fila repetida.
 

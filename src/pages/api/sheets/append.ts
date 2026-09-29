@@ -955,6 +955,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const duplicadas: Array<{ id: string; factura: string }> = [];
 
+    // Se juntan y se guardan todos juntos al final: una inserción por factura haría
+    // esperar al usuario por algo que no cambia el resultado de su exportación.
+    const registros: Array<Record<string, unknown>> = [];
+
     // Guardar a qué pestaña va un proveedor. Es una decisión del usuario y vale por sí
     // misma: no depende de que esta factura puntual se haya escrito. Antes vivía pegada
     // al final de la escritura, así que cuando la fila se salteaba —por ejemplo porque
@@ -1382,6 +1386,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!writtenTabs.includes(tabName)) writtenTabs.push(tabName);
         if (typeof inv.id === 'string') exportedIds.push(inv.id);
 
+        // Queda registro de qué se escribió y dónde. Ritto escribe adentro de la
+        // contabilidad real de un cliente y no hay deshacer: sin esto, una fila mal
+        // escrita no se puede ni rastrear ni reconstruir. Se guarda sólo lo que escribió
+        // Ritto, no la fila entera: lo que ya estaba es del usuario.
+        const escrito: Record<string, string | number> = {};
+        for (const i of result.writtenIdx ?? []) {
+          const col = tabHeaders[i];
+          const valor = row[i];
+          if (col && !isGhost(col) && valor != null && valor !== '') escrito[col] = valor;
+        }
+        registros.push({
+          user_id: user.id,
+          invoice_id: typeof inv.id === 'string' ? inv.id : null,
+          nro_documento: typeof inv.nroDocumento === 'string' ? inv.nroDocumento : null,
+          proveedor: proveedorFactura || null,
+          sheet_id: sheetId,
+          pestana: tabName,
+          fila: result.targetRow ?? 0,
+          modo: result.grewTemplate ? 'insertar' : 'libre',
+          escrito,
+        });
+
         // Recién se aprende después de escribir bien: si la exportación falla, no
         // queremos dejar una regla apuntando a una pestaña que no funcionó.
         for (const col of tabHeaders) {
@@ -1432,6 +1458,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else {
         exportedAt = stamp;
       }
+    }
+
+    // Sin await ni corte por error: que falle el registro no puede romper una
+    // exportación que ya entró bien en la planilla.
+    if (registros.length > 0) {
+      void supabase.from('export_log').insert(registros).then(({ error: regErr }) => {
+        if (regErr) void logError('sheets/append:registro', regErr, { userId: user.id });
+      });
     }
 
     const primaryTab = writtenTabs[0];
