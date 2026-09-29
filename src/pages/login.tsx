@@ -34,6 +34,8 @@ const PLANS: { id: Plan; name: string; price: string; desc: string; features: st
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('login');
+  // Se apaga solo si Supabase contesta que el proveedor no está habilitado.
+  const [googleDisponible, setGoogleDisponible] = useState(true);
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,7 +77,17 @@ export default function LoginPage() {
       options: { redirectTo: `${window.location.origin}/app` },
     });
     if (err) {
-      setError(`No se pudo abrir el acceso con Google. Probá con tu email o escribinos al ${SOPORTE_TEL}.`);
+      // "provider is not enabled" es Supabase diciendo que falta prender Google en el
+      // panel del proyecto. No es algo que el usuario pueda arreglar, así que no se le
+      // pide nada: se le ofrece el camino que sí funciona y se esconde el botón, para
+      // que no vuelva a golpear contra la misma puerta.
+      const noHabilitado = /not enabled|unsupported provider/i.test(err.message ?? '');
+      if (noHabilitado) setGoogleDisponible(false);
+      setError(
+        noHabilitado
+          ? 'El acceso con Google todavía no está disponible. Entrá con tu email y contraseña — funciona igual.'
+          : `No se pudo abrir el acceso con Google. Probá con tu email o escribinos al ${SOPORTE_TEL}.`,
+      );
       setLoading(false);
     }
   }
@@ -244,6 +256,7 @@ export default function LoginPage() {
                 Sheets se pide después, cuando la persona ya vio para qué sirve. Juntar
                 las dos cosas acá pondría la pantalla roja de "app no verificada" en la
                 puerta de entrada, antes de que nadie haya visto nada. */}
+            {googleDisponible && (
             <button type="button" className="btn-google" onClick={entrarConGoogle} disabled={loading}>
               <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden>
                 <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.7-.4-3.9H24v7.1h12.1c-.2 1.8-1.6 4.6-4.5 6.4l6.9 5.3c4.1-3.8 6.6-9.3 6.6-14.9z"/>
@@ -253,8 +266,9 @@ export default function LoginPage() {
               </svg>
               {mode === 'login' ? 'Entrar con Google' : 'Registrarme con Google'}
             </button>
+            )}
 
-            <div className="separador"><span>o con tu email</span></div>
+            {googleDisponible && <div className="separador"><span>o con tu email</span></div>}
 
             <form onSubmit={handleStep1}>
               {mode === 'signup' && (
